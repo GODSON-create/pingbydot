@@ -16,15 +16,17 @@ export function AuthShell({ title, subtitle, children, sticker }: { title: strin
   );
 }
 
-export function GoogleButton({ label }: { label: string }) {
+export function GoogleButton({ label, next = "/create" }: { label: string; next?: string }) {
   return (
     <Button
       type="button"
       variant="outline"
       className="w-full"
       onClick={async () => {
-        const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
-        if (r.error) toast.error("Google sign-in didn't work. Try again.");
+        try {
+          const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: `${window.location.origin}/login?next=${encodeURIComponent(next)}` });
+          if (r.error) toast.error("Google sign-in didn't work. Try again.");
+        } catch { toast.error("Couldn't connect to Google sign-in. Try again."); }
       }}
     >
       <svg viewBox="0 0 24 24" aria-hidden><path fill="currentColor" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.3ZM12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22Zm-5.6-8a6 6 0 0 1 0-3.9V7.5H3.1a10 10 0 0 0 0 9L6.4 14ZM12 6c1.5 0 2.8.5 3.8 1.5l2.9-2.9A10 10 0 0 0 3.1 7.5l3.3 2.6C7.2 7.8 9.4 6 12 6Z" /></svg>

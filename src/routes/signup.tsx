@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { MailCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,12 +15,15 @@ export const Route = createFileRoute("/signup")({
       { name: "description", content: "Create your Ping account and share your first Ping." },
       { property: "og:title", content: "Sign up — Ping" },
       { property: "og:description", content: "Create your Ping account and start building in public." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Signup,
 });
 
 function Signup() {
+  const navigate = useNavigate();
   const [f, setF] = useState({ name: "", username: "", email: "", password: "" });
   const [err, setErr] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -34,19 +37,24 @@ function Signup() {
     if (!u.success) return setErr("Username: " + u.error.issues[0].message);
     if (f.password.length < 8) return setErr("Use at least 8 characters for your password.");
     setPending(true);
-    const { data: taken } = await supabase.from("profiles").select("id").eq("username", u.data).maybeSingle();
+    try {
+    const { data: taken, error: lookupError } = await supabase.from("profiles").select("id").eq("username", u.data).maybeSingle();
+    if (lookupError) return setErr("Couldn't check that username. Try again.");
     if (taken) {
       setPending(false);
       return setErr("That username is taken. Try another.");
     }
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email: f.email.trim(),
       password: f.password,
-      options: { emailRedirectTo: window.location.origin + "/create", data: { username: u.data, display_name: f.name.trim() } },
+      options: { emailRedirectTo: window.location.origin + "/login?next=%2Fcreate", data: { username: u.data, display_name: f.name.trim() } },
     });
     setPending(false);
     if (error) return setErr(error.message);
+    if (data.session) { navigate({ to: "/create" }); return; }
     setSent(true);
+    } catch { setErr("Couldn't connect. Please try again."); }
+    finally { setPending(false); }
   };
 
   if (sent)
@@ -64,7 +72,7 @@ function Signup() {
     <AuthShell title="Start building in public" subtitle="Free, and your first Ping takes a minute." sticker="hi there 👋">
       <GoogleButton label="Continue with Google" />
       <OrDivider />
-      <form onSubmit={submit} className="grid gap-4" noValidate>
+      <form onSubmit={submit} className="grid gap-4">
         <div><Label htmlFor="name">Your name</Label><Input id="name" autoComplete="name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} className="mt-1.5 rounded-xl" /></div>
         <div>
           <Label htmlFor="username">Username</Label>
