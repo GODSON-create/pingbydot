@@ -1,30 +1,37 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { feedQuery } from "@/lib/pings";
 import { CATEGORIES } from "@/lib/validation";
-import { PingCard, PingCardSkeleton } from "@/components/ping/PingCard";
+import { PingCard } from "@/components/ping/PingCard";
+import { ErrorComponent } from "@/routes/__root";
 import { Button } from "@/components/ui/button";
 import { AriseCallout } from "@/components/AriseCallout";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/explore")({
-  validateSearch: z.object({ c: z.string().optional() }),
+  validateSearch: z.object({ c: z.enum(["progress", "idea", "launch", "milestone", "question", "opportunity"]).optional().catch(undefined), page: z.coerce.number().int().min(0).max(100000).catch(0).default(0) }),
+  loaderDeps: ({ search }) => ({ c: search.c, page: search.page }),
+  loader: ({ context, deps }) => context.queryClient.ensureQueryData(feedQuery(deps.c ?? null, deps.page)),
+  errorComponent: ErrorComponent,
+  notFoundComponent: () => <p className="px-5 py-12">No Pings found.</p>,
   head: () => ({
     meta: [
       { title: "Explore Pings — Ping" },
       { name: "description", content: "Browse the latest Pings: progress, ideas, launches, milestones and opportunities from people building in public." },
       { property: "og:title", content: "Explore Pings" },
       { property: "og:description", content: "See what people are building in public." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Explore,
 });
 
 function Explore() {
-  const { c } = Route.useSearch();
-  const cat = CATEGORIES.some((x) => x.value === c) ? c! : null;
-  const { data, isLoading, error, refetch } = useQuery(feedQuery(cat));
+  const { c, page } = Route.useSearch();
+  const cat = c ?? null;
+  const { data } = useSuspenseQuery(feedQuery(cat, page));
 
   return (
     <div className="mx-auto max-w-6xl px-5 py-12">
@@ -47,16 +54,13 @@ function Explore() {
       </nav>
 
       <div className="mt-8 columns-1 gap-5 md:columns-2 lg:columns-3 [&>*]:mb-5 [&>*]:break-inside-avoid">
-        {isLoading && Array.from({ length: 6 }).map((_, i) => <PingCardSkeleton key={i} />)}
         {data?.map((p) => <PingCard key={p.id} ping={p} />)}
       </div>
 
-      {error && (
-        <div className="surface-card rounded-3xl p-8 text-center">
-          <p className="font-semibold">Couldn't load Pings.</p>
-          <Button variant="outline" className="mt-4" onClick={() => refetch()}>Try again</Button>
-        </div>
-      )}
+      <nav aria-label="Feed pages" className="mt-8 flex justify-center gap-3">
+        {page > 0 && <Button asChild variant="outline"><Link to="/explore" search={{ c, page: page - 1 }}>Newer Pings</Link></Button>}
+        {data.length === 60 && <Button asChild variant="outline"><Link to="/explore" search={{ c, page: page + 1 }}>Older Pings</Link></Button>}
+      </nav>
 
       {data && data.length === 0 && (
         <div className="surface-card mx-auto max-w-lg rounded-3xl p-10 text-center">
