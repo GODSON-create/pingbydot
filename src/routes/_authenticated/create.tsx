@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { PingComposer, type PingDraft } from "@/components/ping/PingComposer";
+import { pingSchema } from "@/lib/validation";
 
 export const Route = createFileRoute("/_authenticated/create")({
   head: () => ({
@@ -12,6 +13,8 @@ export const Route = createFileRoute("/_authenticated/create")({
       { name: "description", content: "Share progress, an idea, a launch or a milestone." },
       { property: "og:title", content: "Create a Ping" },
       { property: "og:description", content: "Share your story on Ping." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Create,
@@ -24,9 +27,12 @@ function Create() {
   const m = useMutation({
     mutationFn: async (d: PingDraft) => {
       const { data: u } = await supabase.auth.getUser();
+      const author = u.user;
+      if (!author) throw new Error("Please log in again before publishing.");
+      const draft = pingSchema.parse(d);
       const { data, error } = await supabase
         .from("pings")
-        .insert({ user_id: (user ?? u.user)!.id, category: d.category, content: d.content, cta_url: d.cta_url || null, cta_label: d.cta_label || null })
+        .insert({ user_id: author.id, category: draft.category, content: draft.content, cta_url: draft.cta_url || null, cta_label: draft.cta_label || null })
         .select("id")
         .single();
       if (error) throw error;

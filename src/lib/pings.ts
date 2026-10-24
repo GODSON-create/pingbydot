@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { readPublicPings } from "@/lib/public-pings.functions";
 
 export type Profile = {
   id: string;
@@ -24,19 +25,14 @@ export type Ping = {
   likes: { count: number }[];
 };
 
-const SELECT = "*, author:profiles(id, username, display_name, avatar_url), likes(count)";
-
 export const likeCount = (p: Ping) => p.likes?.[0]?.count ?? 0;
 
-export const feedQuery = (category: string | null) =>
+export const feedQuery = (category: string | null, page = 0) =>
   queryOptions({
-    queryKey: ["feed", category],
+    queryKey: ["feed", category, page],
     queryFn: async () => {
-      let q = supabase.from("pings").select(SELECT).order("created_at", { ascending: false }).limit(60);
-      if (category) q = q.eq("category", category);
-      const { data, error } = await q;
-      if (error) throw error;
-      return data as unknown as Ping[];
+      const result = await readPublicPings({ data: { kind: "feed", value: category, page } });
+      return result.pings as unknown as Ping[];
     },
   });
 
@@ -44,9 +40,8 @@ export const pingQuery = (id: string) =>
   queryOptions({
     queryKey: ["ping", id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("pings").select(SELECT).eq("id", id).maybeSingle();
-      if (error) throw error;
-      return data as unknown as Ping | null;
+      const result = await readPublicPings({ data: { kind: "ping", value: id, page: 0 } });
+      return (result.pings[0] ?? null) as unknown as Ping | null;
     },
   });
 
@@ -54,20 +49,9 @@ export const profileQuery = (username: string) =>
   queryOptions({
     queryKey: ["profile", username],
     queryFn: async () => {
-      const { data: profile, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("username", username.toLowerCase())
-        .maybeSingle();
-      if (error) throw error;
-      if (!profile) return null;
-      const { data: pings, error: e2 } = await supabase
-        .from("pings")
-        .select(SELECT)
-        .eq("user_id", profile.id)
-        .order("created_at", { ascending: false });
-      if (e2) throw e2;
-      return { profile: profile as Profile, pings: pings as unknown as Ping[] };
+      const result = await readPublicPings({ data: { kind: "profile", value: username, page: 0 } });
+      if (!result.profile) return null;
+      return { profile: result.profile as Profile, pings: result.pings as unknown as Ping[] };
     },
   });
 
@@ -76,10 +60,12 @@ export const myLikesQuery = (userId: string | undefined) =>
     queryKey: ["my-likes", userId],
     enabled: !!userId,
     queryFn: async () => {
-      const { data } = await supabase.from("likes").select("ping_id").eq("user_id", userId!);
+      if (!userId) return new Set<string>();
+      const { data, error } = await supabase.from("likes").select("ping_id").eq("user_id", userId);
+      if (error) throw error;
       return new Set((data ?? []).map((r) => r.ping_id));
     },
   });
 
 export const pingUrl = (id: string) =>
-  (typeof window !== "undefined" ? window.location.origin : "") + `/p/${id}`;
+  `https://pingbydot.lovable.app/p/${encodeURIComponent(id)}`;

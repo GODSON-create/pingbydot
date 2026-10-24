@@ -1,15 +1,23 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { profileQuery } from "@/lib/pings";
 import { FounderAvatar } from "@/components/ping/Avatar";
-import { PingCard, PingCardSkeleton } from "@/components/ping/PingCard";
+import { PingCard } from "@/components/ping/PingCard";
+import { ErrorComponent } from "@/routes/__root";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/@{$username}")({
+  loader: async ({ context, params }) => {
+    const data = await context.queryClient.ensureQueryData(profileQuery(params.username));
+    if (!data) throw notFound();
+    return data;
+  },
+  errorComponent: ErrorComponent,
+  notFoundComponent: () => <div className="px-5 py-20 text-center"><h1 className="font-display text-4xl font-extrabold">No one here yet</h1><p>That founder profile doesn't exist.</p><Button asChild className="mt-6"><Link to="/explore">Explore Pings</Link></Button></div>,
   head: ({ params }) => ({
     meta: [
       { title: `@${params.username} — Ping` },
@@ -17,6 +25,7 @@ export const Route = createFileRoute("/@{$username}")({
       { property: "og:title", content: `@${params.username} on Ping` },
       { property: "og:description", content: `Pings from @${params.username}.` },
       { property: "og:type", content: "profile" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: ProfilePage,
@@ -25,10 +34,7 @@ export const Route = createFileRoute("/@{$username}")({
 function ProfilePage() {
   const { username } = Route.useParams();
   const { user } = useAuth();
-  const { data, isLoading } = useQuery(profileQuery(username));
-
-  if (isLoading)
-    return <div className="mx-auto max-w-4xl px-5 py-14"><div className="surface-card h-48 animate-pulse rounded-3xl" /><div className="mt-6 grid gap-5 md:grid-cols-2"><PingCardSkeleton /><PingCardSkeleton /></div></div>;
+  const { data } = useSuspenseQuery(profileQuery(username));
   if (!data)
     return (
       <div className="mx-auto max-w-md px-5 py-20 text-center">
@@ -56,7 +62,7 @@ function ProfilePage() {
                 {profile.bio && <p className="mt-3 max-w-xl whitespace-pre-line">{profile.bio}</p>}
               </div>
               <div className="flex gap-2 sm:flex-col">
-                <Button variant="outline" size="sm" onClick={async () => { await navigator.clipboard.writeText(window.location.href); toast.success("Profile link copied"); }}><Link2 /> Copy profile link</Button>
+                <Button variant="outline" size="sm" onClick={async () => { try { await navigator.clipboard.writeText(`https://pingbydot.lovable.app/@${encodeURIComponent(profile.username)}`); toast.success("Profile link copied"); } catch { toast.error("Couldn't copy. Copy the link from the address bar."); } }}><Link2 /> Copy profile link</Button>
                 {isMe && <Button asChild size="sm" variant="secondary"><Link to="/settings">Edit profile</Link></Button>}
               </div>
             </div>

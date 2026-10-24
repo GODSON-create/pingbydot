@@ -1,5 +1,5 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { createFileRoute, Link, useNavigate, notFound } from "@tanstack/react-router";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ArrowLeft, Copy } from "lucide-react";
 import { toast } from "sonner";
@@ -9,15 +9,29 @@ import { CategoryTag, CtaLink } from "@/components/ping/PingCard";
 import { LikeButton, PingMenu, ShareMenu } from "@/components/ping/PingActions";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
+import { ErrorComponent } from "@/routes/__root";
+
+function MissingPing() {
+  return <div className="mx-auto max-w-md px-5 py-20 text-center"><h1 className="font-display text-4xl font-extrabold">This Ping isn't here</h1><p className="mt-2 text-muted-foreground">It may have been deleted, or the link is mistyped.</p><Button asChild variant="hero" className="mt-6"><Link to="/explore">Explore Pings</Link></Button></div>;
+}
 
 export const Route = createFileRoute("/p/$id")({
-  head: () => ({
+  loader: async ({ context, params }) => {
+    const ping = await context.queryClient.ensureQueryData(pingQuery(params.id));
+    if (!ping) throw notFound();
+    return ping;
+  },
+  errorComponent: ErrorComponent,
+  notFoundComponent: MissingPing,
+  head: ({ loaderData: ping }) => ({
     meta: [
-      { title: "A Ping — Ping" },
-      { name: "description", content: "Read this Ping: a story from someone building in public." },
-      { property: "og:title", content: "A Ping on Ping" },
-      { property: "og:description", content: "Someone is building in public. Read their Ping." },
+      { title: `${ping?.author?.display_name || ping?.author?.username || "A founder"}'s Ping — Ping` },
+      { name: "description", content: ping?.content.slice(0, 200) || "Read a public Ping." },
+      { property: "og:title", content: `${ping?.author?.display_name || ping?.author?.username || "A founder"}'s Ping` },
+      { property: "og:description", content: ping?.content.slice(0, 200) || "Read a public Ping." },
       { property: "og:type", content: "article" },
+      { name: "twitter:card", content: "summary" },
+      ...(ping ? [{ property: "og:url", content: pingUrl(ping.id) }] : []),
     ],
   }),
   component: PingDetail,
@@ -27,19 +41,8 @@ function PingDetail() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { data: ping, isLoading, error } = useQuery(pingQuery(id));
-
-  if (isLoading)
-    return <div className="mx-auto max-w-2xl px-5 py-16"><div className="surface-card h-72 animate-pulse rounded-3xl" /></div>;
-  if (error || !ping)
-    return (
-      <div className="mx-auto max-w-md px-5 py-20 text-center">
-        <span className="sticker bg-blush text-blush-foreground">not found</span>
-        <h1 className="mt-5 font-display text-4xl font-extrabold">This Ping isn't here</h1>
-        <p className="mt-2 text-muted-foreground">It may have been deleted, or the link is mistyped.</p>
-        <Button asChild variant="hero" className="mt-6"><Link to="/explore">Explore Pings</Link></Button>
-      </div>
-    );
+  const { data: ping } = useSuspenseQuery(pingQuery(id));
+  if (!ping) return <MissingPing />;
 
   const name = ping.author?.display_name || ping.author?.username || "Founder";
   const url = pingUrl(ping.id);
@@ -82,8 +85,10 @@ function PingDetail() {
             size="sm"
             variant="secondary"
             onClick={async () => {
-              await navigator.clipboard.writeText(url);
-              toast.success("Link copied");
+              try {
+                await navigator.clipboard.writeText(url);
+                toast.success("Link copied");
+              } catch { toast.error("Couldn't copy. Copy the link shown here instead."); }
             }}
           >
             <Copy /> Copy link

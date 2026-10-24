@@ -8,6 +8,13 @@
       "when": 1792627228264,
       "tag": "0000_ping_core",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792846927549,
+      "tag": "0001_restrict_signup_trigger_execution",
+      "breakpoints": true
     }
   ]
 }

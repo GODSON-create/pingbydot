@@ -1,18 +1,23 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthShell, GoogleButton, OrDivider } from "@/components/AuthShell";
+import { useAuth } from "@/lib/auth";
+import { authDestination } from "@/lib/auth-return";
 
 export const Route = createFileRoute("/login")({
+  validateSearch: (search: Record<string, unknown>) => ({ next: authDestination(search.next) }),
   head: () => ({
     meta: [
       { title: "Log in — Ping" },
       { name: "description", content: "Log in to Ping to share and like Pings." },
       { property: "og:title", content: "Log in — Ping" },
       { property: "og:description", content: "Log in to Ping." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Login,
@@ -20,6 +25,9 @@ export const Route = createFileRoute("/login")({
 
 function Login() {
   const navigate = useNavigate();
+  const { next } = Route.useSearch();
+  const { ready, user } = useAuth();
+  useEffect(() => { if (ready && user) navigate({ to: next, replace: true }); }, [ready, user, next, navigate]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -29,15 +37,17 @@ function Login() {
     e.preventDefault();
     setErr(null);
     setPending(true);
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-    setPending(false);
-    if (error) return setErr(error.message.includes("confirm") ? "Please verify your email first — check your inbox." : "That email and password don't match.");
-    navigate({ to: "/explore" });
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (error) return setErr(error.message.includes("confirm") ? "Please verify your email first — check your inbox." : "Couldn't log in. Check your email and password, then try again.");
+      navigate({ to: next });
+    } catch { setErr("Couldn't connect. Please try again."); }
+    finally { setPending(false); }
   };
 
   return (
     <AuthShell title="Welcome back" subtitle="Pick up where you left off.">
-      <GoogleButton label="Continue with Google" />
+      <GoogleButton label="Continue with Google" next={next} />
       <OrDivider />
       <form onSubmit={submit} className="grid gap-4">
         <div><Label htmlFor="email">Email</Label><Input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1.5 rounded-xl" /></div>

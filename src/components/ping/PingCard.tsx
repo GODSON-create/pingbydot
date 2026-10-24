@@ -55,7 +55,7 @@ export function PingCard({ ping, linkToDetail = true }: { ping: Ping; linkToDeta
   const name = ping.author?.display_name || ping.author?.username || "Founder";
   return (
     <article className="surface-card lift relative flex flex-col rounded-3xl p-5 sm:p-6">
-      <header className="flex items-start gap-3">
+      <header className="relative z-10 flex items-start gap-3">
         {ping.author && (
           <Link to="/@{$username}" params={{ username: ping.author.username }} className="flex min-w-0 flex-1 items-center gap-3">
             <FounderAvatar name={name} src={ping.author.avatar_url} />
@@ -71,7 +71,7 @@ export function PingCard({ ping, linkToDetail = true }: { ping: Ping; linkToDeta
       </header>
       <div className="mt-4 flex-1">
         {linkToDetail ? (
-          <Link to="/p/$id" params={{ id: ping.id }} className="block whitespace-pre-line break-words text-[15px] leading-relaxed after:absolute after:inset-0 after:content-[''] focus-visible:outline-none">
+          <Link to="/p/$id" params={{ id: ping.id }} className="block whitespace-pre-line break-words text-[15px] leading-relaxed after:absolute after:inset-0 after:content-[''] focus-visible:ring-2 focus-visible:ring-ring">
             {ping.content.length > 420 ? ping.content.slice(0, 420) + "…" : ping.content}
           </Link>
         ) : (
