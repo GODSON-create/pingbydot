@@ -13,6 +13,8 @@ export const Route = createFileRoute("/forgot-password")({
       { name: "description", content: "Get a link to reset your Ping password." },
       { property: "og:title", content: "Reset your password — Ping" },
       { property: "og:description", content: "Reset your Ping password." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Forgot,

@@ -18,6 +18,8 @@ export const Route = createFileRoute("/_authenticated/settings")({
       { name: "description", content: "Edit your Ping profile and account." },
       { property: "og:title", content: "Settings — Ping" },
       { property: "og:description", content: "Manage your Ping profile." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Settings,

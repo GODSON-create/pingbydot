@@ -15,6 +15,8 @@ export const Route = createFileRoute("/_authenticated/edit/$id")({
       { name: "description", content: "Edit your Ping." },
       { property: "og:title", content: "Edit Ping" },
       { property: "og:description", content: "Edit your Ping." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Edit,
