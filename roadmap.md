@@ -1,4 +1,6 @@
 # Launch repair
+- [ ] Rich sharing: branded card preview, PNG export, native/file/link sharing and public per-Ping social images.
+- [ ] Verify rich sharing cases and document deployment limitations without publishing.
 - [ ] Restore Data API permissions without changing owner-only write policies.
 - [ ] Repair Explore, Ping details, public share rendering and error handling.
 - [ ] Repair signup/login and verify authenticated publishing.
