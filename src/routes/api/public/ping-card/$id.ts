@@ -24,8 +24,6 @@ export const Route = createFileRoute("/api/public/ping-card/$id")({
           if (error) throw new Error("Public reading failed");
           if (!data) return new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
           const { renderSocialPng } = await import("@/lib/sharing/social");
-          const { type: _ignored, ...unused } = { type: 0 }; // keep response data restricted to the public selection
-          void _ignored; void unused;
           const author = Array.isArray(data.author) ? data.author[0] ?? null : data.author;
           const ping = { ...data, author };
           const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`card-v1:${JSON.stringify(ping)}`));

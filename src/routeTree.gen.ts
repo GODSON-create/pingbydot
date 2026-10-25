@@ -21,6 +21,7 @@ import { Route as AuthenticatedCreateRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as PIdRouteImport } from './routes/p.$id'
 import { Route as AuthenticatedEditIdRouteImport } from './routes/_authenticated/edit.$id'
+import { Route as ApiPublicPingCardIdRouteImport } from './routes/api/public/ping-card/$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -82,6 +83,11 @@ const AuthenticatedEditIdRoute = AuthenticatedEditIdRouteImport.update({
   path: '/edit/$id',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiPublicPingCardIdRoute = ApiPublicPingCardIdRouteImport.update({
+  id: '/api/public/ping-card/$id',
+  path: '/api/public/ping-card/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -95,6 +101,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRoute
   '/p/$id': typeof PIdRoute
   '/edit/$id': typeof AuthenticatedEditIdRoute
+  '/api/public/ping-card/$id': typeof ApiPublicPingCardIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -108,6 +115,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedSettingsRoute
   '/p/$id': typeof PIdRoute
   '/edit/$id': typeof AuthenticatedEditIdRoute
+  '/api/public/ping-card/$id': typeof ApiPublicPingCardIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -123,6 +131,7 @@ export interface FileRoutesById {
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/p/$id': typeof PIdRoute
   '/_authenticated/edit/$id': typeof AuthenticatedEditIdRoute
+  '/api/public/ping-card/$id': typeof ApiPublicPingCardIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -138,6 +147,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/p/$id'
     | '/edit/$id'
+    | '/api/public/ping-card/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -151,6 +161,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/p/$id'
     | '/edit/$id'
+    | '/api/public/ping-card/$id'
   id:
     | '__root__'
     | '/'
@@ -165,6 +176,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings'
     | '/p/$id'
     | '/_authenticated/edit/$id'
+    | '/api/public/ping-card/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -177,6 +189,7 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   SignupRoute: typeof SignupRoute
   PIdRoute: typeof PIdRoute
+  ApiPublicPingCardIdRoute: typeof ApiPublicPingCardIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -265,6 +278,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedEditIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/public/ping-card/$id': {
+      id: '/api/public/ping-card/$id'
+      path: '/api/public/ping-card/$id'
+      fullPath: '/api/public/ping-card/$id'
+      preLoaderRoute: typeof ApiPublicPingCardIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -293,6 +313,7 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   SignupRoute: SignupRoute,
   PIdRoute: PIdRoute,
+  ApiPublicPingCardIdRoute: ApiPublicPingCardIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
