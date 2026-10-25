@@ -42,6 +42,13 @@
 }
 
 :root {
+  /* Portable sRGB artwork tokens for PNG/SVG renderers. */
+  --share-paper: #fff9ef;
+  --share-ink: #182822;
+  --share-forest: #173c32;
+  --share-lime: #c7f36b;
+  --share-muted: #63736a;
+  --share-border: #dce3d3;
   --radius: 1rem;
   --paper: oklch(0.988 0.016 84);
   --background: oklch(0.988 0.016 84);

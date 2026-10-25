@@ -14,7 +14,7 @@ function palette(): CardPalette {
     const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
     return `rgb(${r},${g},${b})`;
   };
-  return { paper: color("--paper"), ink: color("--foreground"), forest: color("--primary"), lime: color("--lime"), muted: color("--muted-foreground"), border: color("--border") };
+  return { paper: color("--share-paper"), ink: color("--share-ink"), forest: color("--share-forest"), lime: color("--share-lime"), muted: color("--share-muted"), border: color("--share-border") };
 }
 
 async function loadImage(src: string) {
