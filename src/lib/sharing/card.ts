@@ -27,8 +27,8 @@ export function cardTree(ping: SharePing, colors: CardPalette, image?: { src: st
   const name = ping.author?.display_name || ping.author?.username || "Founder";
   const handle = ping.author?.username ? `@${ping.author.username}` : "Building in public";
   const size = ping.content.length < 180 ? 62 : ping.content.length < 600 ? 48 : 36;
-  const row = { display: "flex", alignItems: "center", justifyContent: "space-between" } as const;
-  return h("div", { style: { display: "flex", flexDirection: "column", width: 1080, minHeight: 1080, padding: 64, background: colors.paper, color: colors.ink, fontFamily: "Hanken", border: `2px solid ${colors.border}`, borderRadius: 40 } },
+  const row = { display: "flex", width: "100%", alignItems: "center", justifyContent: "space-between" } as const;
+  return h("div", { style: { display: "flex", flexDirection: "column", width: 1080, minHeight: 1080, padding: 64, background: colors.paper, color: colors.ink, fontFamily: "Hanken, Emoji", border: `2px solid ${colors.border}`, borderRadius: 40, boxSizing: "border-box" } },
     h("div", { style: row },
       h("div", { style: { display: "flex", alignItems: "center", gap: 14, color: colors.forest } },
         h("span", { style: { fontSize: 64, fontWeight: 700 } }, "Ping"),
