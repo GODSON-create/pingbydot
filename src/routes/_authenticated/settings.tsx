@@ -29,7 +29,7 @@ function Settings() {
   const { user, profile, refreshProfile } = useAuth();
   const signOut = useSignOut();
   const [f, setF] = useState({ username: "", display_name: "", bio: "", avatar_url: "" });
-  const [errs, setErrs] = useState<Record<string, string>>({});
+  const [errs, setErrs] = useState<Partial<Record<"username" | "display_name" | "bio" | "avatar_url", string>>>({});
   const [saving, setSaving] = useState(false);
   const [pw, setPw] = useState({ current: "", next: "" });
 
@@ -59,9 +59,9 @@ function Settings() {
 
   const changePw = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (pw.next.length < 8) return toast.error("Use at least 8 characters.");
+    if (pw.next.length < 8) { toast.error("Use at least 8 characters."); return; }
     const { error } = await supabase.auth.updateUser({ password: pw.next, current_password: pw.current } as never);
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     setPw({ current: "", next: "" });
     toast.success("Password changed");
   };

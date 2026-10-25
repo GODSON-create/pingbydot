@@ -10,6 +10,8 @@ import { LikeButton, PingMenu, ShareMenu } from "@/components/ping/PingActions";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { ErrorComponent } from "@/routes/__root";
+import { PingShareActions } from "@/components/ping/ShareCardDialog";
+import { socialImageUrl } from "@/lib/sharing/card";
 
 function MissingPing() {
   return <div className="mx-auto max-w-md px-5 py-20 text-center"><h1 className="font-display text-4xl font-extrabold">This Ping isn't here</h1><p className="mt-2 text-muted-foreground">It may have been deleted, or the link is mistyped.</p><Button asChild variant="hero" className="mt-6"><Link to="/explore">Explore Pings</Link></Button></div>;
@@ -30,9 +32,17 @@ export const Route = createFileRoute("/p/$id")({
       { property: "og:title", content: `${ping?.author?.display_name || ping?.author?.username || "A founder"}'s Ping` },
       { property: "og:description", content: ping?.content.slice(0, 200) || "Read a public Ping." },
       { property: "og:type", content: "article" },
-      { name: "twitter:card", content: "summary" },
-      ...(ping ? [{ property: "og:url", content: pingUrl(ping.id) }] : []),
+      { name: "twitter:card", content: "summary_large_image" },
+      ...(ping ? [
+        { property: "og:url", content: pingUrl(ping.id) },
+        { property: "og:image", content: socialImageUrl(ping) },
+        { name: "twitter:image", content: socialImageUrl(ping) },
+        { property: "og:image:width", content: "1200" },
+        { property: "og:image:height", content: "630" },
+        { property: "og:image:alt", content: `A Ping by ${ping.author?.display_name || "a founder"}` },
+      ] : []),
     ],
+    links: ping ? [{ rel: "canonical", href: pingUrl(ping.id) }] : [],
   }),
   component: PingDetail,
 });
@@ -78,6 +88,7 @@ function PingDetail() {
             </div>
           </footer>
         </article>
+        <PingShareActions ping={ping} />
 
         <div className="glass mt-5 flex items-center gap-3 rounded-2xl p-3 pl-5">
           <span className="min-w-0 flex-1 truncate font-mono text-sm text-muted-foreground">{url}</span>

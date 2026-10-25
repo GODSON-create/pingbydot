@@ -26,7 +26,7 @@ const SAMPLES = [
   { id: "a", name: "Amara Osei", user: "amara", bio: "Building a pickup app for neighbourhood bakeries. Ex-pastry chef.", tag: "🚀 Launch", tone: "bg-lime text-lime-foreground", text: "We opened the waitlist for Crumb today. Three bakeries on my street agreed to pilot end-of-day boxes next week.", cta: "Join the waitlist", likes: 24 },
   { id: "b", name: "Tomás Reyes", user: "tomas", bio: "Solo dev making a budgeting tool for freelancers.", tag: "🙋 Question", tone: "bg-blush text-blush-foreground", text: "Freelancers: do you set money aside for tax per invoice or once a month? Deciding the default for Ledgerly.", cta: null, likes: 11 },
   { id: "c", name: "Priya Nair", user: "priya", bio: "Climate hardware. Tinkering with low-cost soil sensors.", tag: "🏁 Milestone", tone: "bg-sun text-foreground", text: "Sensor v3 survived 30 days outdoors through rain. Battery is still at 71%. Field test with two farms starts in May.", cta: "Read the build log", likes: 38 },
-];
+] as const;
 
 function MiniPing({ s, className, style }: { s: (typeof SAMPLES)[number]; className?: string; style?: React.CSSProperties }) {
   return (
@@ -108,7 +108,7 @@ function Demo() {
   const [i, setI] = useState(0);
   const [view, setView] = useState<"ping" | "profile" | "share">("ping");
   const [liked, setLiked] = useState<Record<string, boolean>>({});
-  const s = SAMPLES[i];
+  const s = SAMPLES[i] ?? SAMPLES[0];
   const isLiked = !!liked[s.id];
   return (
     <section id="demo" className="scroll-mt-28 bg-forest grain py-20 text-primary-foreground">

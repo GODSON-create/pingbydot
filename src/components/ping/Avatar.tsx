@@ -9,7 +9,7 @@ export function FounderAvatar({
   className,
 }: {
   name: string;
-  src?: string | null;
+  src?: string | null | undefined;
   size?: "sm" | "md" | "lg" | "xl";
   className?: string;
 }) {

@@ -34,7 +34,7 @@ function Signup() {
     setErr(null);
     const u = usernameSchema.safeParse(f.username);
     if (!f.name.trim()) return setErr("Add your name.");
-    if (!u.success) return setErr("Username: " + u.error.issues[0].message);
+    if (!u.success) return setErr("Username: " + (u.error.issues[0]?.message || "Choose a valid username."));
     if (f.password.length < 8) return setErr("Use at least 8 characters for your password.");
     setPending(true);
     try {

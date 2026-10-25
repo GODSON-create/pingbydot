@@ -21,7 +21,7 @@ export function PingComposer({
   onSubmit: (d: PingDraft) => void;
 }) {
   const [d, setD] = useState<PingDraft>({ category: "progress", content: "", cta_url: "", cta_label: "", ...initial });
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Partial<Record<keyof PingDraft, string>>>({});
   const [showCta, setShowCta] = useState(!!initial?.cta_url);
 
   const submit = (e: React.FormEvent) => {
