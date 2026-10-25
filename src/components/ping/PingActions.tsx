@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useHydrated } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Heart, Share2, Link2, MessageCircle, Flag, MoreHorizontal, Pencil, Trash2, Check } from "lucide-react";
+import { Heart, Share2, Link2, MessageCircle, Flag, MoreHorizontal, Pencil, Trash2, Check, Image as ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -27,6 +27,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { ShareCardDialog } from "./ShareCardDialog";
+import { shareMessage, shareExcerpt } from "@/lib/sharing/card";
 
 export function LikeButton({ ping }: { ping: Ping }) {
   const { user } = useAuth();
@@ -97,8 +99,10 @@ export function LikeButton({ ping }: { ping: Ping }) {
 
 export function ShareMenu({ ping, variant = "ghost" }: { ping: Ping; variant?: "ghost" | "outline" }) {
   const [copied, setCopied] = useState(false);
+  const [cardOpen, setCardOpen] = useState(false);
+  const hydrated = useHydrated();
   const url = pingUrl(ping.id);
-  const text = `${ping.author?.display_name || "A founder"} shared a Ping: ${ping.content.slice(0, 100)}${ping.content.length > 100 ? "…" : ""}`;
+  const text = shareExcerpt(ping.content);
 
   const copy = async () => {
     try {
@@ -113,13 +117,14 @@ export function ShareMenu({ ping, variant = "ghost" }: { ping: Ping; variant?: "
   const native = async () => {
     try {
       await navigator.share({ title: "A Ping", text, url });
-    } catch {
-      /* user cancelled */
+    } catch (e) {
+      if (!(e instanceof DOMException && e.name === "AbortError")) toast.error("Couldn't share. Try copying the link.");
     }
   };
-  const canNative = typeof navigator !== "undefined" && "share" in navigator;
+  const canNative = hydrated && typeof navigator.share === "function";
 
   return (
+    <>
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant={variant} size="sm" className="h-9 text-muted-foreground" aria-label="Share this Ping">
@@ -127,15 +132,18 @@ export function ShareMenu({ ping, variant = "ghost" }: { ping: Ping; variant?: "
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52 rounded-2xl">
+        <DropdownMenuItem onSelect={() => setCardOpen(true)}><ImageIcon /> Share card preview</DropdownMenuItem>
         {canNative && <DropdownMenuItem onSelect={native}><Share2 /> Share…</DropdownMenuItem>}
         <DropdownMenuItem asChild>
-          <a href={`https://wa.me/?text=${encodeURIComponent(`${text} ${url}`)}`} target="_blank" rel="noopener noreferrer">
+          <a href={`https://wa.me/?text=${encodeURIComponent(shareMessage(ping))}`} target="_blank" rel="noopener noreferrer">
             <MessageCircle /> Share on WhatsApp
           </a>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={copy}><Link2 /> Copy link</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+    <ShareCardDialog ping={ping} open={cardOpen} onOpenChange={setCardOpen} />
+    </>
   );
 }
 
