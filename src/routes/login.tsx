@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, type SearchSchemaInput } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { useAuth } from "@/lib/auth";
 import { authDestination } from "@/lib/auth-return";
 
 export const Route = createFileRoute("/login")({
-  validateSearch: (search: Record<string, unknown>) => ({ next: authDestination(search.next) }),
+  validateSearch: (search: SearchSchemaInput & { next?: unknown }) => ({ next: authDestination(search.next) }),
   head: () => ({
     meta: [
       { title: "Log in — Ping" },

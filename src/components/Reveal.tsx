@@ -23,7 +23,7 @@ export function Reveal({
     el.style.transitionDelay = `${delay}ms`;
     const io = new IntersectionObserver(
       ([e]) => {
-        if (e.isIntersecting) {
+        if (e?.isIntersecting) {
           el.classList.add("is-visible");
           io.disconnect();
         }
