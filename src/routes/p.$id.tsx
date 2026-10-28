@@ -33,6 +33,7 @@ export const Route = createFileRoute("/p/$id")({
       { property: "og:description", content: ping?.content.slice(0, 200) || "Read a public Ping." },
       { property: "og:type", content: "article" },
       { name: "twitter:card", content: "summary_large_image" },
+      ...(!ping ? [{ name: "robots", content: "noindex" }] : []),
       ...(ping ? [
         { property: "og:url", content: pingUrl(ping.id) },
         { property: "og:image", content: socialImageUrl(ping) },
