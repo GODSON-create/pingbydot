@@ -21,7 +21,10 @@ async function loadImage(src: string) {
   const img = new Image();
   img.crossOrigin = "anonymous";
   img.src = src;
-  await Promise.race([img.decode(), new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Image timed out")), 8000))]);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([img.decode(), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Image timed out")), 8000); })]);
+  } finally { clearTimeout(timer); }
   return img;
 }
 

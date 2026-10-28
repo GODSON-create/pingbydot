@@ -44,8 +44,12 @@ export function ShareCardDialog({ ping, open, onOpenChange }: { ping: Ping; open
       catch (e) { if (!(e instanceof DOMException && e.name === "AbortError")) toast.error("Couldn't share the image. Try Download card."); }
       finally { setSharing(false); }
     } else {
-      const { downloadCard } = await import("@/lib/sharing/browser");
-      downloadCard(card.file);
+      setSharing(true);
+      try {
+        const { downloadCard } = await import("@/lib/sharing/browser");
+        downloadCard(card.file);
+      } catch { toast.error("Couldn't download the card. Please try again."); }
+      finally { setSharing(false); }
     }
   };
   return <Dialog open={open} onOpenChange={onOpenChange}>
@@ -65,16 +69,17 @@ export function ShareCardDialog({ ping, open, onOpenChange }: { ping: Ping; open
         {card?.imageOmitted && <p className="mt-2 text-xs text-muted-foreground" role="status">The photo couldn't be included. Your full text is on the card.</p>}
         {error && <p className="mt-2 text-sm text-destructive" role="alert">Couldn't create the card. Link sharing is still available.</p>}
       </section>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 gap-2 min-[360px]:grid-cols-2">
         {canNative && <Button onClick={linkShare} disabled={sharing} variant="outline"><Share2 /> Share Ping</Button>}
         <Button onClick={imageShare} disabled={!card || sharing}><ImageIcon />{canFiles ? "Share image" : "Download card"}</Button>
         {canFiles && <Button variant="outline" disabled={!card || sharing} onClick={() => { if (card) void import("@/lib/sharing/browser").then((m) => m.downloadCard(card.file)); }}><Download /> Download card</Button>}
-        <Button asChild variant="outline"><a href={`https://wa.me/?text=${encodeURIComponent(shareMessage(ping))}`} target="_blank" rel="noopener noreferrer"><MessageCircle /> WhatsApp</a></Button>
+        <Button asChild variant="outline"><a href={`https://wa.me/?text=${encodeURIComponent(shareMessage(ping))}`} target="_blank" rel="noopener noreferrer"><MessageCircle /> WhatsApp link</a></Button>
         <Button variant="outline" onClick={async () => {
           try { await navigator.clipboard.writeText(pingUrl(ping.id)); toast.success("Link copied"); }
           catch { toast.error("Couldn't copy. Copy the link below instead."); }
         }}><Link2 /> Copy link</Button>
       </div>
+      <p className="text-xs text-muted-foreground">WhatsApp link sends text and a link, not the PNG. To send the card, use Share image or attach the downloaded PNG in WhatsApp.</p>
       <a href={pingUrl(ping.id)} className="break-all text-center text-xs text-muted-foreground underline">{pingUrl(ping.id)}</a>
     </DialogContent>
   </Dialog>;
