@@ -1,6 +1,7 @@
 import { createElement as h } from "react";
 import { CATEGORIES } from "@/lib/validation";
 import { pingUrl, type Ping } from "@/lib/pings";
+import { brandArtwork } from "@/lib/brand";
 
 export type SharePing = Pick<Ping, "id" | "content" | "category" | "author" | "image_url" | "updated_at">;
 export type CardPalette = { paper: string; ink: string; forest: string; lime: string; muted: string; border: string };
@@ -30,9 +31,7 @@ export function cardTree(ping: SharePing, colors: CardPalette, image?: { src: st
   const row = { display: "flex", width: "100%", alignItems: "center", justifyContent: "space-between" } as const;
   return h("div", { style: { display: "flex", flexDirection: "column", width: 1080, minHeight: 1080, padding: 64, background: colors.paper, color: colors.ink, fontFamily: "Hanken, Emoji", border: `2px solid ${colors.border}`, borderRadius: 40, boxSizing: "border-box" } },
     h("div", { style: row },
-      h("div", { style: { display: "flex", alignItems: "center", gap: 14, color: colors.forest } },
-        h("span", { style: { fontSize: 64, fontWeight: 700 } }, "Ping"),
-        h("span", { style: { fontSize: 22, marginTop: 16 } }, "by DOT")),
+      brandArtwork(colors.forest),
       h("div", { style: { display: "flex", padding: "12px 24px", borderRadius: 32, background: colors.lime, color: colors.forest, fontSize: 24, fontWeight: 700 } }, category)),
     h("div", { style: { display: "flex", flexGrow: 1, flexDirection: "column", paddingTop: 60, paddingBottom: 60 } },
       h("div", { style: { fontSize: size, lineHeight: 1.35, whiteSpace: "pre-wrap", wordBreak: "break-word", overflowWrap: "anywhere" } }, ping.content),

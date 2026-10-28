@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { FounderAvatar } from "@/components/ping/Avatar";
+import { BrandLogo } from "@/components/BrandLogo";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,13 +17,8 @@ import {
 
 export function Wordmark() {
   return (
-    <Link to="/" className="group inline-flex items-center gap-2 font-display text-2xl font-extrabold tracking-tight" aria-label="Ping home">
-      <span className="relative inline-flex size-7 items-center justify-center">
-        <span className="absolute inset-0 rounded-full bg-lime animate-ping-dot" aria-hidden />
-        <span className="relative size-7 rounded-full border-[1.5px] border-foreground bg-lime transition-transform group-hover:scale-110" />
-        <span className="absolute size-2 rounded-full bg-foreground" />
-      </span>
-      Ping
+    <Link to="/" className="inline-flex items-center" aria-label="Ping by DOT home">
+      <BrandLogo />
     </Link>
   );
 }

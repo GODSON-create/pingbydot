@@ -13,3 +13,4 @@
 - Feed pagination belongs in validated URL search parameters so older Pings remain reachable and shareable.
 - Share artwork uses one Satori tree with embedded font and CSS artwork tokens; browser PNG previews are the exported files, while public social PNGs use the same full card scaled to fit without cropping.
 - Public social images read only public Ping fields, never fetch arbitrary remote media server-side, and use short caching plus content-derived ETags so edits and deletions revalidate.
+- Navigation and share artwork use the shared brand asset registry; logo artwork is embedded for rendering, and missing assets use text fallback so neither path invents a mark or fetches remote media server-side.
