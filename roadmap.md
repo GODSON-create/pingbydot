@@ -1,4 +1,5 @@
 # Launch repair
+- [ ] Official logo: inspect authentic assets, connect reusable navigation/artwork slots, verify sharing; await official asset if absent.
 - [x] Sharing follow-up QA: validate PNG exports, SSR metadata, public URLs, mobile fallbacks and cache responses; fix scoped bugs without publishing.
 - [x] Rich sharing: branded card preview, PNG export, native/file/link sharing and public per-Ping social images.
 - [x] Verify rich sharing cases and document deployment limitations without publishing.
