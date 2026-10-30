@@ -47,6 +47,33 @@ export type Database = {
           },
         ]
       }
+      moderation_audit: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          id: string
+          reason: string
+          target_id: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          reason: string
+          target_id: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          reason?: string
+          target_id?: string
+        }
+        Relationships: []
+      }
       pings: {
         Row: {
           category: string
@@ -54,6 +81,7 @@ export type Database = {
           created_at: string
           cta_label: string | null
           cta_url: string | null
+          hidden_at: string | null
           id: string
           image_url: string | null
           updated_at: string
@@ -65,6 +93,7 @@ export type Database = {
           created_at?: string
           cta_label?: string | null
           cta_url?: string | null
+          hidden_at?: string | null
           id?: string
           image_url?: string | null
           updated_at?: string
@@ -76,6 +105,7 @@ export type Database = {
           created_at?: string
           cta_label?: string | null
           cta_url?: string | null
+          hidden_at?: string | null
           id?: string
           image_url?: string | null
           updated_at?: string
@@ -126,6 +156,7 @@ export type Database = {
           ping_id: string
           reason: string
           reporter_id: string
+          resolved_at: string | null
         }
         Insert: {
           created_at?: string
@@ -134,6 +165,7 @@ export type Database = {
           ping_id: string
           reason: string
           reporter_id: string
+          resolved_at?: string | null
         }
         Update: {
           created_at?: string
@@ -142,6 +174,7 @@ export type Database = {
           ping_id?: string
           reason?: string
           reporter_id?: string
+          resolved_at?: string | null
         }
         Relationships: [
           {
@@ -160,12 +193,43 @@ export type Database = {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      admin_metrics: { Args: never; Returns: Json }
+      admin_moderate: {
+        Args: {
+          _action: string
+          _actor: string
+          _reason: string
+          _target: string
+        }
+        Returns: undefined
+      }
+      is_ping_admin: { Args: never; Returns: boolean }
     }
     Enums: {
       [_ in never]: never

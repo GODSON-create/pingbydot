@@ -1,0 +1,11 @@
+REVOKE ALL ON public.user_roles FROM anon, authenticated;
+GRANT SELECT ON public.user_roles TO authenticated;
+REVOKE ALL ON public.moderation_audit FROM anon, authenticated;
+GRANT SELECT ON public.moderation_audit TO authenticated;
+REVOKE ALL ON FUNCTION public.audit_admin_role_change() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.protect_ping_moderation() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.handle_new_user() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON public.reports FROM anon, authenticated;
+GRANT INSERT ON public.reports TO authenticated;
+REVOKE ALL ON public.profiles, public.pings, public.likes FROM anon;
+GRANT SELECT ON public.profiles, public.pings, public.likes TO anon;

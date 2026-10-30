@@ -24,11 +24,11 @@ export const readPublicPings = createServerFn({ method: "GET" })
       const { data: profile, error } = await client.from("profiles").select("id,username,display_name,bio,avatar_url,created_at").eq("username", (data.value ?? "").toLowerCase()).maybeSingle();
       if (error) throw new Error("Couldn't load this profile. Please try again.");
       if (!profile) return { profile: null, pings: [] };
-      const { data: pings, error: pingError } = await client.from("pings").select(PUBLIC_PING_SELECT).eq("user_id", profile.id).order("created_at", { ascending: false }).order("id", { ascending: false });
+      const { data: pings, error: pingError } = await client.from("pings").select(PUBLIC_PING_SELECT).is("hidden_at", null).eq("user_id", profile.id).order("created_at", { ascending: false }).order("id", { ascending: false });
       if (pingError) throw new Error("Couldn't load this profile's Pings. Please try again.");
       return { profile, pings: pings ?? [] };
     }
-    let query = client.from("pings").select(PUBLIC_PING_SELECT).order("created_at", { ascending: false }).order("id", { ascending: false });
+    let query = client.from("pings").select(PUBLIC_PING_SELECT).is("hidden_at", null).order("created_at", { ascending: false }).order("id", { ascending: false });
     if (data.kind === "ping") {
       if (!z.string().uuid().safeParse(data.value).success) return { profile: null, pings: [] };
       query = query.eq("id", data.value ?? "");

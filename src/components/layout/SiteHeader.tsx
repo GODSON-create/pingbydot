@@ -1,7 +1,9 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Menu, X, Plus, LogOut, Settings, User } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { checkAdminAccess } from "@/lib/admin.functions";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -40,6 +42,8 @@ export function SiteHeader() {
   const [open, setOpen] = useState(false);
   const { user, profile, ready } = useAuth();
   const signOut = useSignOut();
+  const verifyAdmin = useServerFn(checkAdminAccess);
+  const admin = useQuery({ queryKey: ["admin-access", user?.id], queryFn: () => verifyAdmin(), enabled: ready && !!user, retry: false, staleTime: 0 });
 
   return (
     <header className="sticky top-0 z-50 px-3 pt-3 sm:px-5">
@@ -70,6 +74,7 @@ export function SiteHeader() {
                     <Link to="/settings"><Settings /> Settings</Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
+                  {admin.data?.isAdmin && <DropdownMenuItem asChild><Link to="/admin"><Settings /> Administration</Link></DropdownMenuItem>}
                   <DropdownMenuItem onSelect={signOut}><LogOut /> Log out</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -96,6 +101,7 @@ export function SiteHeader() {
               <>
                 {profile && <Link to="/@{$username}" params={{ username: profile.username }} className="rounded-2xl px-4 py-3 font-medium hover:bg-secondary">My profile</Link>}
                 <Link to="/settings" className="rounded-2xl px-4 py-3 font-medium hover:bg-secondary">Settings</Link>
+                 {admin.data?.isAdmin && <Link to="/admin" className="rounded-2xl px-4 py-3 font-medium hover:bg-secondary">Administration</Link>}
                 <button onClick={signOut} className="rounded-2xl px-4 py-3 text-left font-medium hover:bg-secondary">Log out</button>
                 <Button asChild variant="hero" className="mt-2"><Link to="/create"><Plus /> New Ping</Link></Button>
               </>

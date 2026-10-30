@@ -43,11 +43,12 @@ export function LikeButton({ ping }: { ping: Ping }) {
 
   const m = useMutation({
     mutationFn: async (next: boolean) => {
+      if (!user) throw new Error("Please sign in again.");
       if (next) {
-        const { error } = await supabase.from("likes").insert({ user_id: user!.id, ping_id: ping.id });
+        const { error } = await supabase.from("likes").insert({ user_id: user.id, ping_id: ping.id });
         if (error && error.code !== "23505") throw error;
       } else {
-        const { error } = await supabase.from("likes").delete().eq("user_id", user!.id).eq("ping_id", ping.id);
+        const { error } = await supabase.from("likes").delete().eq("user_id", user.id).eq("ping_id", ping.id);
         if (error) throw error;
       }
     },
@@ -168,7 +169,8 @@ export function PingMenu({ ping, onDeleted }: { ping: Ping; onDeleted?: () => vo
 
   const report = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("reports").insert({ ping_id: ping.id, reporter_id: user!.id, reason, details: details.trim() || null });
+      if (!user) throw new Error("Please sign in again.");
+      const { error } = await supabase.from("reports").insert({ ping_id: ping.id, reporter_id: user.id, reason, details: details.trim() || null });
       if (error && error.code !== "23505") throw error;
     },
     onSuccess: () => setReported(true),
