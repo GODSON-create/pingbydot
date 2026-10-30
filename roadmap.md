@@ -1,4 +1,6 @@
 # Launch repair
+- [ ] Admin first: locked roles, manual owner bootstrap, verified admin dashboard, moderation audit and paginated management.
+- [ ] Produce owner/admin/non-admin QA report with verified checks and explicit blockers.
 - [x] Official logo preparation: inspect assets, connect reusable navigation/artwork slots with text fallback, verify sharing without publishing.
 - [ ] Official logo placement and logo-derived favicon: blocked until the user supplies authentic PNG/SVG artwork; actual logo aspect ratio and light/dark contrast require that asset.
 - [x] Sharing follow-up QA: validate PNG exports, SSR metadata, public URLs, mobile fallbacks and cache responses; fix scoped bugs without publishing.
