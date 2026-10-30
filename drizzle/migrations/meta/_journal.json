@@ -29,6 +29,13 @@
       "when": 1793323406383,
       "tag": "0003_tighten_admin_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793323471431,
+      "tag": "0004_limit_authenticated_launch_grants",
+      "breakpoints": true
     }
   ]
 }
