@@ -46,15 +46,18 @@ function Settings() {
       return setErrs(x);
     }
     setErrs({});
+    if (!user) { toast.error("Please log in again before saving."); return; }
     setSaving(true);
-    const { error } = await supabase.from("profiles").update({ ...r.data, avatar_url: r.data.avatar_url || null }).eq("id", user!.id);
-    setSaving(false);
+    try {
+    const { error } = await supabase.from("profiles").update({ ...r.data, avatar_url: r.data.avatar_url || null }).eq("id", user.id).select("id").single();
     if (error) {
       if (error.code === "23505") return setErrs({ username: "That username is taken." });
       return toast.error("Couldn't save your profile.");
     }
     toast.success("Profile saved");
     refreshProfile();
+    } catch { toast.error("Couldn't connect. Please try saving again."); }
+    finally { setSaving(false); }
   };
 
   const changePw = async (e: React.FormEvent) => {

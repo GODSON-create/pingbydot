@@ -20,7 +20,7 @@ export const Route = createFileRoute("/api/public/ping-card/$id")({
               return fetch(input, { ...init, headers });
             } },
           });
-          const { data, error } = await client.from("pings").select("id,content,category,image_url,updated_at,author:profiles!pings_user_id_fkey(id,username,display_name,avatar_url)").eq("id", params.id).maybeSingle();
+          const { data, error } = await client.from("pings").select("id,content,category,image_url,updated_at,author:profiles!pings_user_id_fkey(id,username,display_name,avatar_url)").is("hidden_at", null).eq("id", params.id).maybeSingle();
           if (error) throw new Error("Public reading failed");
           if (!data) return new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
           const { renderSocialPng } = await import("@/lib/sharing/social");

@@ -14,3 +14,5 @@
 - Share artwork uses one Satori tree with embedded font and CSS artwork tokens; browser PNG previews are the exported files, while public social PNGs use the same full card scaled to fit without cropping.
 - Public social images read only public Ping fields, never fetch arbitrary remote media server-side, and use short caching plus content-derived ETags so edits and deletions revalidate.
 - Navigation and share artwork use the shared brand asset registry; logo artwork is embedded for rendering, and missing assets use text fallback so neither path invents a mark or fetches remote media server-side.
+- Administrator functions verify the caller's database role before importing privileged clients; roles are grantable only through trusted manual operations, not app endpoints.
+- Moderation changes and audit entries commit atomically through a service-role-only database function; hidden Pings have owner reads but public readers and social images explicitly exclude them.
