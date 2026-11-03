@@ -6,6 +6,9 @@ import { CATEGORIES } from "@/lib/validation";
 import { FounderAvatar } from "./Avatar";
 import { LikeButton, PingMenu, ShareMenu } from "./PingActions";
 import { cn } from "@/lib/utils";
+import { MessageCircle } from "lucide-react";
+import { replyCount } from "@/lib/pings";
+import { RepingAttribution } from "./Comments";
 
 const CAT_TONE: Record<string, string> = {
   progress: "bg-accent text-accent-foreground",
@@ -77,10 +80,11 @@ export function PingCard({ ping, linkToDetail = true }: { ping: Ping; linkToDeta
         ) : (
           <p className="whitespace-pre-line break-words text-lg leading-relaxed">{ping.content}</p>
         )}
+        <RepingAttribution ping={ping} />
         <div className="relative z-10"><CtaLink ping={ping} /></div>
       </div>
       <footer className="relative z-10 mt-4 flex items-center justify-between border-t border-border pt-3">
-        <LikeButton ping={ping} />
+        <span className="flex items-center gap-1"><LikeButton ping={ping} /><Link to="/p/$id" params={{ id: ping.id }} hash="replies-title" aria-label={`${replyCount(ping)} replies`} className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-sm text-muted-foreground hover:bg-secondary"><MessageCircle className="size-4" />{replyCount(ping)}</Link></span>
         <div className="flex items-center">
           <ShareMenu ping={ping} />
           <PingMenu ping={ping} />

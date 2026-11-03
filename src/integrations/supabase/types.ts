@@ -14,6 +14,148 @@ export type Database = {
   }
   public: {
     Tables: {
+      comment_likes: {
+        Row: {
+          comment_id: string
+          created_at: string
+          user_id: string
+        }
+        Insert: {
+          comment_id: string
+          created_at?: string
+          user_id: string
+        }
+        Update: {
+          comment_id?: string
+          created_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comment_likes_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comment_likes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      comment_reports: {
+        Row: {
+          comment_id: string
+          created_at: string
+          details: string | null
+          id: string
+          reason: string
+          reporter_id: string
+          resolved_at: string | null
+        }
+        Insert: {
+          comment_id: string
+          created_at?: string
+          details?: string | null
+          id?: string
+          reason: string
+          reporter_id: string
+          resolved_at?: string | null
+        }
+        Update: {
+          comment_id?: string
+          created_at?: string
+          details?: string | null
+          id?: string
+          reason?: string
+          reporter_id?: string
+          resolved_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comment_reports_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comment_reports_reporter_id_fkey"
+            columns: ["reporter_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      comments: {
+        Row: {
+          content: string
+          created_at: string
+          deleted_at: string | null
+          depth: number
+          hidden_at: string | null
+          id: string
+          parent_id: string | null
+          ping_id: string
+          root_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          deleted_at?: string | null
+          depth?: number
+          hidden_at?: string | null
+          id?: string
+          parent_id?: string | null
+          ping_id: string
+          root_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          deleted_at?: string | null
+          depth?: number
+          hidden_at?: string | null
+          id?: string
+          parent_id?: string | null
+          ping_id?: string
+          root_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comments_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comments_ping_id_fkey"
+            columns: ["ping_id"]
+            isOneToOne: false
+            referencedRelation: "pings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       likes: {
         Row: {
           created_at: string
@@ -74,6 +216,68 @@ export type Database = {
         }
         Relationships: []
       }
+      notifications: {
+        Row: {
+          actor_id: string | null
+          comment_id: string
+          created_at: string
+          id: string
+          kind: string
+          ping_id: string
+          read_at: string | null
+          user_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          comment_id: string
+          created_at?: string
+          id?: string
+          kind: string
+          ping_id: string
+          read_at?: string | null
+          user_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          comment_id?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          ping_id?: string
+          read_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_ping_id_fkey"
+            columns: ["ping_id"]
+            isOneToOne: false
+            referencedRelation: "pings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pings: {
         Row: {
           category: string
@@ -84,6 +288,8 @@ export type Database = {
           hidden_at: string | null
           id: string
           image_url: string | null
+          source_comment_id: string | null
+          source_ping_id: string | null
           updated_at: string
           user_id: string
         }
@@ -96,6 +302,8 @@ export type Database = {
           hidden_at?: string | null
           id?: string
           image_url?: string | null
+          source_comment_id?: string | null
+          source_ping_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -108,10 +316,26 @@ export type Database = {
           hidden_at?: string | null
           id?: string
           image_url?: string | null
+          source_comment_id?: string | null
+          source_ping_id?: string | null
           updated_at?: string
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "pings_source_comment_id_fkey"
+            columns: ["source_comment_id"]
+            isOneToOne: false
+            referencedRelation: "comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pings_source_ping_id_fkey"
+            columns: ["source_ping_id"]
+            isOneToOne: false
+            referencedRelation: "pings"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "pings_user_id_fkey"
             columns: ["user_id"]
