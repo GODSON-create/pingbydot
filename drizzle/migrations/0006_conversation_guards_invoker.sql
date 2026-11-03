@@ -1,0 +1,2 @@
+ALTER FUNCTION public.guard_comment() SECURITY INVOKER;
+ALTER FUNCTION public.guard_reping() SECURITY INVOKER;
