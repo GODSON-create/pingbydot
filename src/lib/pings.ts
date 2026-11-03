@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { RepingSource } from "@/lib/comments";
 import { readPublicPings } from "@/lib/public-pings.functions";
 
 export type Profile = {
@@ -23,8 +24,10 @@ export type Ping = {
   updated_at: string;
   author: Pick<Profile, "id" | "username" | "display_name" | "avatar_url"> | null;
   likes: { count: number }[];
-};
+  replies?: { count: number }[];
+} & Partial<RepingSource>;
 
+export const replyCount = (p: Ping) => p.replies?.[0]?.count ?? 0;
 export const likeCount = (p: Ping) => p.likes?.[0]?.count ?? 0;
 
 export const feedQuery = (category: string | null, page = 0) =>

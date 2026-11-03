@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
 
-export const PUBLIC_PING_SELECT = "id,user_id,category,content,image_url,cta_url,cta_label,created_at,updated_at,author:profiles!pings_user_id_fkey(id,username,display_name,avatar_url),likes(count)";
+export const PUBLIC_PING_SELECT = "id,user_id,category,content,image_url,cta_url,cta_label,created_at,updated_at,author:profiles!pings_user_id_fkey(id,username,display_name,avatar_url),likes(count),replies:comments!comments_ping_id_fkey(count),source_ping_id,source_comment_id,source_comment:comments!pings_source_comment_id_fkey(id,ping_id,content,deleted_at,author:profiles!comments_user_id_fkey(username,display_name))";
 
 export const readPublicPings = createServerFn({ method: "GET" })
   .inputValidator(z.object({ kind: z.enum(["feed", "ping", "profile"]), value: z.string().nullable(), page: z.number().int().min(0).max(100000).default(0) }))
