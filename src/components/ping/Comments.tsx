@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { readPublicComments } from "@/lib/public-comments.functions";
 import {
-  buildThreads, canModifyComment, commentLikeCount, commentReportSchema, commentSchema,
+  buildThreads, repingAttribution, canModifyComment, commentLikeCount, commentReportSchema, commentSchema,
   COMMENT_MAX, COMMENT_MAX_DEPTH, type CommentNode, type CommentRow,
 } from "@/lib/comments";
 import { pingSchema, PING_MAX } from "@/lib/validation";
@@ -322,7 +322,6 @@ function RepingDialog({ node, ping, onClose }: { node: CommentNode; ping: Ping; 
 export function RepingAttribution({ ping }: { ping: Ping }) {
   return <RepingAttributionInner ping={ping} />;
 }
-import { repingAttribution } from "@/lib/comments";
 function RepingAttributionInner({ ping }: { ping: Ping }) {
   const a = repingAttribution({ source_ping_id: ping.source_ping_id ?? null, source_comment_id: ping.source_comment_id ?? null, source_comment: ping.source_comment ?? null });
   if (!a) return null;

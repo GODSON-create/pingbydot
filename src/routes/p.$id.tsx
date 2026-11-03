@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { ErrorComponent } from "@/routes/__root";
 import { PingShareActions } from "@/components/ping/ShareCardDialog";
+import { CommentsSection, RepingAttribution } from "@/components/ping/Comments";
+import { replyCount } from "@/lib/pings";
 import { socialImageUrl } from "@/lib/sharing/card";
 
 function MissingPing() {
@@ -76,13 +78,14 @@ function PingDetail() {
             <CategoryTag value={ping.category} />
           </header>
           <p className="mt-6 whitespace-pre-line break-words text-lg leading-relaxed sm:text-xl">{ping.content}</p>
+          <RepingAttribution ping={ping} />
           <CtaLink ping={ping} />
           <p className="mt-6 text-sm text-muted-foreground">
             <time dateTime={ping.created_at}>{format(new Date(ping.created_at), "MMM d, yyyy · h:mm a")}</time>
             {ping.updated_at !== ping.created_at && new Date(ping.updated_at).getTime() - new Date(ping.created_at).getTime() > 5000 && " · edited"}
           </p>
           <footer className="mt-4 flex items-center justify-between border-t border-border pt-4">
-            <LikeButton ping={ping} />
+            <span className="flex items-center gap-2"><LikeButton ping={ping} /><a href="#replies-title" className="text-sm text-muted-foreground hover:underline">{replyCount(ping)} {replyCount(ping) === 1 ? "reply" : "replies"}</a></span>
             <div className="flex items-center gap-1">
               <ShareMenu ping={ping} variant="outline" />
               <PingMenu ping={ping} onDeleted={() => navigate({ to: "/explore" })} />
@@ -90,6 +93,7 @@ function PingDetail() {
           </footer>
         </article>
         <PingShareActions ping={ping} />
+        <CommentsSection ping={ping} />
 
         <div className="glass mt-5 flex items-center gap-3 rounded-2xl p-3 pl-5">
           <span className="min-w-0 flex-1 truncate font-mono text-sm text-muted-foreground">{url}</span>
