@@ -126,7 +126,7 @@ function CommentForm({ pingId, parentId, onDone, className, autoFocus }: { pingI
   );
 }
 
-function CommentItem({ node, ping, liked }: { node: CommentNode; ping: Ping; liked?: Set<string> }) {
+function CommentItem({ node, ping, liked }: { node: CommentNode; ping: Ping; liked?: Set<string> | undefined }) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const qc = useQueryClient();

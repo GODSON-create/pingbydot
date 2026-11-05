@@ -12,7 +12,9 @@ function normalizeOrigin(value: string | undefined): string {
   }
 }
 
-export const SITE_ORIGIN = normalizeOrigin(import.meta.env.VITE_SITE_ORIGIN as string | undefined);
+export const SITE_ORIGIN = normalizeOrigin(
+  import.meta.env["VITE_SITE_ORIGIN"] as string | undefined,
+);
 export const SITE_NAME = "Ping by DOT";
 
 export const siteUrl = (path = "/") => new URL(path, SITE_ORIGIN).href;
@@ -29,7 +31,7 @@ export function siteJsonLd() {
     name: SITE_NAME,
     url: siteUrl("/"),
   };
-  if (OFFICIAL_LOGO_URL) organization.logo = OFFICIAL_LOGO_URL;
+  if (OFFICIAL_LOGO_URL) organization["logo"] = OFFICIAL_LOGO_URL;
   return {
     "@context": "https://schema.org",
     "@graph": [
@@ -47,7 +49,13 @@ export function siteJsonLd() {
 }
 
 /** Per-page title/description/canonical/OG/X tags for an indexable public page. */
-export function pageHead(o: { title: string; description: string; path: string; type?: string; card?: "summary" | "summary_large_image" }) {
+export function pageHead(o: {
+  title: string;
+  description: string;
+  path: string;
+  type?: string;
+  card?: "summary" | "summary_large_image";
+}) {
   const url = siteUrl(o.path);
   return {
     meta: [
