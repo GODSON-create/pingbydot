@@ -1,3 +1,4 @@
+import { siteUrl } from "@/lib/site";
 import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { RepingSource } from "@/lib/comments";
@@ -71,4 +72,4 @@ export const myLikesQuery = (userId: string | undefined) =>
   });
 
 export const pingUrl = (id: string) =>
-  `https://pingbydot.lovable.app/p/${encodeURIComponent(id)}`;
+  siteUrl(`/p/${encodeURIComponent(id)}`);

@@ -36,9 +36,11 @@ export const Route = createFileRoute("/p/$id")({
       { property: "og:description", content: ping?.content.slice(0, 200) || "Read a public Ping." },
       { property: "og:type", content: "article" },
       { name: "twitter:card", content: "summary_large_image" },
-      ...(!ping ? [{ name: "robots", content: "noindex" }] : []),
+      ...(!ping ? [{ name: "robots", content: "noindex, nofollow" }] : []),
       ...(ping ? [
         { property: "og:url", content: pingUrl(ping.id) },
+        { name: "twitter:title", content: `${ping.author?.display_name || ping.author?.username || "A founder"}'s Ping` },
+        { name: "twitter:description", content: ping.content.slice(0, 200) },
         { property: "og:image", content: socialImageUrl(ping) },
         { name: "twitter:image", content: socialImageUrl(ping) },
         { property: "og:image:width", content: "1200" },

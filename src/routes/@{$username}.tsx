@@ -1,3 +1,4 @@
+import { pageHead, siteUrl, NOINDEX } from "@/lib/site";
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -19,16 +20,18 @@ export const Route = createFileRoute("/@{$username}")({
   },
   errorComponent: ErrorComponent,
   notFoundComponent: () => <div className="px-5 py-20 text-center"><h1 className="font-display text-4xl font-extrabold">No one here yet</h1><p>That founder profile doesn't exist.</p><Button asChild className="mt-6"><Link to="/explore">Explore Pings</Link></Button></div>,
-  head: ({ params }) => ({
-    meta: [
-      { title: `@${params.username} — Ping` },
-      { name: "description", content: `See what @${params.username} is building in public on Ping.` },
-      { property: "og:title", content: `@${params.username} on Ping` },
-      { property: "og:description", content: `Pings from @${params.username}.` },
-      { property: "og:type", content: "profile" },
-      { name: "twitter:card", content: "summary" },
-    ],
-  }),
+  head: ({ params, loaderData }) => {
+    const p = loaderData?.profile;
+    if (!p) return { meta: [{ title: "Profile unavailable — Ping by DOT" }, NOINDEX] };
+    const name = p.display_name || `@${p.username}`;
+    const head = pageHead({
+      title: `${name} (@${p.username}) — Ping by DOT`,
+      description: (p.bio || `See what @${p.username} is building in public on Ping.`).slice(0, 200),
+      path: `/@${encodeURIComponent(p.username)}`,
+      type: "profile",
+    });
+    return { ...head, meta: [...head.meta, { property: "profile:username", content: p.username }] };
+  },
   component: ProfilePage,
 });
 
@@ -63,7 +66,7 @@ function ProfilePage() {
                 {profile.bio && <p className="mt-3 max-w-xl whitespace-pre-line">{profile.bio}</p>}
               </div>
               <div className="flex gap-2 sm:flex-col">
-                <Button variant="outline" size="sm" onClick={async () => { try { await navigator.clipboard.writeText(`https://pingbydot.lovable.app/@${encodeURIComponent(profile.username)}`); toast.success("Profile link copied"); } catch { toast.error("Couldn't copy. Copy the link from the address bar."); } }}><Link2 /> Copy profile link</Button>
+                <Button variant="outline" size="sm" onClick={async () => { try { await navigator.clipboard.writeText(siteUrl(`/@${encodeURIComponent(profile.username)}`)); toast.success("Profile link copied"); } catch { toast.error("Couldn't copy. Copy the link from the address bar."); } }}><Link2 /> Copy profile link</Button>
                 {isMe && <Button asChild size="sm" variant="secondary"><Link to="/settings">Edit profile</Link></Button>}
               </div>
             </div>
