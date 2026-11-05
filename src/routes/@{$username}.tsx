@@ -20,7 +20,7 @@ export const Route = createFileRoute("/@{$username}")({
   },
   errorComponent: ErrorComponent,
   notFoundComponent: () => <div className="px-5 py-20 text-center"><h1 className="font-display text-4xl font-extrabold">No one here yet</h1><p>That founder profile doesn't exist.</p><Button asChild className="mt-6"><Link to="/explore">Explore Pings</Link></Button></div>,
-  head: ({ params, loaderData }) => {
+  head: ({ loaderData }) => {
     const p = loaderData?.profile;
     if (!p) return { meta: [{ title: "Profile unavailable — Ping by DOT" }, NOINDEX] };
     const name = p.display_name || `@${p.username}`;
