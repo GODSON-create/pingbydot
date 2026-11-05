@@ -8,8 +8,10 @@ import { Label } from "@/components/ui/label";
 import { AuthShell } from "@/components/AuthShell";
 
 export const Route = createFileRoute("/reset-password")({
+  staticData: { sitemap: false },
   head: () => ({
     meta: [
+      { name: "robots", content: "noindex, nofollow" },
       { title: "Set a new password — Ping" },
       { name: "description", content: "Choose a new password for your Ping account." },
       { property: "og:title", content: "Set a new password — Ping" },

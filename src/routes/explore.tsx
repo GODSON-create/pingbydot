@@ -1,3 +1,4 @@
+import { pageHead } from "@/lib/site";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { z } from "zod";
@@ -10,20 +11,16 @@ import { AriseCallout } from "@/components/AriseCallout";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/explore")({
+  staticData: { sitemap: true },
   validateSearch: z.object({ c: z.enum(["progress", "idea", "launch", "milestone", "question", "opportunity"]).optional().catch(undefined), page: z.coerce.number().int().min(0).max(100000).catch(0).default(0) }),
   loaderDeps: ({ search }) => ({ c: search.c, page: search.page }),
   loader: ({ context, deps }) => context.queryClient.ensureQueryData(feedQuery(deps.c ?? null, deps.page)),
   errorComponent: ErrorComponent,
   notFoundComponent: () => <p className="px-5 py-12">No Pings found.</p>,
-  head: () => ({
-    meta: [
-      { title: "Explore Pings — Ping" },
-      { name: "description", content: "Browse the latest Pings: progress, ideas, launches, milestones and opportunities from people building in public." },
-      { property: "og:title", content: "Explore Pings" },
-      { property: "og:description", content: "See what people are building in public." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-    ],
+  head: () => pageHead({
+    title: "Explore Pings — Ping by DOT",
+    description: "Browse the latest Pings: progress, ideas, launches, milestones and opportunities from people building in public.",
+    path: "/explore",
   }),
   component: Explore,
 });

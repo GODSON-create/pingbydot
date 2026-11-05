@@ -9,6 +9,9 @@ export type BrandLogoAsset = {
   height: number;
 };
 
+// PENDING OFFICIAL LOGO: return the approved asset here (src, optional darkSrc,
+// embedded artworkDataUrl, intrinsic width/height) and set OFFICIAL_LOGO_URL in
+// src/lib/site.ts; header, share cards, OG images and JSON-LD pick it up.
 // No official Ping logo has been supplied. Do not substitute the template favicon
 // or the decorative mark previously drawn in navigation.
 export function getBrandLogo(): BrandLogoAsset | null {

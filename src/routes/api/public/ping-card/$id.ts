@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
 export const Route = createFileRoute("/api/public/ping-card/$id")({
+  staticData: { sitemap: false },
   server: {
     handlers: {
       GET: async ({ params, request }) => {

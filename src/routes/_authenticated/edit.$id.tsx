@@ -9,8 +9,10 @@ import { pingSchema, type Category } from "@/lib/validation";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/_authenticated/edit/$id")({
+  staticData: { sitemap: false },
   head: () => ({
     meta: [
+      { name: "robots", content: "noindex, nofollow" },
       { title: "Edit Ping — Ping" },
       { name: "description", content: "Edit your Ping." },
       { property: "og:title", content: "Edit Ping" },

@@ -9,9 +9,11 @@ import { useAuth } from "@/lib/auth";
 import { authDestination } from "@/lib/auth-return";
 
 export const Route = createFileRoute("/login")({
+  staticData: { sitemap: false },
   validateSearch: (search: SearchSchemaInput & { next?: unknown }) => ({ next: authDestination(search.next) }),
   head: () => ({
     meta: [
+      { name: "robots", content: "noindex, nofollow" },
       { title: "Log in — Ping" },
       { name: "description", content: "Log in to Ping to share and like Pings." },
       { property: "og:title", content: "Log in — Ping" },

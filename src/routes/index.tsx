@@ -1,3 +1,4 @@
+import { pageHead } from "@/lib/site";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -9,15 +10,12 @@ import { AriseCallout } from "@/components/AriseCallout";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
-  head: () => ({
-    meta: [
-      { title: "Ping — Build in public. Share your story." },
-      { name: "description", content: "Share progress, ideas, milestones and opportunities as Pings with public links. Connect with people who care about what you're building." },
-      { property: "og:title", content: "Ping — Build in public. Share your story." },
-      { property: "og:description", content: "You're building something. Let the world see it." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-    ],
+  staticData: { sitemap: true },
+  head: () => pageHead({
+    title: "Ping by DOT — Build in public. Share your story.",
+    description: "Share progress, ideas, milestones and opportunities as Pings with public links. Connect with people who care about what you're building.",
+    path: "/",
+    card: "summary_large_image",
   }),
   component: Landing,
 });

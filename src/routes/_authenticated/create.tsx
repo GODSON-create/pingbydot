@@ -7,8 +7,10 @@ import { PingComposer, type PingDraft } from "@/components/ping/PingComposer";
 import { pingSchema } from "@/lib/validation";
 
 export const Route = createFileRoute("/_authenticated/create")({
+  staticData: { sitemap: false },
   head: () => ({
     meta: [
+      { name: "robots", content: "noindex, nofollow" },
       { title: "Create a Ping — Ping" },
       { name: "description", content: "Share progress, an idea, a launch or a milestone." },
       { property: "og:title", content: "Create a Ping" },
