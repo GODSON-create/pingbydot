@@ -20,6 +20,7 @@ function MissingPing() {
 }
 
 export const Route = createFileRoute("/p/$id")({
+  staticData: { sitemap: true },
   loader: async ({ context, params }) => {
     const ping = await context.queryClient.ensureQueryData(pingQuery(params.id));
     if (!ping) throw notFound();

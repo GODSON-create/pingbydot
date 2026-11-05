@@ -12,8 +12,10 @@ import { FounderAvatar } from "@/components/ping/Avatar";
 import { useSignOut } from "@/components/layout/SiteHeader";
 
 export const Route = createFileRoute("/_authenticated/settings")({
+  staticData: { sitemap: false },
   head: () => ({
     meta: [
+      { name: "robots", content: "noindex, nofollow" },
       { title: "Settings — Ping" },
       { name: "description", content: "Edit your Ping profile and account." },
       { property: "og:title", content: "Settings — Ping" },

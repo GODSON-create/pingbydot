@@ -9,8 +9,10 @@ import { AuthShell, GoogleButton, OrDivider } from "@/components/AuthShell";
 import { usernameSchema } from "@/lib/validation";
 
 export const Route = createFileRoute("/signup")({
+  staticData: { sitemap: false },
   head: () => ({
     meta: [
+      { name: "robots", content: "noindex, nofollow" },
       { title: "Sign up — Ping" },
       { name: "description", content: "Create your Ping account and share your first Ping." },
       { property: "og:title", content: "Sign up — Ping" },

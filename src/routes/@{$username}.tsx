@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/@{$username}")({
+  staticData: { sitemap: true },
   loader: async ({ context, params }) => {
     const data = await context.queryClient.ensureQueryData(profileQuery(params.username));
     if (!data) throw notFound();

@@ -10,6 +10,7 @@ import { AriseCallout } from "@/components/AriseCallout";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/explore")({
+  staticData: { sitemap: true },
   validateSearch: z.object({ c: z.enum(["progress", "idea", "launch", "milestone", "question", "opportunity"]).optional().catch(undefined), page: z.coerce.number().int().min(0).max(100000).catch(0).default(0) }),
   loaderDeps: ({ search }) => ({ c: search.c, page: search.page }),
   loader: ({ context, deps }) => context.queryClient.ensureQueryData(feedQuery(deps.c ?? null, deps.page)),

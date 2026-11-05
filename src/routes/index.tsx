@@ -9,6 +9,7 @@ import { AriseCallout } from "@/components/AriseCallout";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
+  staticData: { sitemap: true },
   head: () => ({
     meta: [
       { title: "Ping — Build in public. Share your story." },
