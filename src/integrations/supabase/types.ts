@@ -345,6 +345,47 @@ export type Database = {
           },
         ]
       }
+      profile_connections: {
+        Row: {
+          created_at: string
+          handle: string
+          id: string
+          is_primary: boolean
+          is_public: boolean
+          platform: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          handle: string
+          id?: string
+          is_primary?: boolean
+          is_public?: boolean
+          platform: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          handle?: string
+          id?: string
+          is_primary?: boolean
+          is_public?: boolean
+          platform?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_connections_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
