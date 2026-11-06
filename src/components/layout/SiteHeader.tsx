@@ -1,6 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
-import { Menu, X, Plus, LogOut, Settings, User } from "lucide-react";
+import { Plus, LogOut, Settings, User } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { checkAdminAccess } from "@/lib/admin.functions";
@@ -39,7 +38,6 @@ export function useSignOut() {
 const navLink = "rounded-full px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground";
 
 export function SiteHeader() {
-  const [open, setOpen] = useState(false);
   const { user, profile, ready } = useAuth();
   const signOut = useSignOut();
   const verifyAdmin = useServerFn(checkAdminAccess);
@@ -88,32 +86,7 @@ export function SiteHeader() {
             </>
           )}
         </div>
-        <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-label={open ? "Close menu" : "Open menu"}>
-          {open ? <X /> : <Menu />}
-        </Button>
       </div>
-      {open && (
-        <div className="glass mx-auto mt-2 max-w-6xl rounded-3xl p-3 md:hidden animate-page-in" onClick={() => setOpen(false)}>
-          <nav className="flex flex-col gap-1" aria-label="Mobile">
-            <Link to="/explore" className="rounded-2xl px-4 py-3 font-medium hover:bg-secondary">Explore</Link>
-            <Link to="/" hash="how" className="rounded-2xl px-4 py-3 font-medium hover:bg-secondary">How it works</Link>
-            {user ? (
-              <>
-                {profile && <Link to="/@{$username}" params={{ username: profile.username }} className="rounded-2xl px-4 py-3 font-medium hover:bg-secondary">My profile</Link>}
-                <Link to="/settings" className="rounded-2xl px-4 py-3 font-medium hover:bg-secondary">Settings</Link>
-                 {admin.data?.isAdmin && <Link to="/admin" className="rounded-2xl px-4 py-3 font-medium hover:bg-secondary">Administration</Link>}
-                <button onClick={signOut} className="rounded-2xl px-4 py-3 text-left font-medium hover:bg-secondary">Log out</button>
-                <Button asChild variant="hero" className="mt-2"><Link to="/create"><Plus /> New Ping</Link></Button>
-              </>
-            ) : (
-              <>
-                <Link to="/login" className="rounded-2xl px-4 py-3 font-medium hover:bg-secondary">Log in</Link>
-                <Button asChild variant="hero" className="mt-2"><Link to="/signup">Create your first Ping</Link></Button>
-              </>
-            )}
-          </nav>
-        </div>
-      )}
     </header>
   );
 }

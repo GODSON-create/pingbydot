@@ -16,6 +16,8 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AuthProvider } from "@/lib/auth";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { SiteFooter } from "@/components/layout/SiteFooter";
+import { BottomNav } from "@/components/layout/BottomNav";
+import { GestureLayer } from "@/components/layout/GestureLayer";
 import { Toaster } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { SITE_NAME, siteJsonLd } from "@/lib/site";
@@ -113,7 +115,9 @@ function RootComponent() {
         <main id="main" key={pathname} className="animate-page-in">
           <Outlet />
         </main>
-        <SiteFooter />
+        <div className="pb-24 md:pb-0"><SiteFooter /></div>
+        <BottomNav />
+        <GestureLayer />
         <Toaster position="bottom-center" />
       </AuthProvider>
     </QueryClientProvider>
