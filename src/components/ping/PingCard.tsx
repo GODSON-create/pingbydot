@@ -9,6 +9,8 @@ import { cn } from "@/lib/utils";
 import { MessageCircle } from "lucide-react";
 import { replyCount } from "@/lib/pings";
 import { RepingAttribution } from "./Comments";
+import { useState } from "react";
+import { useLongPress } from "@/hooks/use-long-press";
 
 const CAT_TONE: Record<string, string> = {
   progress: "bg-accent text-accent-foreground",
@@ -56,8 +58,10 @@ export function CtaLink({ ping }: { ping: Ping }) {
 
 export function PingCard({ ping, linkToDetail = true }: { ping: Ping; linkToDetail?: boolean }) {
   const name = ping.author?.display_name || ping.author?.username || "Founder";
+  const [actions, setActions] = useState(false);
+  const press = useLongPress(() => setActions(true));
   return (
-    <article className="surface-card lift relative flex flex-col rounded-3xl p-5 sm:p-6">
+    <article {...press} className="surface-card lift relative flex flex-col rounded-3xl p-5 sm:p-6">
       <header className="relative z-10 flex items-start gap-3">
         {ping.author && (
           <Link to="/@{$username}" params={{ username: ping.author.username }} className="flex min-w-0 flex-1 items-center gap-3">
@@ -87,7 +91,7 @@ export function PingCard({ ping, linkToDetail = true }: { ping: Ping; linkToDeta
         <span className="flex items-center gap-1"><LikeButton ping={ping} /><Link to="/p/$id" params={{ id: ping.id }} hash="replies-title" aria-label={`${replyCount(ping)} replies`} className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-sm text-muted-foreground hover:bg-secondary"><MessageCircle className="size-4" />{replyCount(ping)}</Link></span>
         <div className="flex items-center">
           <ShareMenu ping={ping} />
-          <PingMenu ping={ping} />
+          <PingMenu ping={ping} open={actions} onOpenChange={setActions} />
         </div>
       </footer>
     </article>

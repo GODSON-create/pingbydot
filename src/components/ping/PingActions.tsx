@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useHydrated } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Heart, Share2, Link2, MessageCircle, Flag, MoreHorizontal, Pencil, Trash2, Check, Image as ImageIcon } from "lucide-react";
+import { Heart, Share2, Link2, MessageCircle, Flag, LayoutGrid, Pencil, Trash2, Check, Image as ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -12,7 +12,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -26,6 +25,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { ShareCardDialog } from "./ShareCardDialog";
 import { shareMessage, shareExcerpt } from "@/lib/sharing/card";
@@ -156,8 +156,17 @@ const REASONS = [
   { v: "other", l: "Something else" },
 ] as const;
 
-export function PingMenu({ ping, onDeleted }: { ping: Ping; onDeleted?: () => void }) {
+const ROW = "flex min-h-12 w-full items-center gap-3 rounded-2xl px-4 py-3 text-left font-medium hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+export function PingMenu({ ping, onDeleted, open, onOpenChange }: { ping: Ping; onDeleted?: () => void; open?: boolean; onOpenChange?: (o: boolean) => void }) {
   const { user } = useAuth();
+  const [innerPanel, setInnerPanel] = useState(false);
+  const panel = open ?? innerPanel;
+  const setPanel = (o: boolean) => { setInnerPanel(o); onOpenChange?.(o); };
+  const [cardOpen, setCardOpen] = useState(false);
+  const hydrated = useHydrated();
+  const canNative = hydrated && typeof navigator.share === "function";
+  const url = pingUrl(ping.id);
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [reportOpen, setReportOpen] = useState(false);
@@ -192,38 +201,36 @@ export function PingMenu({ ping, onDeleted }: { ping: Ping; onDeleted?: () => vo
 
   return (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="size-9 text-muted-foreground" aria-label="More actions">
-            <MoreHorizontal />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-48 rounded-2xl">
-          {isOwner && (
-            <>
-              <DropdownMenuItem asChild>
-                <Link to="/edit/$id" params={{ id: ping.id }}><Pencil /> Edit</Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => setDeleteOpen(true)} className="text-destructive focus:text-destructive"><Trash2 /> Delete</DropdownMenuItem>
-              <DropdownMenuSeparator />
-            </>
-          )}
-          {!isOwner && (
-            <DropdownMenuItem
-              onSelect={() => {
-                if (!user) {
-                  toast("Sign in to report a Ping", { action: { label: "Log in", onClick: () => navigate({ to: "/login" }) } });
-                  return;
-                }
-                setReported(false);
-                setReportOpen(true);
-              }}
-            >
-              <Flag /> Report
-            </DropdownMenuItem>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <Button variant="ghost" size="sm" className="h-9 text-muted-foreground" aria-label="Ping actions" aria-haspopup="dialog" onClick={() => setPanel(true)}>
+        <LayoutGrid /> <span className="sr-only sm:not-sr-only">Actions</span>
+      </Button>
+      <Sheet open={panel} onOpenChange={setPanel}>
+        <SheetContent side="bottom" className="mx-auto max-w-lg rounded-t-3xl pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+          <SheetHeader className="text-left">
+            <SheetTitle className="font-display">Ping actions</SheetTitle>
+            <SheetDescription className="line-clamp-2">{shareExcerpt(ping.content)}</SheetDescription>
+          </SheetHeader>
+          <div className="mt-2 grid gap-1">
+            <button type="button" className={ROW} onClick={() => { setPanel(false); setCardOpen(true); }}><ImageIcon className="size-5" /> Share card preview</button>
+            {canNative && <button type="button" className={ROW} onClick={async () => { setPanel(false); try { await navigator.share({ title: "A Ping", text: shareExcerpt(ping.content), url }); } catch (e) { if (!(e instanceof DOMException && e.name === "AbortError")) toast.error("Couldn't share. Try copying the link."); } }}><Share2 className="size-5" /> Share…</button>}
+            <a className={ROW} href={`https://wa.me/?text=${encodeURIComponent(shareMessage(ping))}`} target="_blank" rel="noopener noreferrer" onClick={() => setPanel(false)}><MessageCircle className="size-5" /> Share link on WhatsApp</a>
+            <button type="button" className={ROW} onClick={async () => { setPanel(false); try { await navigator.clipboard.writeText(url); toast.success("Link copied"); } catch { toast.error("Couldn't copy. You can copy the link from the address bar."); } }}><Link2 className="size-5" /> Copy link</button>
+            {isOwner ? (
+              <>
+                <Link to="/edit/$id" params={{ id: ping.id }} className={ROW}><Pencil className="size-5" /> Edit</Link>
+                <button type="button" className={cn(ROW, "text-destructive")} onClick={() => { setPanel(false); setDeleteOpen(true); }}><Trash2 className="size-5" /> Delete</button>
+              </>
+            ) : (
+              <button type="button" className={ROW} onClick={() => {
+                setPanel(false);
+                if (!user) { toast("Sign in to report a Ping", { action: { label: "Log in", onClick: () => navigate({ to: "/login" }) } }); return; }
+                setReported(false); setReportOpen(true);
+              }}><Flag className="size-5" /> Report</button>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
+      <ShareCardDialog ping={ping} open={cardOpen} onOpenChange={setCardOpen} />
 
       <Dialog open={reportOpen} onOpenChange={setReportOpen}>
         <DialogContent className="rounded-3xl">
