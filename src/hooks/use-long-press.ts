@@ -6,8 +6,16 @@ export function useLongPress(onLongPress: () => void) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const origin = useRef<{ x: number; y: number } | null>(null);
   const fired = useRef(false);
-  const clear = () => { if (timer.current) clearTimeout(timer.current); timer.current = null; };
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  const clear = () => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+  };
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
 
   return {
     onPointerDown: (e: React.PointerEvent) => {
@@ -30,10 +38,19 @@ export function useLongPress(onLongPress: () => void) {
       if (o && Math.hypot(e.clientX - o.x, e.clientY - o.y) > LONG_PRESS_SLOP_PX) clear();
     },
     onPointerUp: clear,
-    onPointerCancel: () => { clear(); fired.current = false; },
-    onContextMenu: (e: React.MouseEvent) => { if (fired.current) e.preventDefault(); },
+    onPointerCancel: () => {
+      clear();
+      fired.current = false;
+    },
+    onContextMenu: (e: React.MouseEvent) => {
+      if (fired.current) e.preventDefault();
+    },
     onClickCapture: (e: React.MouseEvent) => {
-      if (fired.current) { e.preventDefault(); e.stopPropagation(); fired.current = false; }
+      if (fired.current) {
+        e.preventDefault();
+        e.stopPropagation();
+        fired.current = false;
+      }
     },
   };
 }

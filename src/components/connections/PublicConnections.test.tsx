@@ -18,9 +18,30 @@ describe("Public connections", () => {
     expect(screen.getAllByRole("link")).toHaveLength(3);
   });
   it("renders every public destination without dropping non-primary links", () => {
-    render(<PublicConnections connections={[{ ...rows[0], platform: "whatsapp", handle: "447700900123", is_public: true, is_primary: true }, ...rows.slice(1)]} />);
+    render(
+      <PublicConnections
+        connections={[
+          {
+            ...rows[0],
+            platform: "whatsapp",
+            handle: "447700900123",
+            is_public: true,
+            is_primary: true,
+          },
+          ...rows.slice(1),
+        ]}
+      />,
+    );
     const links = screen.getAllByRole("link");
-    expect(links.map((link) => link.getAttribute("href"))).toEqual(["https://wa.me/447700900123", "https://www.snapchat.com/add/founder", "https://www.instagram.com/founder/", "https://x.com/founder"]);
-    for (const link of links) { expect(link).toHaveAttribute("target", "_blank"); expect(link).toHaveAttribute("rel", "noopener noreferrer"); }
+    expect(links.map((link) => link.getAttribute("href"))).toEqual([
+      "https://wa.me/447700900123",
+      "https://www.snapchat.com/add/founder",
+      "https://www.instagram.com/founder/",
+      "https://x.com/founder",
+    ]);
+    for (const link of links) {
+      expect(link).toHaveAttribute("target", "_blank");
+      expect(link).toHaveAttribute("rel", "noopener noreferrer");
+    }
   });
 });

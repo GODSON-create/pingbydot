@@ -55,7 +55,11 @@ export const profileQuery = (username: string) =>
     queryFn: async () => {
       const result = await readPublicPings({ data: { kind: "profile", value: username, page: 0 } });
       if (!result.profile) return null;
-      return { profile: result.profile as Profile, pings: result.pings as unknown as Ping[], connections: result.connections ?? [] };
+      return {
+        profile: result.profile as Profile,
+        pings: result.pings as unknown as Ping[],
+        connections: result.connections ?? [],
+      };
     },
   });
 
@@ -71,5 +75,4 @@ export const myLikesQuery = (userId: string | undefined) =>
     },
   });
 
-export const pingUrl = (id: string) =>
-  siteUrl(`/p/${encodeURIComponent(id)}`);
+export const pingUrl = (id: string) => siteUrl(`/p/${encodeURIComponent(id)}`);

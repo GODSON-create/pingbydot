@@ -26,9 +26,12 @@ describe("Gesture boundaries", () => {
     expect(shouldRefresh(0, 72, "/settings")).toBe(false);
   });
   it("exempts editors, controls and dialogs", () => {
-    for (const tag of ["input", "textarea", "select", "button", "video"]) expect(isExemptTarget(document.createElement(tag))).toBe(true);
-    const dialog = document.createElement("div"); dialog.setAttribute("role", "dialog");
-    const child = document.createElement("span"); dialog.append(child);
+    for (const tag of ["input", "textarea", "select", "button", "video"])
+      expect(isExemptTarget(document.createElement(tag))).toBe(true);
+    const dialog = document.createElement("div");
+    dialog.setAttribute("role", "dialog");
+    const child = document.createElement("span");
+    dialog.append(child);
     expect(isExemptTarget(child)).toBe(true);
   });
 });
