@@ -495,6 +495,15 @@ export type Database = {
         Returns: undefined
       }
       is_ping_admin: { Args: never; Returns: boolean }
+      save_profile_connection: {
+        Args: {
+          _handle: string
+          _is_primary: boolean
+          _is_public: boolean
+          _platform: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
