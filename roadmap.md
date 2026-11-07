@@ -10,7 +10,8 @@
 - [ ] Repair Explore, Ping details, public share rendering and error handling.
 - [ ] Repair signup/login and verify authenticated publishing.
 - [ ] Run tests, browser checks, schema/security checks and report unverified launch risks.
-# Ping V2 (queued — paused until the user resumes the queue)
+# Ping V2 (Connections and mobile navigation resumed; other modules out of scope)
 - [x] Day 1: SEO metadata, JSON-LD, sitemap.xml, robots.txt, logo integration points (official logo still pending).
 - [ ] Official logo install: blocked until the approved PNG/SVG is uploaded.
-- [ ] Ping Connections (paused): WhatsApp, Snapchat, Instagram, X on profiles at the same time. Settings section to add/edit/remove each one, with its own public on/off switch and an optional primary contact (the other three stay visible). WhatsApp uses a validated international number opening wa.me, with an optional safely encoded message; the number is shown only if WhatsApp is set to public. Snapchat links to the add-friend page; Instagram/X link to the profile pages, with no promise of opening a direct message. Normalize every link and block unsafe ones (such as javascript: links). Use brand icons with accessible labels, plus a note that tapping a link may open the other app. No messaging inside Ping or in-app web views. Count clicks in aggregate only if a privacy notice covers it. Tests for validation, visibility and link destinations.
+- [ ] Finish Connections editor and public links: four independent platforms, public visibility, one primary, validation and destination previews; preserve private numbers under RLS. No tracking or bookmarks.
+- [ ] Verify Connections permissions, rendering, phone navigation/action sheets and gesture boundaries; run available checks and report exact blockers without publishing.

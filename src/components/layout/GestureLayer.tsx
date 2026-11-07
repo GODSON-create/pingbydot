@@ -21,6 +21,7 @@ export function GestureLayer() {
     const onStart = (e: TouchEvent) => {
       if (e.touches.length !== 1) { start = null; return; }
       const t = e.touches[0];
+      if (!t) return;
       const exempt = isExemptTarget(e.target as Element) || document.body.hasAttribute("data-scroll-locked");
       start = { x: t.clientX, y: t.clientY, t: performance.now(), exempt, pulling: window.scrollY <= 0 && isTopLevel(pathRef.current) };
       pullDist = 0;
@@ -28,6 +29,7 @@ export function GestureLayer() {
     const onMove = (e: TouchEvent) => {
       if (!start || start.exempt || !start.pulling) return;
       const t = e.touches[0];
+      if (!t) return;
       const dy = t.clientY - start.y;
       if (dy > 0 && Math.abs(t.clientX - start.x) < dy && window.scrollY <= 0) {
         pullDist = Math.min(dy * 0.5, PULL_TRIGGER_PX * 1.4);
@@ -38,6 +40,7 @@ export function GestureLayer() {
       const s = start; start = null;
       if (!s || s.exempt) return;
       const t = e.changedTouches[0];
+      if (!t) { pullDist = 0; setPull(0); return; }
       const selection = window.getSelection()?.toString();
       if (pullDist) {
         const go = shouldRefresh(window.scrollY, pullDist, pathRef.current);
@@ -56,11 +59,13 @@ export function GestureLayer() {
     window.addEventListener("touchstart", onStart, { passive: true });
     window.addEventListener("touchmove", onMove, { passive: true });
     window.addEventListener("touchend", onEnd, { passive: true });
-    window.addEventListener("touchcancel", () => { start = null; setPull(0); }, { passive: true });
+    const onCancel = () => { start = null; pullDist = 0; setPull(0); };
+    window.addEventListener("touchcancel", onCancel, { passive: true });
     return () => {
       window.removeEventListener("touchstart", onStart);
       window.removeEventListener("touchmove", onMove);
       window.removeEventListener("touchend", onEnd);
+      window.removeEventListener("touchcancel", onCancel);
     };
   }, [navigate, qc, router]);
 

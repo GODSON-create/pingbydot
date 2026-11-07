@@ -44,7 +44,7 @@ export function normalizeConnection(platform: Platform, raw: string): Result {
   if (platform === "whatsapp") {
     let s = input;
     const wa = s.match(/^https:\/\/(?:wa\.me|api\.whatsapp\.com)\/(?:send\?phone=)?\+?([0-9]+)\/?$/i);
-    if (wa) s = wa[1];
+    if (wa?.[1]) s = wa[1];
     else if (/[a-z]:/i.test(s) || /[^0-9+\s().-]/.test(s)) return fail;
     if (!s.startsWith("+") && !wa && !s.startsWith("00")) return fail; // must be international
     const digits = s.replace(/^00/, "").replace(/[^0-9]/g, "");
@@ -65,10 +65,10 @@ export function normalizeConnection(platform: Platform, raw: string): Result {
     const parts = url.pathname.split("/").filter(Boolean);
     if (platform === "snapchat") {
       if (parts[0] !== "add" || parts.length !== 2) return fail;
-      handle = parts[1];
+      handle = parts[1] ?? "";
     } else {
       if (parts.length !== 1) return fail;
-      handle = parts[0];
+      handle = parts[0] ?? "";
     }
   }
   handle = handle.replace(/^@/, "");
@@ -81,7 +81,10 @@ export function normalizeConnection(platform: Platform, raw: string): Result {
 
 /** Build the only URL we ever link to, from a validated stored handle. */
 export function connectionUrl(platform: Platform, handle: string): string | null {
+  if (!PLATFORMS.includes(platform)) return null;
   if (!PATTERN[platform].test(handle)) return null;
+  if (platform === "x" && RESERVED_X.has(handle.toLowerCase())) return null;
+  if (platform === "instagram" && RESERVED_IG.has(handle)) return null;
   const h = encodeURIComponent(handle);
   switch (platform) {
     case "whatsapp": return `https://wa.me/${h}`;
