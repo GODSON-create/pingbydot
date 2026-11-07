@@ -8,7 +8,12 @@ export const PLATFORM_LABEL: Record<Platform, string> = {
   x: "X",
 };
 
-export type Connection = { platform: Platform; handle: string; is_public: boolean; is_primary: boolean };
+export type Connection = {
+  platform: Platform;
+  handle: string;
+  is_public: boolean;
+  is_primary: boolean;
+};
 
 type Result = { ok: true; handle: string } | { ok: false; error: string };
 
@@ -25,7 +30,16 @@ const HOSTS: Record<Exclude<Platform, "whatsapp">, string[]> = {
   x: ["x.com", "www.x.com", "twitter.com", "www.twitter.com", "mobile.twitter.com"],
 };
 
-const RESERVED_X = new Set(["home", "intent", "i", "share", "settings", "messages", "explore", "search"]);
+const RESERVED_X = new Set([
+  "home",
+  "intent",
+  "i",
+  "share",
+  "settings",
+  "messages",
+  "explore",
+  "search",
+]);
 const RESERVED_IG = new Set(["p", "reel", "reels", "explore", "accounts", "stories", "direct"]);
 
 const ERRORS: Record<Platform, string> = {
@@ -43,8 +57,10 @@ export function normalizeConnection(platform: Platform, raw: string): Result {
 
   if (platform === "whatsapp") {
     let s = input;
-    const wa = s.match(/^https:\/\/(?:wa\.me|api\.whatsapp\.com)\/(?:send\?phone=)?\+?([0-9]+)\/?$/i);
-    if (wa) s = wa[1];
+    const wa = s.match(
+      /^https:\/\/(?:wa\.me|api\.whatsapp\.com)\/(?:send\?phone=)?\+?([0-9]+)\/?$/i,
+    );
+    if (wa?.[1]) s = wa[1];
     else if (/[a-z]:/i.test(s) || /[^0-9+\s().-]/.test(s)) return fail;
     if (!s.startsWith("+") && !wa && !s.startsWith("00")) return fail; // must be international
     const digits = s.replace(/^00/, "").replace(/[^0-9]/g, "");
@@ -65,10 +81,10 @@ export function normalizeConnection(platform: Platform, raw: string): Result {
     const parts = url.pathname.split("/").filter(Boolean);
     if (platform === "snapchat") {
       if (parts[0] !== "add" || parts.length !== 2) return fail;
-      handle = parts[1];
+      handle = parts[1] ?? "";
     } else {
       if (parts.length !== 1) return fail;
-      handle = parts[0];
+      handle = parts[0] ?? "";
     }
   }
   handle = handle.replace(/^@/, "");
@@ -81,13 +97,20 @@ export function normalizeConnection(platform: Platform, raw: string): Result {
 
 /** Build the only URL we ever link to, from a validated stored handle. */
 export function connectionUrl(platform: Platform, handle: string): string | null {
+  if (!PLATFORMS.includes(platform)) return null;
   if (!PATTERN[platform].test(handle)) return null;
+  if (platform === "x" && RESERVED_X.has(handle.toLowerCase())) return null;
+  if (platform === "instagram" && RESERVED_IG.has(handle)) return null;
   const h = encodeURIComponent(handle);
   switch (platform) {
-    case "whatsapp": return `https://wa.me/${h}`;
-    case "snapchat": return `https://www.snapchat.com/add/${h}`;
-    case "instagram": return `https://www.instagram.com/${h}/`;
-    case "x": return `https://x.com/${h}`;
+    case "whatsapp":
+      return `https://wa.me/${h}`;
+    case "snapchat":
+      return `https://www.snapchat.com/add/${h}`;
+    case "instagram":
+      return `https://www.instagram.com/${h}/`;
+    case "x":
+      return `https://x.com/${h}`;
   }
 }
 
@@ -98,6 +121,12 @@ export function connectionDisplay(platform: Platform, handle: string) {
 /** Only public rows, in fixed platform order, primary first. Defence in depth on top of database rules. */
 export function publicConnections<T extends Connection>(rows: T[]): T[] {
   return rows
-    .filter((r) => r.is_public && PLATFORMS.includes(r.platform) && connectionUrl(r.platform, r.handle))
-    .sort((a, b) => Number(b.is_primary) - Number(a.is_primary) || PLATFORMS.indexOf(a.platform) - PLATFORMS.indexOf(b.platform));
+    .filter(
+      (r) => r.is_public && PLATFORMS.includes(r.platform) && connectionUrl(r.platform, r.handle),
+    )
+    .sort(
+      (a, b) =>
+        Number(b.is_primary) - Number(a.is_primary) ||
+        PLATFORMS.indexOf(a.platform) - PLATFORMS.indexOf(b.platform),
+    );
 }

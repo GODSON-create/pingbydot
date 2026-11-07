@@ -57,6 +57,13 @@
       "when": 1793974112482,
       "tag": "0007_profile_connections",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794044333027,
+      "tag": "0008_save_profile_connection",
+      "breakpoints": true
     }
   ]
 }
