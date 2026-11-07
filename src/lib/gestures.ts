@@ -30,7 +30,7 @@ export function neighbourPath(pathname: string, dir: "next" | "prev"): string | 
 }
 
 /** Elements where horizontal drags, long-presses or text selection belong to the content. */
-export const GESTURE_EXEMPT = "input,textarea,select,button,[role=button],[contenteditable],[role=slider],[role=dialog],[data-no-gesture],video,audio,iframe,pre";
+export const GESTURE_EXEMPT = "input,textarea,select,button,a,[role=button],[role=menuitem],[contenteditable],[role=slider],[role=dialog],[data-no-gesture],video,audio,iframe,pre";
 
 export function isExemptTarget(el: Element | null): boolean {
   if (!el) return true;

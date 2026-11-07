@@ -30,7 +30,7 @@ export function useLongPress(onLongPress: () => void) {
       if (o && Math.hypot(e.clientX - o.x, e.clientY - o.y) > LONG_PRESS_SLOP_PX) clear();
     },
     onPointerUp: clear,
-    onPointerCancel: clear,
+    onPointerCancel: () => { clear(); fired.current = false; },
     onContextMenu: (e: React.MouseEvent) => { if (fired.current) e.preventDefault(); },
     onClickCapture: (e: React.MouseEvent) => {
       if (fired.current) { e.preventDefault(); e.stopPropagation(); fired.current = false; }

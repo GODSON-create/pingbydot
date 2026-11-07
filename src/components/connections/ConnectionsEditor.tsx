@@ -19,11 +19,14 @@ function ConnectionRow({ platform, saved, userId, onChanged }: { platform: Platf
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const savedHandle = saved?.handle;
+  const savedPublic = saved?.is_public ?? false;
+  const savedPrimary = saved?.is_primary ?? false;
   useEffect(() => {
-    setInput(saved ? connectionDisplay(platform, saved.handle) : "");
-    setVisible(saved?.is_public ?? false);
-    setPrimary(saved?.is_primary ?? false);
-  }, [saved?.handle, saved?.is_public, saved?.is_primary, platform]);
+    setInput(savedHandle ? connectionDisplay(platform, savedHandle) : "");
+    setVisible(savedPublic);
+    setPrimary(savedPrimary);
+  }, [savedHandle, savedPublic, savedPrimary, platform]);
   const normalized = normalizeConnection(platform, input);
   const destination = normalized.ok ? connectionUrl(platform, normalized.handle) : null;
   const label = PLATFORM_LABEL[platform];
