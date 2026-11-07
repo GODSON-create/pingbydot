@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { isExemptTarget, LONG_PRESS_MS, LONG_PRESS_SLOP_PX } from "@/lib/gestures";
 
 /** Touch long-press shortcut. Cancels on movement (scrolling) or text selection; swallows the click that follows. */
@@ -7,10 +7,12 @@ export function useLongPress(onLongPress: () => void) {
   const origin = useRef<{ x: number; y: number } | null>(null);
   const fired = useRef(false);
   const clear = () => { if (timer.current) clearTimeout(timer.current); timer.current = null; };
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
   return {
     onPointerDown: (e: React.PointerEvent) => {
       fired.current = false;
+      clear();
       if (e.pointerType !== "touch" || isExemptTarget(e.target as Element)) return;
       const t = e.target as Element;
       if (t.closest("button,[role=button],[role=menuitem]")) return; // controls keep their own taps

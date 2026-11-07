@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
+import { PLATFORMS, publicConnections, type Platform } from "@/lib/connections";
 
 export const PUBLIC_PING_SELECT = "id,user_id,category,content,image_url,cta_url,cta_label,created_at,updated_at,author:profiles!pings_user_id_fkey(id,username,display_name,avatar_url),likes(count),replies:comments!comments_ping_id_fkey(count),source_ping_id,source_comment_id,source_comment:comments!pings_source_comment_id_fkey(id,ping_id,content,deleted_at,author:profiles!comments_user_id_fkey(username,display_name))";
 
@@ -26,7 +27,10 @@ export const readPublicPings = createServerFn({ method: "GET" })
       if (!profile) return { profile: null, pings: [] };
       const { data: pings, error: pingError } = await client.from("pings").select(PUBLIC_PING_SELECT).is("hidden_at", null).eq("user_id", profile.id).order("created_at", { ascending: false }).order("id", { ascending: false });
       if (pingError) throw new Error("Couldn't load this profile's Pings. Please try again.");
-      return { profile, pings: pings ?? [] };
+      const { data: connections, error: connectionError } = await client.from("profile_connections").select("platform,handle,is_public,is_primary").eq("user_id", profile.id).eq("is_public", true);
+      if (connectionError) throw new Error("Couldn't load this profile's connections. Please try again.");
+      const validConnections = (connections ?? []).filter((row): row is typeof row & { platform: Platform } => PLATFORMS.includes(row.platform as Platform));
+      return { profile, pings: pings ?? [], connections: publicConnections(validConnections) };
     }
     let query = client.from("pings").select(PUBLIC_PING_SELECT).is("hidden_at", null).order("created_at", { ascending: false }).order("id", { ascending: false });
     if (data.kind === "ping") {

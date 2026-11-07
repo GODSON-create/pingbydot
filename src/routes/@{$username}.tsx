@@ -10,6 +10,7 @@ import { PingCard } from "@/components/ping/PingCard";
 import { ErrorComponent } from "@/routes/__root";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
+import { PublicConnections } from "@/components/connections/PublicConnections";
 
 export const Route = createFileRoute("/@{$username}")({
   staticData: { sitemap: true },
@@ -48,7 +49,7 @@ function ProfilePage() {
       </div>
     );
 
-  const { profile, pings } = data;
+  const { profile, pings, connections } = data;
   const isMe = user?.id === profile.id;
   const name = profile.display_name || profile.username;
 
@@ -70,6 +71,7 @@ function ProfilePage() {
                 {isMe && <Button asChild size="sm" variant="secondary"><Link to="/settings">Edit profile</Link></Button>}
               </div>
             </div>
+            <PublicConnections connections={connections} />
           </div>
         </div>
       </section>

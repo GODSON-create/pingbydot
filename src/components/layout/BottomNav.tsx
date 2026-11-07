@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth";
 import { checkAdminAccess } from "@/lib/admin.functions";
 import { useSignOut } from "./SiteHeader";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 const item = "flex min-h-14 min-w-14 flex-1 flex-col items-center justify-center gap-0.5 rounded-2xl text-[11px] font-semibold text-muted-foreground transition-colors active:scale-95 motion-reduce:active:scale-100";
 const active = { className: "text-foreground bg-secondary" };
@@ -37,7 +38,7 @@ export function BottomNav() {
           ) : (
             <Link to="/login" className={item} activeProps={active}><LogIn className="size-5" />Log in</Link>
           )}
-          <button type="button" onClick={() => setOpen(true)} aria-haspopup="dialog" aria-expanded={open} className={cn(item, open && "bg-secondary text-foreground")}><LayoutGrid className="size-5" />Actions</button>
+          <Button variant="ghost" type="button" onClick={() => setOpen(true)} aria-haspopup="dialog" aria-expanded={open} className={cn(item, "h-auto whitespace-normal px-0", open && "bg-secondary text-foreground")}><LayoutGrid className="size-5" />Actions</Button>
         </div>
       </nav>
       <Sheet open={open} onOpenChange={setOpen}>
@@ -52,13 +53,12 @@ export function BottomNav() {
               <>
                 <Link to="/settings" className={row}><Settings className="size-5" /> Settings & connections</Link>
                 {admin.data?.isAdmin && <Link to="/admin" className={row}><ShieldCheck className="size-5" /> Administration</Link>}
-                <button type="button" onClick={signOut} className={cn(row, "text-left")}><LogOut className="size-5" /> Log out</button>
+                <Button variant="ghost" type="button" onClick={signOut} className={cn(row, "h-auto justify-start text-left")}><LogOut className="size-5" /> Log out</Button>
               </>
             ) : (
               <Link to="/signup" className={row}><UserPlus className="size-5" /> Sign up</Link>
             )}
           </div>
-          <p className="mt-4 text-xs text-muted-foreground">Tip: on Home and Explore, swipe sideways to switch and pull down to refresh. Long-press a Ping for its actions.</p>
         </SheetContent>
       </Sheet>
     </>

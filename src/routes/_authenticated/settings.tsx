@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { FounderAvatar } from "@/components/ping/Avatar";
 import { useSignOut } from "@/components/layout/SiteHeader";
+import { ConnectionsEditor } from "@/components/connections/ConnectionsEditor";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   staticData: { sitemap: false },
@@ -90,6 +91,8 @@ function Settings() {
         <div><Label htmlFor="av">Profile image link (optional)</Label><Input id="av" placeholder="https://…/me.jpg" value={f.avatar_url} onChange={(e) => setF({ ...f, avatar_url: e.target.value })} className="mt-1.5 rounded-xl" />{errs.avatar_url && <p className="mt-1 text-xs text-destructive">{errs.avatar_url}</p>}</div>
         <Button type="submit" variant="hero" className="justify-self-start" disabled={saving}>{saving ? "Saving…" : "Save profile"}</Button>
       </form>
+
+      {user && <ConnectionsEditor userId={user.id} />}
 
       {user?.app_metadata?.provider === "email" && (
         <form onSubmit={changePw} className="surface-card mt-6 grid gap-4 rounded-3xl p-6 sm:p-8">

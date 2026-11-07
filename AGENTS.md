@@ -18,3 +18,4 @@
 - Moderation changes and audit entries commit atomically through a service-role-only database function; hidden Pings have owner reads but public readers and social images explicitly exclude them.
 - Public origin, canonical/OG helpers and site JSON-LD live in src/lib/site.ts (VITE_SITE_ORIGIN override) so a custom-domain move changes one value.
 - Sitemap is router-derived (staticData.sitemap on every route) plus paginated public Ping/profile queries with the publishable client; private sections use exclude-subtree and noindex.
+- Connections use a SECURITY INVOKER owner-scoped atomic save RPC to switch primary without partial writes; public profile SSR explicitly selects only public connections and validates destinations again.
