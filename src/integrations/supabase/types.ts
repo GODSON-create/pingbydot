@@ -156,6 +156,259 @@ export type Database = {
           },
         ]
       }
+      follows: {
+        Row: {
+          created_at: string
+          follower_id: string
+          following_id: string
+        }
+        Insert: {
+          created_at?: string
+          follower_id: string
+          following_id: string
+        }
+        Update: {
+          created_at?: string
+          follower_id?: string
+          following_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "follows_follower_id_fkey"
+            columns: ["follower_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "follows_following_id_fkey"
+            columns: ["following_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hub_invites: {
+        Row: {
+          created_at: string
+          created_by: string
+          expires_at: string | null
+          hub_id: string
+          id: string
+          max_uses: number | null
+          revoked_at: string | null
+          token: string
+          uses: number
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          expires_at?: string | null
+          hub_id: string
+          id?: string
+          max_uses?: number | null
+          revoked_at?: string | null
+          token?: string
+          uses?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          expires_at?: string | null
+          hub_id?: string
+          id?: string
+          max_uses?: number | null
+          revoked_at?: string | null
+          token?: string
+          uses?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hub_invites_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hub_invites_hub_id_fkey"
+            columns: ["hub_id"]
+            isOneToOne: false
+            referencedRelation: "hubs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hub_members: {
+        Row: {
+          hub_id: string
+          invited_by: string | null
+          joined_at: string
+          role: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          hub_id: string
+          invited_by?: string | null
+          joined_at?: string
+          role?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          hub_id?: string
+          invited_by?: string | null
+          joined_at?: string
+          role?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hub_members_hub_id_fkey"
+            columns: ["hub_id"]
+            isOneToOne: false
+            referencedRelation: "hubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hub_members_invited_by_fkey"
+            columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hub_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hub_pings: {
+        Row: {
+          added_by: string
+          created_at: string
+          hub_id: string
+          intent: string | null
+          is_pinned: boolean
+          ping_id: string
+          removed_at: string | null
+        }
+        Insert: {
+          added_by: string
+          created_at?: string
+          hub_id: string
+          intent?: string | null
+          is_pinned?: boolean
+          ping_id: string
+          removed_at?: string | null
+        }
+        Update: {
+          added_by?: string
+          created_at?: string
+          hub_id?: string
+          intent?: string | null
+          is_pinned?: boolean
+          ping_id?: string
+          removed_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hub_pings_added_by_fkey"
+            columns: ["added_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hub_pings_hub_id_fkey"
+            columns: ["hub_id"]
+            isOneToOne: false
+            referencedRelation: "hubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hub_pings_ping_id_fkey"
+            columns: ["ping_id"]
+            isOneToOne: false
+            referencedRelation: "pings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hubs: {
+        Row: {
+          access: string
+          category: string
+          created_at: string
+          description: string
+          hidden_at: string | null
+          id: string
+          member_count: number
+          member_limit: number
+          name: string
+          owner_id: string
+          ping_count: number
+          resources: Json
+          rules: string
+          slug: string
+          tagline: string
+          updated_at: string
+          verified: boolean
+        }
+        Insert: {
+          access?: string
+          category?: string
+          created_at?: string
+          description?: string
+          hidden_at?: string | null
+          id?: string
+          member_count?: number
+          member_limit?: number
+          name: string
+          owner_id: string
+          ping_count?: number
+          resources?: Json
+          rules?: string
+          slug: string
+          tagline?: string
+          updated_at?: string
+          verified?: boolean
+        }
+        Update: {
+          access?: string
+          category?: string
+          created_at?: string
+          description?: string
+          hidden_at?: string | null
+          id?: string
+          member_count?: number
+          member_limit?: number
+          name?: string
+          owner_id?: string
+          ping_count?: number
+          resources?: Json
+          rules?: string
+          slug?: string
+          tagline?: string
+          updated_at?: string
+          verified?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hubs_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       likes: {
         Row: {
           created_at: string
@@ -494,7 +747,28 @@ export type Database = {
         }
         Returns: undefined
       }
+      can_view_hub_content: { Args: { _hub: string }; Returns: boolean }
+      create_hub_invite: {
+        Args: { _days?: number; _hub: string; _max_uses?: number }
+        Returns: string
+      }
+      hub_role: { Args: { _hub: string; _user: string }; Returns: string }
+      invite_to_hub: {
+        Args: { _hub: string; _username: string }
+        Returns: undefined
+      }
       is_ping_admin: { Args: never; Returns: boolean }
+      join_hub: { Args: { _hub: string; _token?: string }; Returns: string }
+      leave_hub: { Args: { _hub: string }; Returns: undefined }
+      manage_hub_member: {
+        Args: { _action: string; _hub: string; _role?: string; _user: string }
+        Returns: undefined
+      }
+      moderate_hub_ping: {
+        Args: { _action: string; _hub: string; _ping: string }
+        Returns: undefined
+      }
+      revoke_hub_invite: { Args: { _invite: string }; Returns: undefined }
       save_profile_connection: {
         Args: {
           _handle: string
@@ -502,6 +776,10 @@ export type Database = {
           _is_public: boolean
           _platform: string
         }
+        Returns: undefined
+      }
+      share_ping_to_hub: {
+        Args: { _hub: string; _intent?: string; _ping: string }
         Returns: undefined
       }
     }
