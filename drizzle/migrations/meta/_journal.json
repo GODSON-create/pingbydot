@@ -64,6 +64,13 @@
       "when": 1794044333027,
       "tag": "0008_save_profile_connection",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794214405199,
+      "tag": "0009_ping_hubs",
+      "breakpoints": true
     }
   ]
 }
