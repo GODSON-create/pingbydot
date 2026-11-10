@@ -34,10 +34,28 @@ function Create() {
       const draft = pingSchema.parse(d);
       const { data, error } = await supabase
         .from("pings")
-        .insert({ user_id: author.id, category: draft.category, content: draft.content, cta_url: draft.cta_url || null, cta_label: draft.cta_label || null })
+        .insert({
+          user_id: author.id,
+          category: draft.category,
+          content: draft.content,
+          cta_url: draft.cta_url || null,
+          cta_label: draft.cta_label || null,
+        })
         .select("id")
         .single();
       if (error) throw error;
+
+      if (d.hub_id) {
+        const { error: hubError } = await supabase.rpc("share_ping_to_hub", {
+          _hub: d.hub_id,
+          _ping: data.id,
+          _intent: d.hub_intent || null,
+        });
+        if (hubError) {
+          console.warn("Failed to attach to hub:", hubError);
+        }
+      }
+
       return data.id;
     },
     onSuccess: (id) => {
@@ -52,7 +70,9 @@ function Create() {
       <span className="sticker -rotate-2 bg-blush text-blush-foreground">new Ping</span>
       <h1 className="mt-4 font-display text-4xl font-extrabold sm:text-5xl">What are you building?</h1>
       <p className="mt-2 text-muted-foreground">Share a step, however small. Every Ping gets its own public link.</p>
-      <div className="mt-8"><PingComposer submitLabel="Publish Ping" pending={m.isPending} onSubmit={(d) => m.mutate(d)} /></div>
+      <div className="mt-8">
+        <PingComposer submitLabel="Publish Ping" pending={m.isPending} onSubmit={(d) => m.mutate(d)} />
+      </div>
     </div>
   );
 }

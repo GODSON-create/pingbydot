@@ -14,6 +14,7 @@ import {
   Sparkles,
   User,
   UserPlus,
+  Building2,
 } from "lucide-react";
 import {
   Sheet,
@@ -29,7 +30,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
 const item =
-  "flex min-h-14 min-w-14 flex-1 flex-col items-center justify-center gap-0.5 rounded-2xl text-[11px] font-semibold text-muted-foreground transition-colors active:scale-95 motion-reduce:active:scale-100";
+  "flex min-h-14 min-w-12 flex-1 flex-col items-center justify-center gap-0.5 rounded-2xl text-[10px] font-semibold text-muted-foreground transition-colors active:scale-95 motion-reduce:active:scale-100";
 const active = { className: "text-foreground bg-secondary" };
 const row =
   "flex min-h-12 items-center gap-3 rounded-2xl px-4 py-3 font-medium hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -70,13 +71,17 @@ export function BottomNav() {
             <Compass className="size-5" />
             Explore
           </Link>
+          <Link to="/hubs" className={item} activeProps={active}>
+            <Building2 className="size-5" />
+            Hubs
+          </Link>
           <Link
             to={user ? "/create" : "/signup"}
             aria-label={user ? "New Ping" : "Create your first Ping"}
-            className="flex min-h-14 min-w-14 flex-1 items-center justify-center"
+            className="flex min-h-14 min-w-12 flex-1 items-center justify-center"
           >
-            <span className="flex size-12 items-center justify-center rounded-full bg-lime text-lime-foreground shadow-lift transition-transform active:scale-95 motion-reduce:active:scale-100">
-              <Plus className="size-6" />
+            <span className="flex size-11 items-center justify-center rounded-full bg-lime text-lime-foreground shadow-lift transition-transform active:scale-95 motion-reduce:active:scale-100">
+              <Plus className="size-5" />
             </span>
           </Link>
           {user && profile ? (
@@ -108,7 +113,7 @@ export function BottomNav() {
             )}
           >
             <LayoutGrid className="size-5" />
-            Actions
+            More
           </Button>
         </div>
       </nav>
@@ -126,6 +131,14 @@ export function BottomNav() {
             </SheetDescription>
           </SheetHeader>
           <div className="mt-2 grid gap-1" onClick={close}>
+            <Link to="/hubs" className={row}>
+              <Building2 className="size-5" /> Discover Hubs
+            </Link>
+            {user && (
+              <Link to="/hubs/create" className={row}>
+                <Plus className="size-5" /> Create a Hub
+              </Link>
+            )}
             <Link to="/" hash="how" className={row}>
               <Sparkles className="size-5" /> How it works
             </Link>

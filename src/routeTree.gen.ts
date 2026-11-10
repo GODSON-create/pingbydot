@@ -15,12 +15,15 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as ExploreRouteImport } from './routes/explore'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
+import { Route as HubsRouteImport } from './routes/hubs'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as AuthenticatedCreateRouteImport } from './routes/_authenticated/create'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as HubsSlugRouteImport } from './routes/hubs.$slug'
+import { Route as HubsCreateRouteImport } from './routes/hubs.create'
 import { Route as PIdRouteImport } from './routes/p.$id'
 import { Route as AuthenticatedEditIdRouteImport } from './routes/_authenticated/edit.$id'
 import { Route as ApiPublicPingCardIdRouteImport } from './routes/api/public/ping-card/$id'
@@ -55,6 +58,11 @@ const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
   path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const HubsRoute = HubsRouteImport.update({
+  id: '/hubs',
+  path: '/hubs',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
@@ -85,6 +93,16 @@ const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const HubsSlugRoute = HubsSlugRouteImport.update({
+  id: '/$slug',
+  path: '/$slug',
+  getParentRoute: () => HubsRoute,
+} as any)
+const HubsCreateRoute = HubsCreateRouteImport.update({
+  id: '/create',
+  path: '/create',
+  getParentRoute: () => HubsRoute,
+} as any)
 const PIdRoute = PIdRouteImport.update({
   id: '/p/$id',
   path: '/p/$id',
@@ -107,12 +125,15 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRoute
   '/explore': typeof ExploreRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/hubs': typeof HubsRouteWithChildren
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/create': typeof AuthenticatedCreateRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/hubs/$slug': typeof HubsSlugRoute
+  '/hubs/create': typeof HubsCreateRoute
   '/p/$id': typeof PIdRoute
   '/edit/$id': typeof AuthenticatedEditIdRoute
   '/api/public/ping-card/$id': typeof ApiPublicPingCardIdRoute
@@ -123,12 +144,15 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminRoute
   '/explore': typeof ExploreRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/hubs': typeof HubsRouteWithChildren
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/create': typeof AuthenticatedCreateRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/hubs/$slug': typeof HubsSlugRoute
+  '/hubs/create': typeof HubsCreateRoute
   '/p/$id': typeof PIdRoute
   '/edit/$id': typeof AuthenticatedEditIdRoute
   '/api/public/ping-card/$id': typeof ApiPublicPingCardIdRoute
@@ -141,12 +165,15 @@ export interface FileRoutesById {
   '/admin': typeof AdminRoute
   '/explore': typeof ExploreRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/hubs': typeof HubsRouteWithChildren
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/_authenticated/create': typeof AuthenticatedCreateRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/hubs/$slug': typeof HubsSlugRoute
+  '/hubs/create': typeof HubsCreateRoute
   '/p/$id': typeof PIdRoute
   '/_authenticated/edit/$id': typeof AuthenticatedEditIdRoute
   '/api/public/ping-card/$id': typeof ApiPublicPingCardIdRoute
@@ -159,12 +186,15 @@ export interface FileRouteTypes {
     | '/admin'
     | '/explore'
     | '/forgot-password'
+    | '/hubs'
     | '/login'
     | '/reset-password'
     | '/signup'
     | '/sitemap.xml'
     | '/create'
     | '/settings'
+    | '/hubs/$slug'
+    | '/hubs/create'
     | '/p/$id'
     | '/edit/$id'
     | '/api/public/ping-card/$id'
@@ -175,12 +205,15 @@ export interface FileRouteTypes {
     | '/admin'
     | '/explore'
     | '/forgot-password'
+    | '/hubs'
     | '/login'
     | '/reset-password'
     | '/signup'
     | '/sitemap.xml'
     | '/create'
     | '/settings'
+    | '/hubs/$slug'
+    | '/hubs/create'
     | '/p/$id'
     | '/edit/$id'
     | '/api/public/ping-card/$id'
@@ -192,12 +225,15 @@ export interface FileRouteTypes {
     | '/admin'
     | '/explore'
     | '/forgot-password'
+    | '/hubs'
     | '/login'
     | '/reset-password'
     | '/signup'
     | '/sitemap.xml'
     | '/_authenticated/create'
     | '/_authenticated/settings'
+    | '/hubs/$slug'
+    | '/hubs/create'
     | '/p/$id'
     | '/_authenticated/edit/$id'
     | '/api/public/ping-card/$id'
@@ -210,6 +246,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRoute
   ExploreRoute: typeof ExploreRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
+  HubsRoute: typeof HubsRouteWithChildren
   LoginRoute: typeof LoginRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SignupRoute: typeof SignupRoute
@@ -262,6 +299,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/hubs': {
+      id: '/hubs'
+      path: '/hubs'
+      fullPath: '/hubs'
+      preLoaderRoute: typeof HubsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
@@ -304,6 +348,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/hubs/$slug': {
+      id: '/hubs/$slug'
+      path: '/$slug'
+      fullPath: '/hubs/$slug'
+      preLoaderRoute: typeof HubsSlugRouteImport
+      parentRoute: typeof HubsRoute
+    }
+    '/hubs/create': {
+      id: '/hubs/create'
+      path: '/create'
+      fullPath: '/hubs/create'
+      preLoaderRoute: typeof HubsCreateRouteImport
+      parentRoute: typeof HubsRoute
+    }
     '/p/$id': {
       id: '/p/$id'
       path: '/p/$id'
@@ -343,6 +401,18 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
 const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
+interface HubsRouteChildren {
+  HubsSlugRoute: typeof HubsSlugRoute
+  HubsCreateRoute: typeof HubsCreateRoute
+}
+
+const HubsRouteChildren: HubsRouteChildren = {
+  HubsSlugRoute: HubsSlugRoute,
+  HubsCreateRoute: HubsCreateRoute,
+}
+
+const HubsRouteWithChildren = HubsRoute._addFileChildren(HubsRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
@@ -350,6 +420,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRoute,
   ExploreRoute: ExploreRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
+  HubsRoute: HubsRouteWithChildren,
   LoginRoute: LoginRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SignupRoute: SignupRoute,

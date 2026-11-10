@@ -1,12 +1,11 @@
 import { Link } from "@tanstack/react-router";
 import { formatDistanceToNowStrict } from "date-fns";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, MessageCircle } from "lucide-react";
 import type { Ping } from "@/lib/pings";
 import { CATEGORIES } from "@/lib/validation";
 import { FounderAvatar } from "./Avatar";
 import { LikeButton, PingMenu, ShareMenu } from "./PingActions";
 import { cn } from "@/lib/utils";
-import { MessageCircle } from "lucide-react";
 import { replyCount } from "@/lib/pings";
 import { RepingAttribution } from "./Comments";
 import { useState } from "react";
@@ -56,7 +55,15 @@ export function CtaLink({ ping }: { ping: Ping }) {
   );
 }
 
-export function PingCard({ ping, linkToDetail = true }: { ping: Ping; linkToDetail?: boolean }) {
+export function PingCard({
+  ping,
+  linkToDetail = true,
+  hubBadge,
+}: {
+  ping: Ping;
+  linkToDetail?: boolean;
+  hubBadge?: { name: string; slug: string; intent?: string | null };
+}) {
   const name = ping.author?.display_name || ping.author?.username || "Founder";
   const [actions, setActions] = useState(false);
   const press = useLongPress(() => setActions(true));
@@ -74,7 +81,21 @@ export function PingCard({ ping, linkToDetail = true }: { ping: Ping; linkToDeta
             </span>
           </Link>
         )}
-        <CategoryTag value={ping.category} />
+        <div className="flex items-center gap-2">
+          {hubBadge && (
+            <Link
+              to="/hubs/$slug"
+              params={{ slug: hubBadge.slug }}
+              search={hubBadge.intent ? { intent: hubBadge.intent } : undefined}
+              className="inline-flex items-center gap-1 rounded-full bg-secondary px-2.5 py-1 text-xs font-semibold hover:bg-secondary/80"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <span>{hubBadge.name}</span>
+              {hubBadge.intent && <span className="text-muted-foreground font-normal">#{hubBadge.intent}</span>}
+            </Link>
+          )}
+          <CategoryTag value={ping.category} />
+        </div>
       </header>
       <div className="mt-4 flex-1">
         {linkToDetail ? (

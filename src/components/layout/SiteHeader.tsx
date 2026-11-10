@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Plus, LogOut, Settings, User } from "lucide-react";
+import { Plus, LogOut, Settings, User, Building2 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { checkAdminAccess } from "@/lib/admin.functions";
@@ -49,6 +49,7 @@ export function SiteHeader() {
         <Wordmark />
         <nav className="hidden items-center gap-1 md:flex" aria-label="Main">
           <Link to="/explore" className={navLink} activeProps={{ className: "text-foreground bg-secondary" }}>Explore</Link>
+          <Link to="/hubs" className={navLink} activeProps={{ className: "text-foreground bg-secondary" }}>Hubs</Link>
           <Link to="/" hash="how" className={navLink}>How it works</Link>
           <Link to="/" hash="demo" className={navLink}>Demo</Link>
         </nav>
@@ -68,6 +69,9 @@ export function SiteHeader() {
                       <Link to="/@{$username}" params={{ username: profile.username }}><User /> My profile</Link>
                     </DropdownMenuItem>
                   )}
+                  <DropdownMenuItem asChild>
+                    <Link to="/hubs"><Building2 /> Hubs</Link>
+                  </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link to="/settings"><Settings /> Settings</Link>
                   </DropdownMenuItem>
