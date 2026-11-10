@@ -10,7 +10,7 @@ GRANT SELECT ON public.profiles TO anon;
 GRANT SELECT, INSERT, UPDATE ON public.profiles TO authenticated;
 GRANT ALL ON public.profiles TO service_role;
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Profiles are public" ON public.profiles FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "Profiles are public" ON public.profiles FOR SELECT TO anon, authenticated USING (username IS NOT NULL AND id IS NOT NULL);
 CREATE POLICY "Users update own profile" ON public.profiles FOR UPDATE TO authenticated USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
 CREATE POLICY "Users insert own profile" ON public.profiles FOR INSERT TO authenticated WITH CHECK (auth.uid() = id);
 
@@ -31,7 +31,7 @@ GRANT SELECT ON public.pings TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.pings TO authenticated;
 GRANT ALL ON public.pings TO service_role;
 ALTER TABLE public.pings ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Pings are public" ON public.pings FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "Pings are public" ON public.pings FOR SELECT TO anon, authenticated USING (id IS NOT NULL);
 CREATE POLICY "Users create own pings" ON public.pings FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users update own pings" ON public.pings FOR UPDATE TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users delete own pings" ON public.pings FOR DELETE TO authenticated USING (auth.uid() = user_id);
@@ -47,7 +47,7 @@ GRANT SELECT ON public.likes TO anon;
 GRANT SELECT, INSERT, DELETE ON public.likes TO authenticated;
 GRANT ALL ON public.likes TO service_role;
 ALTER TABLE public.likes ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Likes are public" ON public.likes FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "Likes are public" ON public.likes FOR SELECT TO anon, authenticated USING (EXISTS (SELECT 1 FROM public.pings WHERE pings.id = likes.ping_id));
 CREATE POLICY "Users like as self" ON public.likes FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users unlike own" ON public.likes FOR DELETE TO authenticated USING (auth.uid() = user_id);
 
@@ -91,7 +91,7 @@ BEGIN
 END; $$;
 CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
-CREATE POLICY "Media is public" ON storage.objects FOR SELECT USING (bucket_id = 'media');
+CREATE POLICY "Users read own media" ON storage.objects FOR SELECT TO authenticated USING (bucket_id = 'media' AND (storage.foldername(name))[1] = auth.uid()::text);
 CREATE POLICY "Users upload own media" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'media' AND (storage.foldername(name))[1] = auth.uid()::text);
 CREATE POLICY "Users update own media" ON storage.objects FOR UPDATE TO authenticated USING (bucket_id = 'media' AND (storage.foldername(name))[1] = auth.uid()::text);
 CREATE POLICY "Users delete own media" ON storage.objects FOR DELETE TO authenticated USING (bucket_id = 'media' AND (storage.foldername(name))[1] = auth.uid()::text);

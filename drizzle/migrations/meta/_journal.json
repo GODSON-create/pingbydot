@@ -71,6 +71,13 @@
       "when": 1794214405199,
       "tag": "0009_ping_hubs",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794300000000,
+      "tag": "0010_secure_media_storage_and_access_rules",
+      "breakpoints": true
     }
   ]
 }

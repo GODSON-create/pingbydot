@@ -106,7 +106,8 @@ CREATE POLICY "Hub Pings visible with hub content" ON public.hub_pings FOR SELEC
 
 CREATE POLICY "Hub admins read invites" ON public.hub_invites FOR SELECT TO authenticated USING (public.hub_role(hub_id, auth.uid()) IN ('owner','admin'));
 
-CREATE POLICY "Follows are public" ON public.follows FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "Follows are public" ON public.follows FOR SELECT TO anon, authenticated
+ USING (follower_id IS NOT NULL AND following_id IS NOT NULL AND EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = follows.following_id));
 CREATE POLICY "Users follow as self" ON public.follows FOR INSERT TO authenticated WITH CHECK (follower_id = auth.uid());
 CREATE POLICY "Users unfollow as self" ON public.follows FOR DELETE TO authenticated USING (follower_id = auth.uid());
 

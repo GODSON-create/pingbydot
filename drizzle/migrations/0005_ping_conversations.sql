@@ -63,7 +63,8 @@ GRANT SELECT ON public.comment_likes TO anon;
 GRANT SELECT, INSERT, DELETE ON public.comment_likes TO authenticated;
 GRANT ALL ON public.comment_likes TO service_role;
 ALTER TABLE public.comment_likes ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Comment likes are public" ON public.comment_likes FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "Comment likes are public" ON public.comment_likes FOR SELECT TO anon, authenticated
+ USING (EXISTS (SELECT 1 FROM public.comments c WHERE c.id = comment_id AND c.hidden_at IS NULL AND c.deleted_at IS NULL));
 CREATE POLICY "Users like comments as self" ON public.comment_likes FOR INSERT TO authenticated
  WITH CHECK (user_id = auth.uid() AND EXISTS (SELECT 1 FROM public.comments c WHERE c.id = comment_id AND c.hidden_at IS NULL AND c.deleted_at IS NULL));
 CREATE POLICY "Users unlike own comment likes" ON public.comment_likes FOR DELETE TO authenticated USING (user_id = auth.uid());
