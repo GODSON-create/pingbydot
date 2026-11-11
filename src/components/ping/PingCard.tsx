@@ -13,7 +13,7 @@ import { useLongPress } from "@/hooks/use-long-press";
 
 const CAT_TONE: Record<string, string> = {
   progress: "bg-accent text-accent-foreground",
-  idea: "bg-sun/70 text-foreground",
+  idea: "bg-sun text-sun-foreground",
   launch: "bg-lime text-lime-foreground",
   milestone: "bg-primary text-primary-foreground",
   question: "bg-blush text-blush-foreground",

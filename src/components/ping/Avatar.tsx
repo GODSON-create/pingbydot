@@ -4,7 +4,7 @@ import { useState } from "react";
 const TONES = [
   "bg-lime text-lime-foreground",
   "bg-blush text-blush-foreground",
-  "bg-sun text-foreground",
+  "bg-sun text-sun-foreground",
   "bg-primary text-primary-foreground",
 ];
 

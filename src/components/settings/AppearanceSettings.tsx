@@ -30,7 +30,7 @@ export function AppearanceSettings() {
     {
       value: "dark",
       label: "Dark Theme",
-      description: "Deep obsidian night with Ping emerald accents",
+      description: "Deep charcoal with forest undertones & bright Ping-green accents",
       icon: Moon,
     },
     {

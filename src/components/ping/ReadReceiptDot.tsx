@@ -66,7 +66,7 @@ export function ReadReceiptDot({
       ) : status === "read" ? (
         <span className="inline-flex size-2 rounded-full bg-emerald-500" />
       ) : (
-        <span className="inline-flex size-2 rounded-full bg-foreground/80 dark:bg-foreground/90" />
+        <span className="inline-flex size-2 rounded-full bg-foreground/80 dark:bg-black dark:border dark:border-neutral-500" />
       )}
     </span>
   );
