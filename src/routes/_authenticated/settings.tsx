@@ -12,6 +12,7 @@ import { FounderAvatar } from "@/components/ping/Avatar";
 import { useSignOut } from "@/components/layout/SiteHeader";
 import { ConnectionsEditor } from "@/components/connections/ConnectionsEditor";
 import { PingActivityPrivacy } from "@/components/settings/PingActivityPrivacy";
+import { AppearanceSettings } from "@/components/settings/AppearanceSettings";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   staticData: { sitemap: false },
@@ -186,6 +187,8 @@ function Settings() {
       {user && <ConnectionsEditor userId={user.id} />}
 
       {user && <PingActivityPrivacy userId={user.id} />}
+
+      <AppearanceSettings />
 
       {user?.app_metadata?.provider === "email" && (
         <form onSubmit={changePw} className="surface-card mt-6 grid gap-4 rounded-3xl p-6 sm:p-8">

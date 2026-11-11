@@ -89,4 +89,26 @@ describe("Database RLS and Storage Security Audit", () => {
     expect(m11Sql).toContain("public.signal_posts");
     expect(m11Sql).toContain("public.create_hub");
   });
+
+  it("verifies migration 0012 exists and is registered in _journal.json", () => {
+    const journalPath = path.join(migrationsDir, "meta/_journal.json");
+    const journal = JSON.parse(fs.readFileSync(journalPath, "utf8"));
+    const entry12 = journal.entries.find((e: { idx: number }) => e.idx === 12);
+
+    expect(entry12).toBeDefined();
+    expect(entry12.tag).toBe("0012_moments_highlights_reping");
+
+    const m12Sql = fs.readFileSync(
+      path.join(migrationsDir, "0012_moments_highlights_reping.sql"),
+      "utf8"
+    );
+    expect(m12Sql).toContain("public.moments");
+    expect(m12Sql).toContain("public.moment_views");
+    expect(m12Sql).toContain("public.moment_likes");
+    expect(m12Sql).toContain("public.moment_replies");
+    expect(m12Sql).toContain("public.moment_repings");
+    expect(m12Sql).toContain("public.highlights");
+    expect(m12Sql).toContain("public.highlight_items");
+    expect(m12Sql).toContain("public.reping_moment");
+  });
 });

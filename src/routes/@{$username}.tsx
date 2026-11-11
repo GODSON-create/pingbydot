@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { pageHead, siteUrl, NOINDEX } from "@/lib/site";
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useSuspenseQuery, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -11,6 +12,9 @@ import { ErrorComponent } from "@/routes/__root";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { PublicConnections } from "@/components/connections/PublicConnections";
+import { ProfileHighlights } from "@/components/moments/ProfileHighlights";
+import { userActiveMomentsQuery } from "@/lib/moments";
+import { MomentViewerModal } from "@/components/moments/MomentViewerModal";
 import { followQuery, myHubsQuery } from "@/lib/hub-queries";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -197,6 +201,7 @@ function ProfilePage() {
               </div>
             </div>
             <PublicConnections connections={connections} />
+            <ProfileHighlights profile={profile} isMe={isMe} />
           </div>
         </div>
       </section>

@@ -1099,7 +1099,373 @@ export type Database = {
           },
         ]
       }
-
+      moments: {
+        Row: {
+          id: string
+          author_id: string
+          media_url: string
+          media_type: string
+          caption: string | null
+          overlay_text: string | null
+          stickers: Json
+          mentions: Json
+          location: string | null
+          duration: number
+          audience: string
+          hub_id: string | null
+          is_discoverable: boolean
+          allow_comments: boolean
+          allow_sharing: boolean
+          allow_repings: boolean
+          expires_at: string
+          is_archived: boolean
+          deleted_at: string | null
+          view_count: number
+          like_count: number
+          reping_count: number
+          reply_count: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          author_id: string
+          media_url: string
+          media_type?: string
+          caption?: string | null
+          overlay_text?: string | null
+          stickers?: Json
+          mentions?: Json
+          location?: string | null
+          duration?: number
+          audience?: string
+          hub_id?: string | null
+          is_discoverable?: boolean
+          allow_comments?: boolean
+          allow_sharing?: boolean
+          allow_repings?: boolean
+          expires_at?: string
+          is_archived?: boolean
+          deleted_at?: string | null
+          view_count?: number
+          like_count?: number
+          reping_count?: number
+          reply_count?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          author_id?: string
+          media_url?: string
+          media_type?: string
+          caption?: string | null
+          overlay_text?: string | null
+          stickers?: Json
+          mentions?: Json
+          location?: string | null
+          duration?: number
+          audience?: string
+          hub_id?: string | null
+          is_discoverable?: boolean
+          allow_comments?: boolean
+          allow_sharing?: boolean
+          allow_repings?: boolean
+          expires_at?: string
+          is_archived?: boolean
+          deleted_at?: string | null
+          view_count?: number
+          like_count?: number
+          reping_count?: number
+          reply_count?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "moments_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "moments_hub_id_fkey"
+            columns: ["hub_id"]
+            isOneToOne: false
+            referencedRelation: "hubs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      moment_views: {
+        Row: {
+          id: string
+          moment_id: string
+          viewer_id: string
+          viewed_at: string
+        }
+        Insert: {
+          id?: string
+          moment_id: string
+          viewer_id: string
+          viewed_at?: string
+        }
+        Update: {
+          id?: string
+          moment_id?: string
+          viewer_id?: string
+          viewed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "moment_views_moment_id_fkey"
+            columns: ["moment_id"]
+            isOneToOne: false
+            referencedRelation: "moments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "moment_views_viewer_id_fkey"
+            columns: ["viewer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      moment_likes: {
+        Row: {
+          id: string
+          moment_id: string
+          user_id: string
+          reaction: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          moment_id: string
+          user_id: string
+          reaction?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          moment_id?: string
+          user_id?: string
+          reaction?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "moment_likes_moment_id_fkey"
+            columns: ["moment_id"]
+            isOneToOne: false
+            referencedRelation: "moments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "moment_likes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      moment_replies: {
+        Row: {
+          id: string
+          moment_id: string
+          sender_id: string
+          recipient_id: string
+          message: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          moment_id: string
+          sender_id: string
+          recipient_id: string
+          message: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          moment_id?: string
+          sender_id?: string
+          recipient_id?: string
+          message?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "moment_replies_moment_id_fkey"
+            columns: ["moment_id"]
+            isOneToOne: false
+            referencedRelation: "moments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "moment_replies_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      moment_repings: {
+        Row: {
+          id: string
+          moment_id: string
+          user_id: string
+          caption: string | null
+          audience: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          moment_id: string
+          user_id: string
+          caption?: string | null
+          audience?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          moment_id?: string
+          user_id?: string
+          caption?: string | null
+          audience?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "moment_repings_moment_id_fkey"
+            columns: ["moment_id"]
+            isOneToOne: false
+            referencedRelation: "moments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "moment_repings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      highlights: {
+        Row: {
+          id: string
+          user_id: string
+          title: string
+          cover_url: string | null
+          display_order: number
+          is_private: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          title: string
+          cover_url?: string | null
+          display_order?: number
+          is_private?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          title?: string
+          cover_url?: string | null
+          display_order?: number
+          is_private?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "highlights_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      highlight_items: {
+        Row: {
+          id: string
+          highlight_id: string
+          moment_id: string
+          display_order: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          highlight_id: string
+          moment_id: string
+          display_order?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          highlight_id?: string
+          moment_id?: string
+          display_order?: number
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "highlight_items_highlight_id_fkey"
+            columns: ["highlight_id"]
+            isOneToOne: false
+            referencedRelation: "highlights"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "highlight_items_moment_id_fkey"
+            columns: ["moment_id"]
+            isOneToOne: false
+            referencedRelation: "moments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_close_circle: {
+        Row: {
+          id: string
+          user_id: string
+          member_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          member_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          member_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_close_circle_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -1158,6 +1524,26 @@ export type Database = {
         Returns: boolean
       }
 
+      view_moment: {
+        Args: { _moment_id: string }
+        Returns: undefined
+      }
+      toggle_like_moment: {
+        Args: { _moment_id: string; _reaction?: string }
+        Returns: boolean
+      }
+      reping_moment: {
+        Args: {
+          _moment_id: string
+          _caption?: string
+          _audience?: string
+        }
+        Returns: string
+      }
+      delete_reping: {
+        Args: { _reping_id: string }
+        Returns: undefined
+      }
       admin_metrics: { Args: never; Returns: Json }
       admin_moderate: {
         Args: {

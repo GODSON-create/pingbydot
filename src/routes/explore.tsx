@@ -5,6 +5,8 @@ import { z } from "zod";
 import { feedQuery } from "@/lib/pings";
 import { CATEGORIES } from "@/lib/validation";
 import { PingCard } from "@/components/ping/PingCard";
+import { MomentsTray } from "@/components/moments/MomentsTray";
+import { DiscoverableMomentsFeed } from "@/components/moments/DiscoverableMomentsFeed";
 import { ErrorComponent } from "@/routes/__root";
 import { Button } from "@/components/ui/button";
 import { AriseCallout } from "@/components/AriseCallout";
@@ -41,6 +43,8 @@ function Explore() {
         <Button asChild variant="hero"><Link to="/create">Share a Ping</Link></Button>
       </div>
 
+      <MomentsTray className="mt-6" />
+
       <nav className="-mx-5 mt-8 flex gap-2 overflow-x-auto px-5 pb-2" aria-label="Filter by type">
         <Link to="/explore" search={{}} className={cn("shrink-0 rounded-full border px-4 py-2 text-sm font-medium transition-colors", !cat ? "border-foreground bg-foreground text-background" : "bg-card hover:bg-secondary")}>All</Link>
         {CATEGORIES.map((x) => (
@@ -67,6 +71,8 @@ function Explore() {
           <Button asChild variant="hero" className="mt-6"><Link to="/create">Create the first Ping</Link></Button>
         </div>
       )}
+
+      <DiscoverableMomentsFeed />
 
       <div className="mt-16"><AriseCallout /></div>
     </div>
