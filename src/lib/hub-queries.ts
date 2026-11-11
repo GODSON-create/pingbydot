@@ -91,6 +91,24 @@ export const hubMembersQuery = (hubId: string, search: string, page: number, sta
     },
   });
 
+
+export const myPendingHubsQuery = (userId: string | undefined) =>
+  queryOptions({
+    queryKey: ["my-pending-hubs", userId],
+    enabled: !!userId,
+    queryFn: async (): Promise<Set<string>> => {
+      if (!userId) return new Set();
+      const { data, error } = await supabase
+        .from("hub_members")
+        .select("hub_id")
+        .eq("user_id", userId)
+        .eq("status", "pending");
+
+      if (error || !data) return new Set();
+      return new Set(data.map((r) => r.hub_id));
+    },
+  });
+
 export const myHubsQuery = (userId: string | undefined) =>
   queryOptions({
     queryKey: ["my-hubs", userId],

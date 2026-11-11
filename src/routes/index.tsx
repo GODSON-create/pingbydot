@@ -1,217 +1,695 @@
 import { pageHead } from "@/lib/site";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Heart, Link2, Share2, Sparkles, Users, Infinity as InfinityIcon, Compass, ArrowRight } from "lucide-react";
+import { z } from "zod";
+import {
+  Sparkles,
+  Radio,
+  Building2,
+  Users,
+  Lock,
+  Globe,
+  Plus,
+  ArrowRight,
+  CheckCircle,
+  Bell,
+  BellOff,
+  Compass,
+  Calendar,
+  Check,
+  Shield,
+  Clock,
+  Layers,
+  ArrowUpRight,
+  TrendingUp,
+  MessageSquare,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FounderAvatar } from "@/components/ping/Avatar";
-import { Reveal } from "@/components/Reveal";
+import { PingCard, PingCardSkeleton } from "@/components/ping/PingCard";
+import { MomentsTray } from "@/components/moments/MomentsTray";
 import { AriseCallout } from "@/components/AriseCallout";
+import { useAuth } from "@/lib/auth";
+import { feedQuery, followingFeedQuery, type Ping } from "@/lib/pings";
+import { hubsQuery, myHubsQuery, myPendingHubsQuery, hubError } from "@/lib/hub-queries";
+import { HUB_CATEGORIES, type Hub, type HubCategory } from "@/lib/hubs";
+import {
+  signalsQuery,
+  recentSignalBroadcastsQuery,
+  myFollowedSignalsQuery,
+  useSignalFollow,
+  type Signal,
+} from "@/lib/signals";
+import { CATEGORIES, type Category } from "@/lib/validation";
+import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
   staticData: { sitemap: true },
-  head: () => pageHead({
-    title: "Ping by DOT — Build in public. Share your story.",
-    description: "Share progress, ideas, milestones and opportunities as Pings with public links. Connect with people who care about what you're building.",
-    path: "/",
-    card: "summary_large_image",
+  validateSearch: z.object({
+    tab: z.enum(["foryou", "following"]).optional().default("foryou"),
+    c: z.enum(["progress", "idea", "launch", "milestone", "question", "opportunity"]).optional(),
+    page: z.coerce.number().int().min(0).max(10000).catch(0).default(0),
   }),
-  component: Landing,
+  head: () =>
+    pageHead({
+      title: "Ping by DOT — Build in Public, Discover Hubs & Signals",
+      description:
+        "Real-time social discovery for founders and builders. Share Pings, publish Moments, collaborate in Hubs, and subscribe to official institutional Signals.",
+      path: "/",
+      card: "summary_large_image",
+    }),
+  component: HomePage,
 });
 
-const SAMPLES = [
-  { id: "a", name: "Amara Osei", user: "amara", bio: "Building a pickup app for neighbourhood bakeries. Ex-pastry chef.", tag: "🚀 Launch", tone: "bg-lime text-lime-foreground", text: "We opened the waitlist for Crumb today. Three bakeries on my street agreed to pilot end-of-day boxes next week.", cta: "Join the waitlist", likes: 24 },
-  { id: "b", name: "Tomás Reyes", user: "tomas", bio: "Solo dev making a budgeting tool for freelancers.", tag: "🙋 Question", tone: "bg-blush text-blush-foreground", text: "Freelancers: do you set money aside for tax per invoice or once a month? Deciding the default for Ledgerly.", cta: null, likes: 11 },
-  { id: "c", name: "Priya Nair", user: "priya", bio: "Climate hardware. Tinkering with low-cost soil sensors.", tag: "🏁 Milestone", tone: "bg-sun text-sun-foreground", text: "Sensor v3 survived 30 days outdoors through rain. Battery is still at 71%. Field test with two farms starts in May.", cta: "Read the build log", likes: 38 },
-] as const;
+/* -------------------------------------------------------------------------- */
+/*                               HUB CARD (HOME)                              */
+/* -------------------------------------------------------------------------- */
+function HomeHubCard({
+  hub,
+  isMember,
+  isPending,
+  isOwner,
+  currentUserId,
+}: {
+  hub: Hub;
+  isMember: boolean;
+  isPending: boolean;
+  isOwner: boolean;
+  currentUserId?: string | undefined;
+}) {
+  const qc = useQueryClient();
+  const cat = HUB_CATEGORIES.find((c) => c.value === hub.category);
+  const isPrivate = hub.access === "private";
 
-function MiniPing({ s, className, style }: { s: (typeof SAMPLES)[number]; className?: string; style?: React.CSSProperties }) {
+  const joinMutation = useMutation({
+    mutationFn: async () => {
+      if (!currentUserId) {
+        toast("Sign in to join or request access to Hubs", {
+          action: { label: "Log in", onClick: () => (window.location.href = "/login") },
+        });
+        return;
+      }
+      const { data, error } = await supabase.rpc("join_hub", { _hub: hub.id });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (status) => {
+      qc.invalidateQueries({ queryKey: ["my-hubs"] });
+      qc.invalidateQueries({ queryKey: ["my-pending-hubs"] });
+      qc.invalidateQueries({ queryKey: ["hubs"] });
+      qc.invalidateQueries({ queryKey: ["hub", hub.slug] });
+      if (status === "active") {
+        toast.success(`You joined ${hub.name}! 🎉`);
+      } else {
+        toast.info("Access request submitted for review.");
+      }
+    },
+    onError: (e: any) => {
+      toast.error(hubError(e, "Could not join hub."));
+    },
+  });
+
   return (
-    <div className={cn("glass w-72 rounded-3xl p-4", className)} style={style}>
-      <div className="flex items-center gap-2.5">
-        <FounderAvatar name={s.name} size="sm" />
-        <div className="min-w-0 flex-1 text-sm"><p className="truncate font-semibold">{s.name}</p><p className="text-xs text-muted-foreground">@{s.user}</p></div>
-        <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", s.tone)}>{s.tag}</span>
+    <article className="surface-card group relative flex flex-col justify-between rounded-3xl p-5 border border-border/70 hover:border-border transition-all shadow-sm hover:shadow-md">
+      <div>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-secondary text-2xl shadow-soft">
+            {cat?.emoji ?? "🏢"}
+          </div>
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+              isPrivate
+                ? "bg-blush text-blush-foreground"
+                : "bg-accent text-accent-foreground",
+            )}
+          >
+            {isPrivate ? (
+              <>
+                <Lock className="size-3" /> Private
+              </>
+            ) : (
+              <>
+                <Globe className="size-3" /> Public
+              </>
+            )}
+          </span>
+        </div>
+
+        <div className="mt-3">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Link
+              to="/hubs/$slug"
+              params={{ slug: hub.slug }}
+              className="font-display text-base font-bold text-foreground hover:underline truncate"
+            >
+              {hub.name}
+            </Link>
+            {hub.verified && (
+              <span className="rounded-full bg-lime px-2 py-0.2 text-[10px] font-bold text-lime-foreground">
+                ✓
+              </span>
+            )}
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+            {hub.tagline || hub.description || "Builder community on Ping."}
+          </p>
+        </div>
+
+        <div className="mt-3 flex items-center gap-3 text-[11px] text-muted-foreground font-medium">
+          <span className="inline-flex items-center gap-1">
+            <Users className="size-3.5 text-primary" />
+            {(hub.member_count ?? 0).toLocaleString()} builders
+          </span>
+          <span>•</span>
+          <span className="inline-flex items-center gap-1">
+            <MessageSquare className="size-3 text-muted-foreground" />
+            {(hub.ping_count ?? 0).toLocaleString()} pings
+          </span>
+        </div>
       </div>
-      <p className="mt-3 text-sm leading-relaxed">{s.text}</p>
-      <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1"><Heart className="size-3.5 fill-blush-foreground text-blush-foreground" /> {s.likes}</span>
-        <span className="inline-flex items-center gap-1"><Link2 className="size-3.5" /> ping/p/{s.id}…</span>
+
+      <div className="mt-4 pt-3 border-t border-border/50 flex items-center gap-2">
+        <Button asChild variant="outline" size="sm" className="w-1/2 rounded-xl text-xs h-8">
+          <Link to="/hubs/$slug" params={{ slug: hub.slug }}>
+            Open
+          </Link>
+        </Button>
+
+        {isOwner ? (
+          <span className="w-1/2 text-center text-xs font-bold text-lime-foreground bg-lime/20 py-1.5 rounded-xl border border-lime/30">
+            Owner
+          </span>
+        ) : isMember ? (
+          <span className="w-1/2 inline-flex items-center justify-center gap-1 text-xs font-semibold text-primary bg-primary/10 py-1.5 rounded-xl border border-primary/20">
+            <Check className="size-3" /> Joined
+          </span>
+        ) : isPending ? (
+          <span className="w-1/2 inline-flex items-center justify-center gap-1 text-xs font-semibold text-amber-500 bg-amber-500/10 py-1.5 rounded-xl border border-amber-500/20">
+            <Clock className="size-3" /> Pending
+          </span>
+        ) : (
+          <Button
+            variant="hero"
+            size="sm"
+            onClick={() => joinMutation.mutate()}
+            disabled={joinMutation.isPending}
+            className="w-1/2 rounded-xl text-xs h-8 shadow-sm"
+          >
+            {isPrivate ? "Request" : "Join"}
+          </Button>
+        )}
+      </div>
+    </article>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*                             SIGNAL CARD (HOME)                             */
+/* -------------------------------------------------------------------------- */
+function HomeSignalCard({
+  signal,
+  isFollowing,
+  latestPost,
+  currentUserId,
+}: {
+  signal: Signal;
+  isFollowing: boolean;
+  latestPost?: { id: string; title: string; content: string; created_at: string } | undefined;
+  currentUserId?: string | undefined;
+}) {
+  const followMutation = useSignalFollow(signal.id, currentUserId);
+
+  const handleToggle = () => {
+    if (!currentUserId) {
+      toast("Sign in to subscribe to official Signals", {
+        action: { label: "Log in", onClick: () => (window.location.href = "/login") },
+      });
+      return;
+    }
+    followMutation.mutate();
+  };
+
+  return (
+    <article className="surface-card group relative flex flex-col justify-between rounded-3xl p-5 border border-border/70 hover:border-border transition-all shadow-sm hover:shadow-md">
+      <div>
+        <div className="flex items-start gap-3">
+          {signal.avatar_url ? (
+            <img
+              src={signal.avatar_url}
+              alt={signal.name}
+              className="size-11 rounded-2xl object-cover shrink-0 border border-border/50"
+            />
+          ) : (
+            <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary font-bold">
+              <Radio className="size-5" />
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <Link
+                to="/signals/$slug"
+                params={{ slug: signal.slug }}
+                className="font-display text-base font-bold text-foreground hover:underline truncate"
+              >
+                {signal.name}
+              </Link>
+              {signal.verified && (
+                <span
+                  title="Verified Institution"
+                  className="inline-flex items-center gap-0.5 rounded-full bg-primary/15 px-2 py-0.2 text-[10px] font-bold text-primary"
+                >
+                  <CheckCircle className="size-3" />
+                  Verified
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground">
+              <span className="capitalize font-semibold text-secondary-foreground bg-secondary px-2 py-0.5 rounded-full">
+                {signal.institution_type}
+              </span>
+              <span>{(signal.follower_count ?? 0).toLocaleString()} subscribers</span>
+            </div>
+          </div>
+        </div>
+
+        {signal.description && (
+          <p className="mt-3 text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+            {signal.description}
+          </p>
+        )}
+
+        {/* Latest broadcast snippet preview */}
+        {latestPost ? (
+          <div className="mt-3 rounded-2xl bg-secondary/50 p-2.5 border border-border/40 text-xs">
+            <div className="flex items-center gap-1 text-[11px] font-semibold text-primary">
+              <Radio className="size-3 animate-pulse" />
+              <span className="truncate">Latest: {latestPost.title}</span>
+            </div>
+            <p className="mt-1 text-[11px] text-muted-foreground line-clamp-1">
+              {latestPost.content}
+            </p>
+          </div>
+        ) : (
+          <div className="mt-3 rounded-2xl bg-secondary/30 p-2 border border-border/30 text-[11px] text-muted-foreground text-center">
+            Standing by for upcoming institutional broadcasts.
+          </div>
+        )}
+      </div>
+
+      <div className="mt-4 pt-3 border-t border-border/50 flex items-center gap-2">
+        <Button asChild variant="outline" size="sm" className="w-1/2 rounded-xl text-xs h-8">
+          <Link to="/signals/$slug" params={{ slug: signal.slug }}>
+            Tune In
+          </Link>
+        </Button>
+
+        <Button
+          variant={isFollowing ? "outline" : "hero"}
+          size="sm"
+          onClick={handleToggle}
+          disabled={followMutation.isPending}
+          className="w-1/2 rounded-xl text-xs h-8 gap-1 shadow-sm"
+        >
+          {isFollowing ? (
+            <>
+              <BellOff className="size-3" /> Subscribed
+            </>
+          ) : (
+            <>
+              <Bell className="size-3" /> Subscribe
+            </>
+          )}
+        </Button>
+      </div>
+    </article>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*                              HOMEPAGE COMPONENT                            */
+/* -------------------------------------------------------------------------- */
+function HomePage() {
+  const { user, profile } = useAuth();
+  const search = Route.useSearch();
+  const activeTab = search.tab || "foryou";
+  const categoryFilter = search.c ?? null;
+  const page = search.page || 0;
+
+  // Real Queries
+  const { data: forYouPings = [], isLoading: pingsLoading } = useQuery(
+    feedQuery(categoryFilter, page),
+  );
+  const { data: followingPings = [], isLoading: followingLoading } = useQuery(
+    followingFeedQuery(user?.id, page),
+  );
+  const { data: hubs = [], isLoading: hubsLoading } = useQuery(hubsQuery("", null, 0));
+  const { data: myHubs = [] } = useQuery(myHubsQuery(user?.id));
+  const { data: myPendingHubs = new Set<string>() } = useQuery(myPendingHubsQuery(user?.id));
+
+  const { data: signals = [], isLoading: signalsLoading } = useQuery(signalsQuery());
+  const { data: followedSignals = new Set<string>() } = useQuery(
+    myFollowedSignalsQuery(user?.id),
+  );
+  const { data: recentBroadcasts = {} } = useQuery(recentSignalBroadcastsQuery());
+
+  const displayedPings = activeTab === "following" ? followingPings : forYouPings;
+  const isPingsLoading = activeTab === "following" ? followingLoading : pingsLoading;
+
+  // Set of joined hub IDs
+  const myHubIds = new Set(myHubs.map((h) => h.hub.id));
+
+  return (
+    <div className="mx-auto max-w-7xl px-4 sm:px-6 py-6 pb-24">
+      {/* 1. TOP GREETING & MOMENTS TRAY */}
+      <section className="mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+          <div>
+            <span className="sticker rotate-[-1deg] bg-lime text-lime-foreground">
+              build in public
+            </span>
+            <h1 className="mt-2 font-display text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">
+              {user ? (
+                <>Hey {profile?.display_name || profile?.username || "Builder"}, what's shipping?</>
+              ) : (
+                <>Where founders share daily progress.</>
+              )}
+            </h1>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {user ? (
+              <Button asChild variant="hero" size="sm" className="rounded-full shadow-lift h-9 px-4">
+                <Link to="/create">
+                  <Plus className="size-4" /> Post a Ping
+                </Link>
+              </Button>
+            ) : (
+              <Button asChild variant="hero" size="sm" className="rounded-full shadow-lift h-9 px-5">
+                <Link to="/signup">Join Ping</Link>
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Moments Tray */}
+        <div className="surface-card rounded-3xl p-4 sm:p-5 border border-border/80 shadow-soft">
+          <div className="flex items-center justify-between mb-2 px-1">
+            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <Sparkles className="size-3.5 text-primary" /> Active Moments
+            </span>
+            <span className="text-[11px] text-muted-foreground">Stories expire in 24 hours</span>
+          </div>
+          <MomentsTray />
+        </div>
+      </section>
+
+      {/* 2. MAIN 2-COLUMN DISCOVERY GRID */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_390px] gap-8 items-start">
+        {/* =================================================================== */}
+        {/* LEFT COLUMN: PINGS FEED                                             */}
+        {/* =================================================================== */}
+        <main className="space-y-6">
+          {/* Feed Header Tabs: For You vs Following */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-border/60 pb-3">
+            <div className="flex items-center gap-2">
+              <Link
+                to="/"
+                search={{ tab: "foryou", c: categoryFilter ?? undefined, page: 0 }}
+                className={cn(
+                  "rounded-full px-4 py-1.5 text-sm font-semibold transition-all",
+                  activeTab === "foryou"
+                    ? "bg-foreground text-background shadow-sm"
+                    : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                )}
+              >
+                For You
+              </Link>
+              <Link
+                to="/"
+                search={{ tab: "following", c: categoryFilter ?? undefined, page: 0 }}
+                className={cn(
+                  "rounded-full px-4 py-1.5 text-sm font-semibold transition-all flex items-center gap-1.5",
+                  activeTab === "following"
+                    ? "bg-foreground text-background shadow-sm"
+                    : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                )}
+              >
+                Following
+                {!user && <Lock className="size-3 text-muted-foreground" />}
+              </Link>
+            </div>
+
+            <span className="text-xs text-muted-foreground font-medium">
+              {categoryFilter ? `Filtering by #${categoryFilter}` : "Showing all categories"}
+            </span>
+          </div>
+
+          {/* Category Filter Bar */}
+          <nav
+            className="-mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-2 scrollbar-none sm:-mx-0 sm:px-0"
+            aria-label="Filter by type"
+          >
+            <Link
+              to="/"
+              search={{ tab: activeTab, c: undefined, page: 0 }}
+              className={cn(
+                "shrink-0 rounded-full border px-3.5 py-1 text-xs font-semibold transition-colors",
+                !categoryFilter
+                  ? "border-foreground bg-foreground text-background"
+                  : "border-border bg-card hover:bg-secondary",
+              )}
+            >
+              All Types
+            </Link>
+            {CATEGORIES.map((cat) => (
+              <Link
+                key={cat.value}
+                to="/"
+                search={{ tab: activeTab, c: cat.value as any, page: 0 }}
+                className={cn(
+                  "shrink-0 rounded-full border px-3.5 py-1 text-xs font-semibold transition-colors flex items-center gap-1",
+                  categoryFilter === cat.value
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-border bg-card hover:bg-secondary",
+                )}
+              >
+                <span>{cat.emoji}</span>
+                <span>{cat.label}</span>
+              </Link>
+            ))}
+          </nav>
+
+          {/* Quick Post Banner for Logged-In Users */}
+          {user && (
+            <div className="surface-card flex items-center justify-between gap-3 rounded-2xl p-3 sm:p-4 border border-border/80">
+              <Link
+                to="/@{$username}"
+                params={{ username: profile?.username || "" }}
+                className="flex items-center gap-2.5 min-w-0"
+              >
+                <FounderAvatar
+                  name={profile?.display_name || profile?.username || "You"}
+                  src={profile?.avatar_url}
+                  size="sm"
+                />
+                <span className="text-xs text-muted-foreground truncate font-medium">
+                  What did you ship today?
+                </span>
+              </Link>
+              <Button asChild variant="hero" size="sm" className="rounded-xl h-8 px-3 text-xs">
+                <Link to="/create">Post Ping</Link>
+              </Button>
+            </div>
+          )}
+
+          {/* Pings Grid */}
+          <div className="space-y-4">
+            {isPingsLoading ? (
+              <div className="space-y-4">
+                <PingCardSkeleton />
+                <PingCardSkeleton />
+                <PingCardSkeleton />
+              </div>
+            ) : activeTab === "following" && !user ? (
+              <div className="surface-card rounded-3xl p-10 text-center border border-border/60">
+                <Users className="mx-auto size-10 text-primary" />
+                <h3 className="mt-3 font-display font-bold text-lg">See updates from people you follow</h3>
+                <p className="mt-1 text-xs text-muted-foreground max-w-sm mx-auto">
+                  Log in to create a tailored timeline of founders and collaborators you care about.
+                </p>
+                <Button asChild variant="hero" size="sm" className="mt-4 rounded-xl">
+                  <Link to="/login" search={{ next: "/?tab=following" }}>
+                    Sign in to Follow
+                  </Link>
+                </Button>
+              </div>
+            ) : displayedPings.length === 0 ? (
+              <div className="surface-card rounded-3xl p-10 text-center border border-border/60">
+                <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-lime/20 text-lime-foreground font-bold">
+                  <Sparkles className="size-6" />
+                </div>
+                <h3 className="mt-4 font-display font-bold text-lg">
+                  {activeTab === "following"
+                    ? "Your following feed is quiet"
+                    : categoryFilter
+                    ? `No Pings tagged #${categoryFilter} yet`
+                    : "No Pings shared yet"}
+                </h3>
+                <p className="mt-1 text-xs text-muted-foreground max-w-sm mx-auto">
+                  {activeTab === "following"
+                    ? "Explore discoverable builders and Hubs to follow founders building exciting things."
+                    : "Be the first to share an update with the Ping network!"}
+                </p>
+                <div className="mt-5 flex justify-center gap-3">
+                  <Button asChild variant="hero" size="sm" className="rounded-xl">
+                    <Link to="/create">Post a Ping</Link>
+                  </Button>
+                  <Button asChild variant="outline" size="sm" className="rounded-xl">
+                    <Link to="/explore">Explore Directory</Link>
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              displayedPings.map((ping) => <PingCard key={ping.id} ping={ping} />)
+            )}
+          </div>
+
+          {/* Feed Pagination */}
+          {displayedPings.length > 0 && (
+            <div className="flex items-center justify-center gap-3 pt-4">
+              {page > 0 && (
+                <Button asChild variant="outline" size="sm" className="rounded-xl">
+                  <Link to="/" search={{ tab: activeTab, c: categoryFilter ?? undefined, page: Math.max(0, page - 1) }}>
+                    Newer Pings
+                  </Link>
+                </Button>
+              )}
+              {displayedPings.length >= 25 && (
+                <Button asChild variant="outline" size="sm" className="rounded-xl">
+                  <Link to="/" search={{ tab: activeTab, c: categoryFilter ?? undefined, page: page + 1 }}>
+                    Older Pings
+                  </Link>
+                </Button>
+              )}
+            </div>
+          )}
+
+          {/* Arise Callout */}
+          <div className="pt-6">
+            <AriseCallout />
+          </div>
+        </main>
+
+        {/* =================================================================== */}
+        {/* RIGHT COLUMN: HUBS & SIGNALS DISCOVERY (STICKY ON DESKTOP)          */}
+        {/* =================================================================== */}
+        <aside className="space-y-8 lg:sticky lg:top-20">
+          {/* 3. HUBS DISCOVERY SECTION */}
+          <section aria-labelledby="hubs-discovery-heading">
+            <div className="flex items-center justify-between mb-3">
+              <h2
+                id="hubs-discovery-heading"
+                className="font-display text-lg font-bold flex items-center gap-2 text-foreground"
+              >
+                <Building2 className="size-5 text-primary" />
+                <span>Community Hubs</span>
+              </h2>
+              <div className="flex items-center gap-2">
+                <Button asChild variant="ghost" size="sm" className="h-7 text-xs px-2 text-primary font-semibold">
+                  <Link to="/hubs">Browse All</Link>
+                </Button>
+                <Button asChild variant="outline" size="sm" className="h-7 text-xs px-2 rounded-lg">
+                  <Link to="/hubs/create">+ Create</Link>
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {hubsLoading ? (
+                <div className="space-y-3">
+                  {[1, 2].map((i) => (
+                    <div key={i} className="h-36 rounded-3xl bg-muted/40 animate-pulse" />
+                  ))}
+                </div>
+              ) : hubs.length === 0 ? (
+                <div className="surface-card rounded-2xl p-6 text-center text-xs text-muted-foreground border border-border/60">
+                  <Building2 className="mx-auto size-8 text-muted-foreground/40 mb-2" />
+                  <p className="font-semibold text-foreground">No public Hubs yet</p>
+                  <p className="mt-1">Create a hub for your collective or accelerator.</p>
+                  <Button asChild variant="hero" size="sm" className="mt-3 rounded-xl text-xs h-7">
+                    <Link to="/hubs/create">Create Hub</Link>
+                  </Button>
+                </div>
+              ) : (
+                hubs.slice(0, 3).map((hub) => (
+                  <HomeHubCard
+                    key={hub.id}
+                    hub={hub}
+                    isMember={myHubIds.has(hub.id)}
+                    isPending={myPendingHubs.has(hub.id)}
+                    isOwner={hub.owner_id === user?.id}
+                    currentUserId={user?.id}
+                  />
+                ))
+              )}
+            </div>
+          </section>
+
+          {/* 4. SIGNALS DISCOVERY SECTION */}
+          <section aria-labelledby="signals-discovery-heading">
+            <div className="flex items-center justify-between mb-3">
+              <h2
+                id="signals-discovery-heading"
+                className="font-display text-lg font-bold flex items-center gap-2 text-foreground"
+              >
+                <Radio className="size-5 text-primary" />
+                <span>Official Signals</span>
+              </h2>
+              <div className="flex items-center gap-2">
+                <Button asChild variant="ghost" size="sm" className="h-7 text-xs px-2 text-primary font-semibold">
+                  <Link to="/signals">Browse All</Link>
+                </Button>
+                <Button asChild variant="outline" size="sm" className="h-7 text-xs px-2 rounded-lg">
+                  <Link to="/signals/create">+ Register</Link>
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {signalsLoading ? (
+                <div className="space-y-3">
+                  {[1, 2].map((i) => (
+                    <div key={i} className="h-36 rounded-3xl bg-muted/40 animate-pulse" />
+                  ))}
+                </div>
+              ) : signals.length === 0 ? (
+                <div className="surface-card rounded-2xl p-6 text-center text-xs text-muted-foreground border border-border/60">
+                  <Radio className="mx-auto size-8 text-muted-foreground/40 mb-2" />
+                  <p className="font-semibold text-foreground">No official Signals yet</p>
+                  <p className="mt-1">Register an official channel for your institution.</p>
+                  <Button asChild variant="hero" size="sm" className="mt-3 rounded-xl text-xs h-7">
+                    <Link to="/signals/create">Register Channel</Link>
+                  </Button>
+                </div>
+              ) : (
+                signals.slice(0, 3).map((signal) => (
+                  <HomeSignalCard
+                    key={signal.id}
+                    signal={signal}
+                    isFollowing={followedSignals.has(signal.id)}
+                    latestPost={recentBroadcasts[signal.id]}
+                    currentUserId={user?.id}
+                  />
+                ))
+              )}
+            </div>
+          </section>
+        </aside>
       </div>
     </div>
-  );
-}
-
-function Hero() {
-  return (
-    <section className="relative overflow-hidden">
-      <div className="pointer-events-none absolute inset-0" aria-hidden>
-        <div className="absolute -right-20 top-0 size-[28rem] rounded-full bg-lime/40 blur-3xl animate-drift" />
-        <div className="absolute -left-24 top-40 size-[22rem] rounded-full bg-blush/60 blur-3xl animate-drift [animation-delay:-8s]" />
-      </div>
-      <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-5 pb-20 pt-14 lg:grid-cols-[1.1fr_1fr] lg:pt-20">
-        <div>
-          <span className="sticker -rotate-2 bg-card">✦ Build in public. Share your story.</span>
-          <h1 className="mt-6 font-display text-5xl font-extrabold leading-[0.95] sm:text-7xl">
-            You're building something. <span className="text-shimmer">Let the world see it.</span>
-          </h1>
-          <p className="mt-6 max-w-lg text-lg text-muted-foreground">
-            Share progress, ideas, milestones and opportunities as Pings. Each one gets a link anyone can open — so your ideas have somewhere to go, and people who care can find you.
-          </p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Button asChild variant="hero" size="lg"><Link to="/signup">Create your first Ping</Link></Button>
-            <Button asChild variant="glass" size="lg"><Link to="/explore">Explore Pings <ArrowRight /></Link></Button>
-          </div>
-        </div>
-        <div className="relative mx-auto h-[26rem] w-full max-w-md" aria-label="Example Pings (sample content)">
-          <MiniPing s={SAMPLES[0]} className="absolute left-0 top-2 animate-float-a" style={{ "--r": "-4deg" } as React.CSSProperties} />
-          <MiniPing s={SAMPLES[2]} className="absolute right-0 top-36 animate-float-b" style={{ "--r": "3deg" } as React.CSSProperties} />
-          <div className="glass absolute bottom-6 left-6 flex items-center gap-2 rounded-full px-4 py-2 text-sm animate-float-b">
-            <Heart className="size-4 fill-blush-foreground text-blush-foreground" /> Tomás liked your Ping
-          </div>
-          <span className="sticker absolute right-8 top-0 rotate-6 bg-lime text-lime-foreground">sample</span>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-const STEPS = [
-  { icon: Sparkles, t: "Share", d: "Amara posts a Ping about her waitlist opening." },
-  { icon: Compass, t: "Discover", d: "Someone browsing Explore — or tapping a WhatsApp link — finds it." },
-  { icon: Heart, t: "React", d: "They like it. Amara sees that the story landed." },
-  { icon: Users, t: "Connect", d: "They open her profile, follow her link, and reach out." },
-];
-
-function Travels() {
-  return (
-    <section id="how" className="mx-auto max-w-6xl scroll-mt-28 px-5 py-20">
-      <Reveal><h2 className="font-display text-4xl font-extrabold sm:text-5xl">How a Ping travels</h2></Reveal>
-      <ol className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        {STEPS.map((s, i) => (
-          <Reveal as="li" key={s.t} delay={i * 90} className="surface-card lift rounded-3xl p-6">
-            <span className="flex size-11 items-center justify-center rounded-full border-[1.5px] border-foreground bg-lime"><s.icon className="size-5" /></span>
-            <p className="mt-5 text-xs font-bold text-muted-foreground">0{i + 1}</p>
-            <h3 className="font-display text-xl font-bold">{s.t}</h3>
-            <p className="mt-1 text-sm text-muted-foreground">{s.d}</p>
-          </Reveal>
-        ))}
-      </ol>
-    </section>
-  );
-}
-
-function Demo() {
-  const [i, setI] = useState(0);
-  const [view, setView] = useState<"ping" | "profile" | "share">("ping");
-  const [liked, setLiked] = useState<Record<string, boolean>>({});
-  const s = SAMPLES[i] ?? SAMPLES[0];
-  const isLiked = !!liked[s.id];
-  return (
-    <section id="demo" className="scroll-mt-28 bg-forest grain py-20 text-primary-foreground">
-      <div className="mx-auto max-w-6xl px-5">
-        <Reveal>
-          <span className="sticker bg-lime text-lime-foreground">interactive preview</span>
-          <h2 className="mt-4 font-display text-4xl font-extrabold sm:text-5xl">Try it before you sign up</h2>
-          <p className="mt-2 max-w-lg text-primary-foreground/75">Sample Pings only — nothing here is published or saved.</p>
-        </Reveal>
-        <div className="mt-10 grid gap-8 lg:grid-cols-[18rem_1fr]">
-          <div className="flex gap-2 overflow-x-auto lg:flex-col" role="tablist" aria-label="Sample Pings">
-            {SAMPLES.map((x, k) => (
-              <button key={x.id} role="tab" aria-selected={k === i} onClick={() => setI(k)} className={cn("glass-dark shrink-0 rounded-2xl px-4 py-3 text-left transition-all", k === i && "ring-2 ring-lime")}>
-                <p className="text-sm font-semibold">{x.name}</p><p className="text-xs text-primary-foreground/70">{x.tag}</p>
-              </button>
-            ))}
-          </div>
-          <div>
-            <div className="inline-flex rounded-full bg-forest-deep/60 p-1" role="tablist" aria-label="Preview view">
-              {(["ping", "profile", "share"] as const).map((v) => (
-                <button key={v} role="tab" aria-selected={view === v} onClick={() => setView(v)} className={cn("rounded-full px-4 py-1.5 text-sm font-semibold capitalize transition-colors", view === v ? "bg-lime text-lime-foreground" : "text-primary-foreground/80 hover:text-primary-foreground")}>
-                  {v === "share" ? "Share link" : v}
-                </button>
-              ))}
-            </div>
-            <div key={`${s.id}-${view}`} className="mt-5 max-w-xl animate-page-in rounded-3xl bg-card p-6 text-card-foreground shadow-lift">
-              {view === "ping" && (
-                <>
-                  <div className="flex items-center gap-3"><FounderAvatar name={s.name} /><div className="flex-1"><p className="font-semibold">{s.name}</p><p className="text-xs text-muted-foreground">@{s.user} · sample</p></div><span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold", s.tone)}>{s.tag}</span></div>
-                  <p className="mt-4 text-lg leading-relaxed">{s.text}</p>
-                  {s.cta && <div className="mt-4 rounded-2xl border bg-secondary/60 px-4 py-3 text-sm font-semibold">{s.cta} ↗</div>}
-                  <div className="mt-4 flex items-center gap-2 border-t pt-3">
-                    <button onClick={() => setLiked({ ...liked, [s.id]: !isLiked })} aria-pressed={isLiked} className={cn("inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-sm font-semibold", isLiked ? "bg-blush text-blush-foreground" : "text-muted-foreground hover:bg-blush/60")}>
-                      <Heart key={String(isLiked)} className={cn("size-4", isLiked && "fill-current animate-pop")} /> {s.likes + (isLiked ? 1 : 0)}
-                    </button>
-                    <button onClick={() => setView("share")} className="inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-sm text-muted-foreground hover:bg-secondary"><Share2 className="size-4" /> Reping</button>
-                  </div>
-                </>
-              )}
-              {view === "profile" && (
-                <div className="flex flex-col items-start gap-3">
-                  <FounderAvatar name={s.name} size="lg" />
-                  <div><p className="font-display text-2xl font-bold">{s.name}</p><p className="text-sm text-muted-foreground">@{s.user}</p></div>
-                  <p>{s.bio}</p>
-                  <p className="text-sm text-muted-foreground">Every Ping they share shows up on this public profile.</p>
-                </div>
-              )}
-              {view === "share" && (
-                <div>
-                  <p className="font-display text-xl font-bold">Every Ping has its own link</p>
-                  <div className="mt-4 flex items-center gap-2 rounded-2xl border bg-secondary/60 p-2 pl-4 font-mono text-sm">
-                    <span className="flex-1 truncate">yourping.app/p/{s.id}-sample</span>
-                    <Button size="sm" onClick={() => toast("This is a preview link. Real Pings get a live link you can copy.")}>Copy</Button>
-                  </div>
-                  <p className="mt-3 text-sm text-muted-foreground">Share it with your phone's share sheet, on WhatsApp, or paste it anywhere. Anyone can read it without an account.</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-const FEATURES = [
-  { icon: Link2, t: "Public, shareable links", d: "Every Ping lives at a stable URL anyone can open — no sign-up wall." },
-  { icon: Users, t: "Founder profiles", d: "One page with your bio and every Ping you've shared, in order." },
-  { icon: Heart, t: "Reactions", d: "Signed-in people can like a Ping once. Small signal, real people." },
-  { icon: InfinityIcon, t: "Unlimited Pings", d: "Share as often as you build. Tiny steps count." },
-  { icon: Compass, t: "Discovery", d: "Explore the newest Pings by type: launches, questions, opportunities and more." },
-];
-
-function Features() {
-  return (
-    <section className="mx-auto max-w-6xl px-5 py-20">
-      <Reveal><h2 className="max-w-2xl font-display text-4xl font-extrabold sm:text-5xl">Everything a story needs to travel. Nothing it doesn't.</h2></Reveal>
-      <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {FEATURES.map((f, k) => (
-          <Reveal key={f.t} delay={k * 70} className={cn("surface-card lift rounded-3xl p-7", k === 0 && "lg:row-span-2 bg-accent")}>
-            <f.icon className="size-6" />
-            <h3 className="mt-4 font-display text-xl font-bold">{f.t}</h3>
-            <p className="mt-1 text-muted-foreground">{f.d}</p>
-          </Reveal>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function Landing() {
-  return (
-    <>
-      <Hero />
-      <Travels />
-      <Demo />
-      <Features />
-      <section className="mx-auto max-w-6xl px-5">
-        <Reveal className="relative overflow-hidden rounded-[2rem] border-[1.5px] border-foreground bg-lime p-10 text-center text-lime-foreground sm:p-16">
-          <h2 className="font-display text-4xl font-extrabold sm:text-6xl">Your next step deserves an audience.</h2>
-          <p className="mx-auto mt-3 max-w-md">Write a Ping about what you did this week. It takes a minute.</p>
-          <Button asChild size="lg" className="mt-8"><Link to="/signup">Create your first Ping</Link></Button>
-        </Reveal>
-        <div className="mt-10"><AriseCallout /></div>
-      </section>
-    </>
   );
 }

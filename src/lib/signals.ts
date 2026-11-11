@@ -358,3 +358,38 @@ export function signalAnalyticsQuery(postId: string, isPublisher: boolean) {
     },
   };
 }
+
+export const recentSignalBroadcastsQuery = () => ({
+  queryKey: ["recent-signal-broadcasts"],
+  queryFn: async (): Promise<Record<string, { id: string; title: string; content: string; created_at: string }>> => {
+    const { data, error } = await supabase
+      .from("signal_posts")
+      .select("id, signal_id, title, content, created_at")
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    if (error || !data) return {};
+    const map: Record<string, { id: string; title: string; content: string; created_at: string }> = {};
+    for (const p of data) {
+      if (!map[p.signal_id]) {
+        map[p.signal_id] = p;
+      }
+    }
+    return map;
+  },
+});
+
+export const myFollowedSignalsQuery = (userId: string | undefined) => ({
+  queryKey: ["my-followed-signals", userId],
+  enabled: !!userId,
+  queryFn: async (): Promise<Set<string>> => {
+    if (!userId) return new Set<string>();
+    const { data, error } = await supabase
+      .from("signal_followers")
+      .select("signal_id")
+      .eq("user_id", userId);
+
+    if (error || !data) return new Set<string>();
+    return new Set(data.map((r) => r.signal_id));
+  },
+});

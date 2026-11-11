@@ -119,8 +119,8 @@ describe("Hubs Critical Functionality & Repair Verification", () => {
     ];
     const cleaned = safeResources(raw);
     expect(cleaned.length).toBe(2);
-    expect(cleaned[0].url).toBe("https://accelerator.ai");
-    expect(cleaned[1].url).toBe("https://github.com/dot/ping");
+    expect(cleaned[0]?.url).toBe("https://accelerator.ai");
+    expect(cleaned[1]?.url).toBe("https://github.com/dot/ping");
   });
 
   it("Journey 14: moderates Hub feed pings (pin, unpin, remove) within max pinned constraints", () => {

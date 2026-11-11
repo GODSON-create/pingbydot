@@ -31,6 +31,44 @@ export type Ping = {
 export const replyCount = (p: Ping) => p.replies?.[0]?.count ?? 0;
 export const likeCount = (p: Ping) => p.likes?.[0]?.count ?? 0;
 
+
+export const followingFeedQuery = (userId: string | undefined, page = 0) =>
+  queryOptions({
+    queryKey: ["following-feed", userId, page],
+    enabled: !!userId,
+    queryFn: async (): Promise<Ping[]> => {
+      if (!userId) return [];
+      const { data: followRows, error: followError } = await supabase
+        .from("follows")
+        .select("following_id")
+        .eq("follower_id", userId);
+
+      if (followError || !followRows || followRows.length === 0) return [];
+      const followingIds = followRows.map((r) => r.following_id);
+
+      const { data, error } = await supabase
+        .from("pings")
+        .select(`
+          id, user_id, category, content, image_url, cta_url, cta_label, created_at, updated_at,
+          author:profiles!pings_user_id_fkey(id, username, display_name, avatar_url),
+          likes(count),
+          replies:comments!comments_ping_id_fkey(count),
+          source_ping_id, source_comment_id,
+          source_comment:comments!pings_source_comment_id_fkey(id, ping_id, content, deleted_at, author:profiles!comments_user_id_fkey(username, display_name))
+        `)
+        .in("user_id", followingIds)
+        .is("hidden_at", null)
+        .order("created_at", { ascending: false })
+        .range(page * 30, page * 30 + 29);
+
+      if (error) {
+        console.warn("Error loading following feed:", error);
+        return [];
+      }
+      return (data ?? []) as unknown as Ping[];
+    },
+  });
+
 export const feedQuery = (category: string | null, page = 0) =>
   queryOptions({
     queryKey: ["feed", category, page],
