@@ -49,7 +49,7 @@ export const Route = createFileRoute("/@{$username}")({
   component: ProfilePage,
 });
 
-function FollowButton({ profileId, currentUserId }: { profileId: string; currentUserId?: string }) {
+function FollowButton({ profileId, currentUserId }: { profileId: string; currentUserId?: string | undefined }) {
   const qc = useQueryClient();
   const { data: follow } = useQuery(followQuery(profileId, currentUserId));
 
@@ -126,6 +126,7 @@ function ProfilePage() {
   const { username } = Route.useParams();
   const { user } = useAuth();
   const { data } = useSuspenseQuery(profileQuery(username));
+  if (!data) return null;
 
   const { profile, pings, connections } = data;
   const isMe = user?.id === profile.id;
@@ -244,7 +245,7 @@ function ProfilePage() {
           </div>
         ) : (
           <div className="mt-5 grid gap-5 md:grid-cols-2">
-            {pings.map((p) => (
+            {pings.map((p: any) => (
               <PingCard key={p.id} ping={p} />
             ))}
           </div>

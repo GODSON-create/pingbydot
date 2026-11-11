@@ -86,7 +86,7 @@ export function PingCard({
             <Link
               to="/hubs/$slug"
               params={{ slug: hubBadge.slug }}
-              search={hubBadge.intent ? { intent: hubBadge.intent } : undefined}
+              search={hubBadge.intent ? { intent: hubBadge.intent } : {}}
               className="inline-flex items-center gap-1 rounded-full bg-secondary px-2.5 py-1 text-xs font-semibold hover:bg-secondary/80"
               onClick={(e) => e.stopPropagation()}
             >

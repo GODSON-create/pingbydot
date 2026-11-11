@@ -46,18 +46,22 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { HubShareModal } from "@/components/hubs/HubShareModal";
+import { HubChat } from "@/components/hubs/HubChat";
 import { cn } from "@/lib/utils";
 import { pageHead } from "@/lib/site";
 
 export const Route = createFileRoute("/hubs/$slug")({
+  staticData: { sitemap: true },
   validateSearch: z.object({
     intent: z.string().optional(),
     tab: z.string().optional(),
+    invite: z.string().optional(),
   }),
   head: () =>
     pageHead({
       title: "Hub Details — Ping by DOT",
       description: "Community hub on Ping.",
+      path: "/hubs",
     }),
   component: HubDetail,
 });
@@ -74,8 +78,8 @@ function MemberRow({
   hubId: string;
   isStaff: boolean;
   isOwner: boolean;
-  currentUserId?: string;
-  onRefetch: () => void;
+  currentUserId?: string | undefined;
+  onRefetch: () => void | Promise<any>;
 }) {
   const profile = member.profile;
   const name = profile?.display_name || profile?.username || "Builder";
@@ -134,7 +138,7 @@ function MemberRow({
         _hub: hubId,
         _user: member.user_id,
         _action: action,
-        _role: role || null,
+        ...(role ? { _role: role } : {}),
       });
       if (error) {
         toast.error(hubError(error, "Action failed."));
@@ -248,7 +252,7 @@ function MemberRow({
 
 function HubDetail() {
   const { slug } = Route.useParams();
-  const { intent: intentParam, tab: tabParam } = Route.useSearch();
+  const { intent: intentParam, tab: tabParam, invite: inviteTokenParam } = Route.useSearch();
   const { user } = useAuth();
   const qc = useQueryClient();
   const [shareOpen, setShareOpen] = useState(false);
@@ -288,7 +292,10 @@ function HubDetail() {
   const joinMutation = useMutation({
     mutationFn: async () => {
       if (!user || !hub) throw new Error("Please log in first.");
-      const { data, error } = await supabase.rpc("join_hub", { _hub: hub.id });
+      const { data, error } = await supabase.rpc("join_hub", {
+        _hub: hub.id,
+        ...(inviteTokenParam ? { _token: inviteTokenParam } : {}),
+      });
       if (error) throw error;
       return data;
     },
@@ -456,7 +463,7 @@ function HubDetail() {
                   )
                 ) : (
                   <Button asChild variant="hero" size="sm" className="rounded-full h-10 px-5 shadow-lift">
-                    <Link to="/login" search={{ redirect: `/hubs/${hub.slug}` }}>
+                    <Link to="/login" search={{ next: `/hubs/${hub.slug}` }}>
                       Sign in to Join
                     </Link>
                   </Button>
@@ -471,6 +478,9 @@ function HubDetail() {
       <section className="mx-auto max-w-5xl px-5 mt-6">
         <Tabs defaultValue={activeTab}>
           <TabsList className="h-11 rounded-full p-1 bg-secondary/80">
+            <TabsTrigger value="chat" className="rounded-full px-5 text-sm font-semibold">
+              Live Pings
+            </TabsTrigger>
             <TabsTrigger value="feed" className="rounded-full px-5 text-sm font-semibold">
               Feed ({hub.ping_count ?? 0})
             </TabsTrigger>
@@ -481,6 +491,11 @@ function HubDetail() {
               About & Resources
             </TabsTrigger>
           </TabsList>
+
+          {/* TAB 0: LIVE CHAT */}
+          <TabsContent value="chat" className="mt-6">
+            <HubChat hubId={hub.id} isMember={isMember} isPrivate={isPrivate} />
+          </TabsContent>
 
           {/* TAB 1: FEED */}
           <TabsContent value="feed" className="mt-6 space-y-6">
@@ -682,7 +697,7 @@ function HubDetail() {
       </section>
 
       {/* Share Modal */}
-      <HubShareModal hub={hub} open={shareOpen} onClose={() => setShareOpen(false)} />
+      <HubShareModal hub={hub} open={shareOpen} onClose={() => setShareOpen(false)} isStaff={isStaff} />
     </div>
   );
 }

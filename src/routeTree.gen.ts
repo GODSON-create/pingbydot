@@ -18,6 +18,7 @@ import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as HubsRouteImport } from './routes/hubs'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as SignalsRouteImport } from './routes/signals'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as AuthenticatedCreateRouteImport } from './routes/_authenticated/create'
@@ -25,6 +26,8 @@ import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticat
 import { Route as HubsSlugRouteImport } from './routes/hubs.$slug'
 import { Route as HubsCreateRouteImport } from './routes/hubs.create'
 import { Route as PIdRouteImport } from './routes/p.$id'
+import { Route as SignalsSlugRouteImport } from './routes/signals.$slug'
+import { Route as SignalsCreateRouteImport } from './routes/signals.create'
 import { Route as AuthenticatedEditIdRouteImport } from './routes/_authenticated/edit.$id'
 import { Route as ApiPublicPingCardIdRouteImport } from './routes/api/public/ping-card/$id'
 
@@ -73,6 +76,11 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
   path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SignalsRoute = SignalsRouteImport.update({
+  id: '/signals',
+  path: '/signals',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
   path: '/signup',
@@ -108,6 +116,16 @@ const PIdRoute = PIdRouteImport.update({
   path: '/p/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SignalsSlugRoute = SignalsSlugRouteImport.update({
+  id: '/$slug',
+  path: '/$slug',
+  getParentRoute: () => SignalsRoute,
+} as any)
+const SignalsCreateRoute = SignalsCreateRouteImport.update({
+  id: '/create',
+  path: '/create',
+  getParentRoute: () => SignalsRoute,
+} as any)
 const AuthenticatedEditIdRoute = AuthenticatedEditIdRouteImport.update({
   id: '/edit/$id',
   path: '/edit/$id',
@@ -128,6 +146,7 @@ export interface FileRoutesByFullPath {
   '/hubs': typeof HubsRouteWithChildren
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/signals': typeof SignalsRouteWithChildren
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/create': typeof AuthenticatedCreateRoute
@@ -135,6 +154,8 @@ export interface FileRoutesByFullPath {
   '/hubs/$slug': typeof HubsSlugRoute
   '/hubs/create': typeof HubsCreateRoute
   '/p/$id': typeof PIdRoute
+  '/signals/$slug': typeof SignalsSlugRoute
+  '/signals/create': typeof SignalsCreateRoute
   '/edit/$id': typeof AuthenticatedEditIdRoute
   '/api/public/ping-card/$id': typeof ApiPublicPingCardIdRoute
 }
@@ -147,6 +168,7 @@ export interface FileRoutesByTo {
   '/hubs': typeof HubsRouteWithChildren
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/signals': typeof SignalsRouteWithChildren
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/create': typeof AuthenticatedCreateRoute
@@ -154,6 +176,8 @@ export interface FileRoutesByTo {
   '/hubs/$slug': typeof HubsSlugRoute
   '/hubs/create': typeof HubsCreateRoute
   '/p/$id': typeof PIdRoute
+  '/signals/$slug': typeof SignalsSlugRoute
+  '/signals/create': typeof SignalsCreateRoute
   '/edit/$id': typeof AuthenticatedEditIdRoute
   '/api/public/ping-card/$id': typeof ApiPublicPingCardIdRoute
 }
@@ -168,6 +192,7 @@ export interface FileRoutesById {
   '/hubs': typeof HubsRouteWithChildren
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/signals': typeof SignalsRouteWithChildren
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/_authenticated/create': typeof AuthenticatedCreateRoute
@@ -175,6 +200,8 @@ export interface FileRoutesById {
   '/hubs/$slug': typeof HubsSlugRoute
   '/hubs/create': typeof HubsCreateRoute
   '/p/$id': typeof PIdRoute
+  '/signals/$slug': typeof SignalsSlugRoute
+  '/signals/create': typeof SignalsCreateRoute
   '/_authenticated/edit/$id': typeof AuthenticatedEditIdRoute
   '/api/public/ping-card/$id': typeof ApiPublicPingCardIdRoute
 }
@@ -189,6 +216,7 @@ export interface FileRouteTypes {
     | '/hubs'
     | '/login'
     | '/reset-password'
+    | '/signals'
     | '/signup'
     | '/sitemap.xml'
     | '/create'
@@ -196,6 +224,8 @@ export interface FileRouteTypes {
     | '/hubs/$slug'
     | '/hubs/create'
     | '/p/$id'
+    | '/signals/$slug'
+    | '/signals/create'
     | '/edit/$id'
     | '/api/public/ping-card/$id'
   fileRoutesByTo: FileRoutesByTo
@@ -208,6 +238,7 @@ export interface FileRouteTypes {
     | '/hubs'
     | '/login'
     | '/reset-password'
+    | '/signals'
     | '/signup'
     | '/sitemap.xml'
     | '/create'
@@ -215,6 +246,8 @@ export interface FileRouteTypes {
     | '/hubs/$slug'
     | '/hubs/create'
     | '/p/$id'
+    | '/signals/$slug'
+    | '/signals/create'
     | '/edit/$id'
     | '/api/public/ping-card/$id'
   id:
@@ -228,6 +261,7 @@ export interface FileRouteTypes {
     | '/hubs'
     | '/login'
     | '/reset-password'
+    | '/signals'
     | '/signup'
     | '/sitemap.xml'
     | '/_authenticated/create'
@@ -235,6 +269,8 @@ export interface FileRouteTypes {
     | '/hubs/$slug'
     | '/hubs/create'
     | '/p/$id'
+    | '/signals/$slug'
+    | '/signals/create'
     | '/_authenticated/edit/$id'
     | '/api/public/ping-card/$id'
   fileRoutesById: FileRoutesById
@@ -249,6 +285,7 @@ export interface RootRouteChildren {
   HubsRoute: typeof HubsRouteWithChildren
   LoginRoute: typeof LoginRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  SignalsRoute: typeof SignalsRouteWithChildren
   SignupRoute: typeof SignupRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   PIdRoute: typeof PIdRoute
@@ -320,6 +357,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/signals': {
+      id: '/signals'
+      path: '/signals'
+      fullPath: '/signals'
+      preLoaderRoute: typeof SignalsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/signup': {
       id: '/signup'
       path: '/signup'
@@ -369,6 +413,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/signals/$slug': {
+      id: '/signals/$slug'
+      path: '/$slug'
+      fullPath: '/signals/$slug'
+      preLoaderRoute: typeof SignalsSlugRouteImport
+      parentRoute: typeof SignalsRoute
+    }
+    '/signals/create': {
+      id: '/signals/create'
+      path: '/create'
+      fullPath: '/signals/create'
+      preLoaderRoute: typeof SignalsCreateRouteImport
+      parentRoute: typeof SignalsRoute
+    }
     '/_authenticated/edit/$id': {
       id: '/_authenticated/edit/$id'
       path: '/edit/$id'
@@ -413,6 +471,19 @@ const HubsRouteChildren: HubsRouteChildren = {
 
 const HubsRouteWithChildren = HubsRoute._addFileChildren(HubsRouteChildren)
 
+interface SignalsRouteChildren {
+  SignalsSlugRoute: typeof SignalsSlugRoute
+  SignalsCreateRoute: typeof SignalsCreateRoute
+}
+
+const SignalsRouteChildren: SignalsRouteChildren = {
+  SignalsSlugRoute: SignalsSlugRoute,
+  SignalsCreateRoute: SignalsCreateRoute,
+}
+
+const SignalsRouteWithChildren =
+  SignalsRoute._addFileChildren(SignalsRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
@@ -423,6 +494,7 @@ const rootRouteChildren: RootRouteChildren = {
   HubsRoute: HubsRouteWithChildren,
   LoginRoute: LoginRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  SignalsRoute: SignalsRouteWithChildren,
   SignupRoute: SignupRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   PIdRoute: PIdRoute,

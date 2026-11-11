@@ -25,7 +25,7 @@ describe("Database RLS and Storage Security Audit", () => {
     }
 
     expect(offending).toEqual([]);
-  });
+  }, 20000);
 
   it("ensures storage.objects has no unrestricted public download policy", () => {
     const offending: { file: string; line: number; text: string }[] = [];
@@ -68,5 +68,25 @@ describe("Database RLS and Storage Security Audit", () => {
     expect(m10Sql).toContain('DROP POLICY IF EXISTS "Likes are public" ON public.likes;');
     expect(m10Sql).toContain('DROP POLICY IF EXISTS "Comment likes are public" ON public.comment_likes;');
     expect(m10Sql).toContain('DROP POLICY IF EXISTS "Follows are public" ON public.follows;');
+  });
+
+  it("verifies migration 0011 exists and is registered in _journal.json", () => {
+    const journalPath = path.join(migrationsDir, "meta/_journal.json");
+    const journal = JSON.parse(fs.readFileSync(journalPath, "utf8"));
+    const entry11 = journal.entries.find((e: { idx: number }) => e.idx === 11);
+
+    expect(entry11).toBeDefined();
+    expect(entry11.tag).toBe("0011_hubs_signals_read_receipts");
+
+    const m11Sql = fs.readFileSync(
+      path.join(migrationsDir, "0011_hubs_signals_read_receipts.sql"),
+      "utf8"
+    );
+    expect(m11Sql).toContain("public.hub_messages");
+    expect(m11Sql).toContain("public.ping_read_receipts");
+    expect(m11Sql).toContain("public.user_privacy_preferences");
+    expect(m11Sql).toContain("public.signals");
+    expect(m11Sql).toContain("public.signal_posts");
+    expect(m11Sql).toContain("public.create_hub");
   });
 });

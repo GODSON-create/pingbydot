@@ -15,6 +15,7 @@ import {
   User,
   UserPlus,
   Building2,
+  Radio,
 } from "lucide-react";
 import {
   Sheet,
@@ -133,6 +134,9 @@ export function BottomNav() {
           <div className="mt-2 grid gap-1" onClick={close}>
             <Link to="/hubs" className={row}>
               <Building2 className="size-5" /> Discover Hubs
+            </Link>
+            <Link to="/signals" className={row}>
+              <Radio className="size-5" /> Official Signals
             </Link>
             {user && (
               <Link to="/hubs/create" className={row}>

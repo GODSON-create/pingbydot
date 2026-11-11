@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Copy, Check, Share2, UserPlus, QrCode } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Copy, Check, Share2, UserPlus, QrCode, Key, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -13,23 +13,55 @@ export function HubShareModal({
   hub,
   open,
   onClose,
+  isStaff = false,
 }: {
   hub: Hub;
   open: boolean;
   onClose: () => void;
+  isStaff?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [generatingToken, setGeneratingToken] = useState(false);
   const [inviteUsername, setInviteUsername] = useState("");
   const [inviting, setInviting] = useState(false);
   const [showQr, setShowQr] = useState(false);
 
-  const inviteUrl = siteUrl(`/hubs/${encodeURIComponent(hub.slug)}?ref=invite`);
+  // Generate secure invite token on open if staff
+  useEffect(() => {
+    let active = true;
+    if (open && isStaff && !inviteToken) {
+      setGeneratingToken(true);
+      (async () => {
+        try {
+          const { data, error } = await supabase.rpc("create_hub_invite", {
+            _hub: hub.id,
+            _days: 14,
+          });
+          if (!error && data && active) {
+            setInviteToken(data);
+          }
+        } catch (err) {
+          console.warn("Could not generate invite token:", err);
+        } finally {
+          if (active) setGeneratingToken(false);
+        }
+      })();
+    }
+    return () => {
+      active = false;
+    };
+  }, [open, isStaff, hub.id, inviteToken]);
+
+  const inviteUrl = inviteToken
+    ? siteUrl(`/hubs/${encodeURIComponent(hub.slug)}?invite=${encodeURIComponent(inviteToken)}`)
+    : siteUrl(`/hubs/${encodeURIComponent(hub.slug)}`);
 
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(inviteUrl);
       setCopied(true);
-      toast.success("Invite link copied!");
+      toast.success(inviteToken ? "Secure tokenized invite link copied!" : "Hub link copied!");
       setTimeout(() => setCopied(false), 2000);
     } catch {
       toast.error("Couldn't copy link. Please copy it manually.");
@@ -80,30 +112,43 @@ export function HubShareModal({
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-md rounded-3xl">
         <DialogHeader>
-          <DialogTitle className="font-display text-xl font-bold">
-            Share & Invite to {hub.name}
+          <DialogTitle className="font-display text-xl font-bold flex items-center gap-2">
+            <Sparkles className="size-5 text-primary" />
+            <span>Share & Invite to {hub.name}</span>
           </DialogTitle>
           <DialogDescription>
-            Invite collaborators, students, or team members to build in public here.
+            {isStaff
+              ? "Share your dedicated, cryptographic invite token with builders or campus collectives."
+              : "Invite collaborators and friends to build in public in this Hub."}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5 pt-2">
-          {/* Copy invite link */}
+          {/* Direct link input */}
           <div>
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              Direct Invite Link
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                {inviteToken ? <Key className="size-3 text-primary" /> : null}
+                <span>{inviteToken ? "Secure Tokenized Invite" : "Hub Link"}</span>
+              </label>
+              {inviteToken && (
+                <span className="text-[11px] font-medium text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                  Valid 14 days
+                </span>
+              )}
+            </div>
+
             <div className="mt-1.5 flex items-center gap-2">
               <Input
                 readOnly
-                value={inviteUrl}
+                value={generatingToken ? "Generating secure invite link…" : inviteUrl}
                 className="rounded-2xl text-xs font-mono select-all"
               />
               <Button
                 type="button"
                 variant="outline"
                 size="icon"
+                disabled={generatingToken}
                 onClick={copy}
                 className="size-10 shrink-0 rounded-2xl"
                 aria-label="Copy invite link"
@@ -128,7 +173,7 @@ export function HubShareModal({
           {/* Invite existing Ping user by username */}
           <div>
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              Invite by Ping Handle
+              Direct Handle Invite
             </label>
             <form onSubmit={handleInviteUser} className="mt-1.5 flex items-center gap-2">
               <Input
@@ -149,7 +194,7 @@ export function HubShareModal({
             </form>
           </div>
 
-          {/* QR code toggle for campus / meetup onboarding */}
+          {/* QR code toggle */}
           <div className="rounded-2xl border border-dashed border-border p-4 text-center">
             <button
               type="button"
@@ -157,7 +202,7 @@ export function HubShareModal({
               className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground"
             >
               <QrCode className="size-4" />
-              {showQr ? "Hide QR Code" : "Show QR Code for In-Person Onboarding"}
+              {showQr ? "Hide QR Code" : "Show QR Code for In-Person / Meetup Onboarding"}
             </button>
             {showQr && (
               <div className="mt-3 flex flex-col items-center">
@@ -168,7 +213,7 @@ export function HubShareModal({
                   loading="lazy"
                 />
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Scan to open the hub invite link instantly.
+                  Scan to accept invite and join {hub.name} instantly.
                 </p>
               </div>
             )}

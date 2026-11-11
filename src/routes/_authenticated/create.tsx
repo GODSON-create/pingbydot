@@ -49,7 +49,7 @@ function Create() {
         const { error: hubError } = await supabase.rpc("share_ping_to_hub", {
           _hub: d.hub_id,
           _ping: data.id,
-          _intent: d.hub_intent || null,
+          ...(d.hub_intent ? { _intent: d.hub_intent } : {}),
         });
         if (hubError) {
           console.warn("Failed to attach to hub:", hubError);

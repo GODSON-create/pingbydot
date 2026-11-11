@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Plus, LogOut, Settings, User, Building2 } from "lucide-react";
+import { Plus, LogOut, Settings, User, Building2, Radio } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { checkAdminAccess } from "@/lib/admin.functions";
@@ -50,6 +50,7 @@ export function SiteHeader() {
         <nav className="hidden items-center gap-1 md:flex" aria-label="Main">
           <Link to="/explore" className={navLink} activeProps={{ className: "text-foreground bg-secondary" }}>Explore</Link>
           <Link to="/hubs" className={navLink} activeProps={{ className: "text-foreground bg-secondary" }}>Hubs</Link>
+          <Link to="/signals" className={navLink} activeProps={{ className: "text-foreground bg-secondary" }}>Signals</Link>
           <Link to="/" hash="how" className={navLink}>How it works</Link>
           <Link to="/" hash="demo" className={navLink}>Demo</Link>
         </nav>
@@ -71,6 +72,9 @@ export function SiteHeader() {
                   )}
                   <DropdownMenuItem asChild>
                     <Link to="/hubs"><Building2 /> Hubs</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/signals"><Radio /> Signals</Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link to="/settings"><Settings /> Settings</Link>

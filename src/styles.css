@@ -197,6 +197,18 @@
   0% { transform: scale(1); opacity: 0.7; }
   100% { transform: scale(2.6); opacity: 0; }
 }
+@keyframes ping-breathe {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.85;
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+  }
+  50% {
+    transform: scale(1.28);
+    opacity: 1;
+    box-shadow: 0 0 10px 3px rgba(16, 185, 129, 0.7);
+  }
+}
 
 @utility animate-float-a { animation: float-a 7s ease-in-out infinite; }
 @utility animate-float-b { animation: float-b 8.5s ease-in-out infinite; }
@@ -205,6 +217,7 @@
 @utility animate-burst { animation: burst 0.6s ease-out forwards; }
 @utility animate-page-in { animation: page-in 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 @utility animate-ping-dot { animation: ping-dot 1.8s cubic-bezier(0, 0, 0.2, 1) infinite; }
+@utility animate-ping-breathe { animation: ping-breathe 2s ease-in-out infinite; }
 @utility text-shimmer {
   background: linear-gradient(90deg, var(--primary) 0%, var(--primary) 40%, oklch(0.55 0.12 150) 50%, var(--primary) 60%, var(--primary) 100%);
   background-size: 200% 100%;

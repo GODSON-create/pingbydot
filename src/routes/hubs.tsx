@@ -12,6 +12,7 @@ import { useAuth } from "@/lib/auth";
 import { pageHead } from "@/lib/site";
 
 export const Route = createFileRoute("/hubs")({
+  staticData: { sitemap: true },
   validateSearch: z.object({
     category: z.string().optional(),
     q: z.string().optional(),

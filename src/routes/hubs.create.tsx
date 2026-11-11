@@ -21,6 +21,7 @@ import { pageHead } from "@/lib/site";
 import { hubError } from "@/lib/hub-queries";
 
 export const Route = createFileRoute("/hubs/create")({
+  staticData: { sitemap: false },
   head: () =>
     pageHead({
       title: "Create a Hub — Ping by DOT",
@@ -38,7 +39,7 @@ function CreateHub() {
   // Protect route
   useEffect(() => {
     if (ready && !user) {
-      navigate({ to: "/login", search: { redirect: "/hubs/create" } });
+      navigate({ to: "/login", search: { next: "/hubs/create" } });
     }
   }, [ready, user, navigate]);
 
@@ -122,6 +123,23 @@ function CreateHub() {
         throw new Error("Slug taken.");
       }
 
+      // Attempt creation via secure RPC first
+      const { data: rpcHub, error: rpcError } = await (supabase.rpc as any)("create_hub", {
+        _name: parsed.data.name,
+        _slug: parsed.data.slug,
+        _tagline: parsed.data.tagline || "",
+        _description: parsed.data.description || "",
+        _rules: parsed.data.rules || "",
+        _category: parsed.data.category,
+        _access: parsed.data.access,
+        _resources: parsed.data.resources,
+      });
+
+      if (!rpcError && rpcHub && typeof rpcHub === "object" && "slug" in rpcHub) {
+        return (rpcHub as { slug: string }).slug;
+      }
+
+      // Fallback to direct insert
       const { data: newHub, error: insertError } = await supabase
         .from("hubs")
         .insert({
@@ -201,7 +219,7 @@ function CreateHub() {
             className="mt-1.5 h-12 rounded-2xl"
             maxLength={60}
           />
-          {errors.name && <p className="mt-1 text-xs text-destructive">{errors.name}</p>}
+          {errors["name"] && <p className="mt-1 text-xs text-destructive">{errors["name"]}</p>}
         </div>
 
         {/* Slug */}
@@ -225,7 +243,7 @@ function CreateHub() {
               maxLength={40}
             />
           </div>
-          {errors.slug && <p className="mt-1 text-xs text-destructive">{errors.slug}</p>}
+          {errors["slug"] && <p className="mt-1 text-xs text-destructive">{errors["slug"]}</p>}
         </div>
 
         {/* Tagline */}
@@ -241,7 +259,7 @@ function CreateHub() {
             className="mt-1.5 h-12 rounded-2xl"
             maxLength={120}
           />
-          {errors.tagline && <p className="mt-1 text-xs text-destructive">{errors.tagline}</p>}
+          {errors["tagline"] && <p className="mt-1 text-xs text-destructive">{errors["tagline"]}</p>}
         </div>
 
         {/* Category */}
@@ -265,7 +283,7 @@ function CreateHub() {
               </button>
             ))}
           </div>
-          {errors.category && <p className="mt-1 text-xs text-destructive">{errors.category}</p>}
+          {errors["category"] && <p className="mt-1 text-xs text-destructive">{errors["category"]}</p>}
         </fieldset>
 
         {/* Access Type */}

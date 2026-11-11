@@ -732,11 +732,432 @@ export type Database = {
         }
         Relationships: []
       }
+      hub_messages: {
+        Row: {
+          content: string
+          created_at: string
+          deleted_at: string | null
+          hub_id: string
+          id: string
+          is_system: boolean
+          media_url: string | null
+          reactions: Json
+          reply_to_id: string | null
+          sender_id: string
+          updated_at: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          deleted_at?: string | null
+          hub_id: string
+          id?: string
+          is_system?: boolean
+          media_url?: string | null
+          reactions?: Json
+          reply_to_id?: string | null
+          sender_id: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          deleted_at?: string | null
+          hub_id?: string
+          id?: string
+          is_system?: boolean
+          media_url?: string | null
+          reactions?: Json
+          reply_to_id?: string | null
+          sender_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hub_messages_hub_id_fkey"
+            columns: ["hub_id"]
+            isOneToOne: false
+            referencedRelation: "hubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hub_messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ping_read_receipts: {
+        Row: {
+          delivered_at: string
+          hub_id: string
+          last_interacted_at: string
+          message_id: string
+          read_at: string | null
+          recipient_id: string
+        }
+        Insert: {
+          delivered_at?: string
+          hub_id: string
+          last_interacted_at?: string
+          message_id: string
+          read_at?: string | null
+          recipient_id: string
+        }
+        Update: {
+          delivered_at?: string
+          hub_id?: string
+          last_interacted_at?: string
+          message_id?: string
+          read_at?: string | null
+          recipient_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ping_read_receipts_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "hub_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ping_read_receipts_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_privacy_preferences: {
+        Row: {
+          active_presence_enabled: boolean
+          last_active_enabled: boolean
+          read_receipts_enabled: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active_presence_enabled?: boolean
+          last_active_enabled?: boolean
+          read_receipts_enabled?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active_presence_enabled?: boolean
+          last_active_enabled?: boolean
+          read_receipts_enabled?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_privacy_preferences_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      signals: {
+        Row: {
+          avatar_url: string | null
+          cover_url: string | null
+          created_at: string
+          created_by: string
+          description: string
+          follower_count: number
+          id: string
+          institution_type: string
+          name: string
+          post_count: number
+          slug: string
+          tagline: string
+          updated_at: string
+          verification_details: Json
+          verification_status: string
+          verified: boolean
+          website_url: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          cover_url?: string | null
+          created_at?: string
+          created_by: string
+          description?: string
+          follower_count?: number
+          id?: string
+          institution_type?: string
+          name: string
+          post_count?: number
+          slug: string
+          tagline?: string
+          updated_at?: string
+          verification_details?: Json
+          verification_status?: string
+          verified?: boolean
+          website_url?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          cover_url?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string
+          follower_count?: number
+          id?: string
+          institution_type?: string
+          name?: string
+          post_count?: number
+          slug?: string
+          tagline?: string
+          updated_at?: string
+          verification_details?: Json
+          verification_status?: string
+          verified?: boolean
+          website_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signals_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      signal_publishers: {
+        Row: {
+          assigned_by: string | null
+          created_at: string
+          role: string
+          signal_id: string
+          user_id: string
+        }
+        Insert: {
+          assigned_by?: string | null
+          created_at?: string
+          role?: string
+          signal_id: string
+          user_id: string
+        }
+        Update: {
+          assigned_by?: string | null
+          created_at?: string
+          role?: string
+          signal_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signal_publishers_signal_id_fkey"
+            columns: ["signal_id"]
+            isOneToOne: false
+            referencedRelation: "signals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signal_publishers_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      signal_followers: {
+        Row: {
+          created_at: string
+          notifications_enabled: boolean
+          signal_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          notifications_enabled?: boolean
+          signal_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          notifications_enabled?: boolean
+          signal_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signal_followers_signal_id_fkey"
+            columns: ["signal_id"]
+            isOneToOne: false
+            referencedRelation: "signals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signal_followers_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      signal_posts: {
+        Row: {
+          author_id: string
+          category: string
+          content: string
+          created_at: string
+          id: string
+          is_urgent: boolean
+          media_urls: Json
+          read_count: number
+          signal_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          author_id: string
+          category?: string
+          content: string
+          created_at?: string
+          id?: string
+          is_urgent?: boolean
+          media_urls?: Json
+          read_count?: number
+          signal_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          author_id?: string
+          category?: string
+          content?: string
+          created_at?: string
+          id?: string
+          is_urgent?: boolean
+          media_urls?: Json
+          read_count?: number
+          signal_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signal_posts_signal_id_fkey"
+            columns: ["signal_id"]
+            isOneToOne: false
+            referencedRelation: "signals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signal_posts_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      signal_reads: {
+        Row: {
+          post_id: string
+          read_at: string
+          signal_id: string
+          user_id: string
+        }
+        Insert: {
+          post_id: string
+          read_at?: string
+          signal_id: string
+          user_id: string
+        }
+        Update: {
+          post_id?: string
+          read_at?: string
+          signal_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signal_reads_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "signal_posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signal_reads_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      create_hub: {
+        Args: {
+          _access?: string
+          _category?: string
+          _description?: string
+          _name: string
+          _resources?: Json
+          _rules?: string
+          _slug: string
+          _tagline?: string
+        }
+        Returns: Json
+      }
+      create_signal: {
+        Args: {
+          _description?: string
+          _institution_type?: string
+          _name: string
+          _slug: string
+          _tagline?: string
+          _website_url?: string
+        }
+        Returns: Json
+      }
+      get_message_read_summary: {
+        Args: { _message_id: string }
+        Returns: Json
+      }
+      get_signal_post_analytics: {
+        Args: { _post_id: string }
+        Returns: Json
+      }
+      get_user_privacy: {
+        Args: { _user: string }
+        Returns: Json
+      }
+      mark_hub_messages_read: {
+        Args: { _hub_id: string; _message_ids: string[] }
+        Returns: undefined
+      }
+      mark_signal_read: {
+        Args: { _post_id: string }
+        Returns: undefined
+      }
+      signal_role: {
+        Args: { _signal: string; _user: string }
+        Returns: string
+      }
+      toggle_follow_signal: {
+        Args: { _signal: string }
+        Returns: boolean
+      }
+
       admin_metrics: { Args: never; Returns: Json }
       admin_moderate: {
         Args: {

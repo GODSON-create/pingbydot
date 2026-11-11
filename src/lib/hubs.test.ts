@@ -131,9 +131,9 @@ describe("hub permissions and visibility", () => {
     ];
     const top = topBuilders(items, 2);
     expect(top).toHaveLength(2);
-    expect(top[0].author.username).toBe("alice");
-    expect(top[0].count).toBe(3);
-    expect(top[1].author.username).toBe("bob");
-    expect(top[1].count).toBe(1);
+    expect(top[0]?.author.username).toBe("alice");
+    expect(top[0]?.count).toBe(3);
+    expect(top[1]?.author.username).toBe("bob");
+    expect(top[1]?.count).toBe(1);
   });
 });
