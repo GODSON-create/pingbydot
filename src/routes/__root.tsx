@@ -16,6 +16,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AuthProvider } from "@/lib/auth";
 import { ThemeProvider } from "@/lib/theme";
 import { SiteHeader } from "@/components/layout/SiteHeader";
+import { DesktopSidebar } from "@/components/layout/DesktopSidebar";
 import { SiteFooter } from "@/components/layout/SiteFooter";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { GestureLayer } from "@/components/layout/GestureLayer";
@@ -119,10 +120,15 @@ function RootComponent() {
         <AuthProvider>
         <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-full focus:bg-lime focus:px-4 focus:py-2">Skip to content</a>
         <SiteHeader />
+        <div className="mx-auto w-full max-w-7xl flex flex-col lg:flex-row items-start min-h-screen">
+          <DesktopSidebar />
+          <div className="flex-1 min-w-0 w-full flex flex-col min-h-screen">
         <main id="main" key={pathname} className="animate-page-in">
           <Outlet />
         </main>
-        <div className="pb-24 md:pb-0"><SiteFooter /></div>
+            <div className="pb-24 lg:pb-0"><SiteFooter /></div>
+          </div>
+        </div>
         <BottomNav />
         <GestureLayer />
         <Toaster position="bottom-center" />

@@ -149,7 +149,7 @@ function HomeHubCard({
               {hub.name}
             </Link>
             {hub.verified && (
-              <span className="rounded-full bg-lime px-2 py-0.2 text-[10px] font-bold text-lime-foreground">
+              <span className="rounded-full bg-gold/15 text-gold border border-gold/30 px-2 py-0.5 text-[10px] font-bold">
                 ✓
               </span>
             )}
@@ -260,7 +260,7 @@ function HomeSignalCard({
               {signal.verified && (
                 <span
                   title="Verified Institution"
-                  className="inline-flex items-center gap-0.5 rounded-full bg-primary/15 px-2 py-0.2 text-[10px] font-bold text-primary"
+                  className="inline-flex items-center gap-1 rounded-full bg-gold/15 text-gold border border-gold/30 px-2 py-0.5 text-[10px] font-bold"
                 >
                   <CheckCircle className="size-3" />
                   Verified
@@ -408,7 +408,7 @@ function HomePage() {
       </section>
 
       {/* 2. MAIN 2-COLUMN DISCOVERY GRID */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_390px] gap-8 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] xl:grid-cols-[1fr_360px] gap-6 xl:gap-8 items-start">
         {/* =================================================================== */}
         {/* LEFT COLUMN: PINGS FEED                                             */}
         {/* =================================================================== */}

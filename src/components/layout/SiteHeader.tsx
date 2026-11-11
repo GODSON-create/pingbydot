@@ -1,10 +1,11 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Plus, LogOut, Settings, User, Building2, Radio } from "lucide-react";
+import { Plus, LogOut, Settings, User, Building2, Radio, Sun, Moon, Laptop } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { checkAdminAccess } from "@/lib/admin.functions";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
+import { useTheme } from "@/lib/theme";
 import { supabase } from "@/integrations/supabase/client";
 import { FounderAvatar } from "@/components/ping/Avatar";
 import { BrandLogo } from "@/components/BrandLogo";
@@ -39,22 +40,39 @@ const navLink = "rounded-full px-3 py-2 text-sm font-medium text-muted-foregroun
 
 export function SiteHeader() {
   const { user, profile, ready } = useAuth();
+  const { theme, resolvedTheme, setTheme } = useTheme();
   const signOut = useSignOut();
   const verifyAdmin = useServerFn(checkAdminAccess);
   const admin = useQuery({ queryKey: ["admin-access", user?.id], queryFn: () => verifyAdmin(), enabled: ready && !!user, retry: false, staleTime: 0 });
 
+  const toggleTheme = () => {
+    const nextTheme = theme === "system" ? "light" : theme === "light" ? "dark" : "system";
+    setTheme(nextTheme);
+  };
+  const ThemeIcon = theme === "system" ? Laptop : resolvedTheme === "dark" ? Moon : Sun;
+
   return (
-    <header className="sticky top-0 z-50 px-3 pt-3 sm:px-5">
+    <header className="sticky top-0 z-50 px-3 pt-3 sm:px-5 lg:hidden">
       <div className="glass mx-auto flex h-16 max-w-6xl items-center justify-between rounded-full px-4 sm:px-6">
         <Wordmark />
         <nav className="hidden items-center gap-1 md:flex" aria-label="Main">
           <Link to="/explore" className={navLink} activeProps={{ className: "text-foreground bg-secondary" }}>Explore</Link>
           <Link to="/hubs" className={navLink} activeProps={{ className: "text-foreground bg-secondary" }}>Hubs</Link>
           <Link to="/signals" className={navLink} activeProps={{ className: "text-foreground bg-secondary" }}>Signals</Link>
-          <Link to="/" hash="how" className={navLink}>How it works</Link>
-          <Link to="/" hash="demo" className={navLink}>Demo</Link>
         </nav>
-        <div className="hidden items-center gap-2 md:flex">
+        <div className="flex items-center gap-2">
+          {/* Quick Theme Toggle */}
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="flex size-9 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground transition-all"
+            title={`Theme: ${theme}`}
+            aria-label="Toggle theme"
+          >
+            <ThemeIcon className="size-4" />
+          </button>
+
+          <div className="hidden items-center gap-2 md:flex">
           {ready && user ? (
             <>
               <Button asChild size="sm" variant="hero">
@@ -93,6 +111,7 @@ export function SiteHeader() {
               </Button>
             </>
           )}
+          </div>
         </div>
       </div>
     </header>

@@ -688,7 +688,7 @@ function SignalDetailPage() {
                   {signal.name}
                 </h1>
                 {signal.verified ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-bold text-primary">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-gold/15 text-gold border border-gold/30 px-2.5 py-0.5 text-xs font-bold">
                     <CheckCircle className="size-3.5" />
                     Verified Institution
                   </span>

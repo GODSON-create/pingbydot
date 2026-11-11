@@ -40,6 +40,12 @@
   --color-sun-foreground: var(--sun-foreground);
   --color-forest-deep: var(--forest-deep);
   --color-paper: var(--paper);
+  --color-obsidian: var(--obsidian);
+  --color-graphite: var(--graphite);
+  --color-graphite-elevated: var(--graphite-elevated);
+  --color-ping-green: var(--ping-green);
+  --color-gold: var(--gold);
+  --color-gold-foreground: var(--gold-foreground);
 }
 
 :root {
@@ -51,6 +57,12 @@
   --share-muted: #63736a;
   --share-border: #dce3d3;
   --radius: 1rem;
+  --obsidian: #090B0A;
+  --graphite: #171B18;
+  --graphite-elevated: #1F2520;
+  --ping-green: #C7F36B;
+  --gold: #D8B66A;
+  --gold-foreground: #090B0A;
   --paper: oklch(0.988 0.016 84);
   --background: oklch(0.988 0.016 84);
   --foreground: oklch(0.19 0.018 165);
@@ -88,39 +100,69 @@
     0 24px 48px -20px color-mix(in oklab, var(--primary) 40%, transparent);
 }
 .dark {
-  --paper: oklch(0.12 0.012 150);
-  --background: oklch(0.12 0.012 150);
-  --foreground: oklch(0.965 0.006 100);
-  --card: oklch(0.175 0.014 150);
-  --card-foreground: oklch(0.965 0.006 100);
-  --popover: oklch(0.20 0.016 150);
-  --popover-foreground: oklch(0.965 0.006 100);
-  --primary: oklch(0.82 0.19 142);
-  --primary-foreground: oklch(0.12 0.03 150);
-  --forest-deep: oklch(0.09 0.014 150);
-  --secondary: oklch(0.23 0.016 150);
-  --secondary-foreground: oklch(0.90 0.01 150);
-  --muted: oklch(0.21 0.015 150);
-  --muted-foreground: oklch(0.76 0.015 150);
-  --accent: oklch(0.24 0.035 150);
-  --accent-foreground: oklch(0.88 0.12 142);
-  --lime: oklch(0.85 0.18 125);
-  --lime-foreground: oklch(0.12 0.03 150);
-  --blush: oklch(0.28 0.05 18);
-  --blush-foreground: oklch(0.92 0.05 18);
-  --sun: oklch(0.30 0.07 75);
-  --sun-foreground: oklch(0.94 0.08 75);
-  --destructive: oklch(0.55 0.22 27);
-  --destructive-foreground: oklch(0.985 0.01 90);
-  --border: oklch(0.36 0.02 150);
-  --input: oklch(0.49 0.025 150);
-  --ring: oklch(0.82 0.19 142);
+  /* ======================================================================== */
+  /* LOCKED 4-COLOUR DARK THEME PALETTE + TYPOGRAPHY NEUTRALS                 */
+  /* ======================================================================== */
+  --obsidian: #090B0A;
+  --graphite: #171B18;
+  --graphite-elevated: #1F2520;
+  --ping-green: #C7F36B;
+  --gold: #D8B66A;
+  --gold-foreground: #090B0A;
 
-  --gradient-hero: radial-gradient(65% 55% at 75% 0%, color-mix(in oklab, oklch(0.35 0.08 145) 25%, transparent), transparent 70%),
-    radial-gradient(55% 45% at 10% 25%, color-mix(in oklab, oklch(0.30 0.06 125) 20%, transparent), transparent 75%);
-  --gradient-forest: linear-gradient(145deg, oklch(0.20 0.025 150), oklch(0.13 0.015 150));
-  --shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.5), 0 8px 24px -10px rgba(0, 0, 0, 0.7);
-  --shadow-lift: 0 3px 6px rgba(0, 0, 0, 0.6), 0 20px 40px -15px rgba(0, 0, 0, 0.85);
+  /* OBSIDIAN: Main canvas, background, deep navigation background */
+  --paper: #090B0A;
+  --background: #090B0A;
+  --forest-deep: #0D100E;
+
+  /* GRAPHITE: Cards, panels, elevated content surfaces */
+  --card: #171B18;
+  --card-foreground: #F4F2E9;
+
+  /* GRAPHITE ELEVATED: Menus, dialogs, popovers */
+  --popover: #1F2520;
+  --popover-foreground: #F4F2E9;
+
+  /* PRIMARY TEXT NEUTRAL: #F4F2E9 (WCAG AAA 17.5:1 on Obsidian, 15.2:1 on Graphite) */
+  --foreground: #F4F2E9;
+
+  /* ELECTRIC PING GREEN: Primary buttons, active nav, selected interactive states */
+  --primary: #C7F36B;
+  --primary-foreground: #090B0A;
+  --lime: #C7F36B;
+  --lime-foreground: #090B0A;
+  --ring: #C7F36B;
+
+  /* GRAPHITE TONAL SURFACES & SECONDARY TEXT: #C0C4BA (9.6:1 on Graphite) */
+  --secondary: #1F2521;
+  --secondary-foreground: #C0C4BA;
+
+  /* GRAPHITE SUBTLE SURFACES & MUTED TEXT: #9DA49A (6.7:1 on Graphite) */
+  --muted: #1A201C;
+  --muted-foreground: #9DA49A;
+
+  --accent: #232B25;
+  --accent-foreground: #C7F36B;
+
+  /* CHAMPAGNE GOLD: Verified institutional identity, achievements, premium details */
+  --sun: #D8B66A;
+  --sun-foreground: #090B0A;
+
+  --blush: #2A1F21;
+  --blush-foreground: #F2A8B0;
+
+  --destructive: #E05D52;
+  --destructive-foreground: #FFFFFF;
+
+  /* SUBTLE BORDERS: Crisp surface separation without harsh lines */
+  --border: #262D27;
+  --input: #262D27;
+
+  --gradient-hero: radial-gradient(65% 55% at 75% 0%, rgba(199, 243, 107, 0.08), transparent 70%),
+    radial-gradient(55% 45% at 10% 25%, rgba(216, 182, 106, 0.06), transparent 75%);
+  --gradient-forest: linear-gradient(145deg, #1A201B, #0E1210);
+  --shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.6), 0 8px 24px -10px rgba(0, 0, 0, 0.8);
+  --shadow-lift: 0 4px 8px rgba(0, 0, 0, 0.7), 0 20px 40px -15px rgba(0, 0, 0, 0.9);
 }
 
 
@@ -144,9 +186,9 @@
     .dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
   .dark textarea,
   .dark select {
-    background-color: oklch(0.145 0.012 150);
-    border-color: var(--color-input);
-    color: var(--color-foreground);
+    background-color: #121513;
+    border-color: #2D352E;
+    color: #F4F2E9;
   }
   .dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):focus-visible,
   .dark textarea:focus-visible,
@@ -168,10 +210,10 @@
   box-shadow: inset 0 1px 0 color-mix(in oklab, white 70%, transparent), var(--shadow-soft);
 }
 .dark .glass {
-  background: color-mix(in oklab, var(--card) 92%, transparent);
-  backdrop-filter: blur(20px) saturate(160%);
-  border: 1px solid var(--border);
-  box-shadow: 0 4px 20px -4px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  background: color-mix(in srgb, #171B18 94%, transparent);
+  backdrop-filter: blur(20px) saturate(140%);
+  border: 1px solid #262D27;
+  box-shadow: 0 4px 20px -4px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 @utility glass-dark {
   background: color-mix(in oklab, var(--forest-deep) 55%, transparent);
@@ -179,9 +221,9 @@
   border: 1px solid color-mix(in oklab, var(--primary-foreground) 16%, transparent);
 }
 .dark .glass-dark {
-  background: color-mix(in oklab, var(--card) 94%, transparent);
-  backdrop-filter: blur(20px) saturate(150%);
-  border: 1px solid var(--border);
+  background: color-mix(in srgb, #090B0A 96%, transparent);
+  backdrop-filter: blur(20px) saturate(140%);
+  border: 1px solid #262D27;
 }
 @utility surface-card {
   background: var(--card);
@@ -211,7 +253,7 @@
   box-shadow: 2px 2px 0 var(--foreground);
 }
 .dark .sticker {
-  border-color: color-mix(in oklab, var(--foreground) 30%, transparent);
+  border-color: #313A32;
   box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.6);
 }
 @utility grain {

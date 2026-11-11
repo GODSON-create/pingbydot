@@ -865,7 +865,7 @@ function HubDetail() {
                       {hub.name}
                     </h1>
                     {hub.verified && (
-                      <span className="rounded-full bg-lime px-2.5 py-0.5 text-xs font-bold text-lime-foreground">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-gold/15 text-gold border border-gold/30 px-2.5 py-0.5 text-xs font-bold">
                         ✓ Verified
                       </span>
                     )}

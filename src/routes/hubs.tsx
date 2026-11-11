@@ -50,7 +50,7 @@ function HubCard({ hub }: { hub: Hub }) {
               {hub.verified && (
                 <span
                   title="Verified Hub"
-                  className="rounded-full bg-lime px-2 py-0.5 text-[10px] font-bold text-lime-foreground"
+                  className="inline-flex items-center gap-1 rounded-full bg-gold/15 text-gold border border-gold/30 px-2 py-0.5 text-[10px] font-bold"
                 >
                   ✓ Verified
                 </span>

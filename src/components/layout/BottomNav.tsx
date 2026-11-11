@@ -16,7 +16,12 @@ import {
   UserPlus,
   Building2,
   Radio,
+  Sun,
+  Moon,
+  Laptop,
 } from "lucide-react";
+import { useTheme } from "@/lib/theme";
+import { toast } from "sonner";
 import {
   Sheet,
   SheetContent,
@@ -32,7 +37,7 @@ import { Button } from "@/components/ui/button";
 
 const item =
   "flex min-h-14 min-w-12 flex-1 flex-col items-center justify-center gap-0.5 rounded-2xl text-[10px] font-semibold text-muted-foreground transition-colors active:scale-95 motion-reduce:active:scale-100";
-const active = { className: "text-foreground bg-secondary" };
+const active = { className: "text-primary bg-primary/15 font-bold" };
 const row =
   "flex min-h-12 items-center gap-3 rounded-2xl px-4 py-3 font-medium hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
@@ -40,6 +45,7 @@ const row =
 export function BottomNav() {
   const { user, profile, ready } = useAuth();
   const { pathname } = useLocation();
+  const { theme, resolvedTheme, setTheme } = useTheme();
   const [open, setOpen] = useState(false);
   const signOut = useSignOut();
   const verifyAdmin = useServerFn(checkAdminAccess);
@@ -143,6 +149,28 @@ export function BottomNav() {
                 <Plus className="size-5" /> Create a Hub
               </Link>
             )}
+            <button
+              type="button"
+              onClick={() => {
+                const nextTheme = theme === "system" ? "light" : theme === "light" ? "dark" : "system";
+                setTheme(nextTheme);
+                toast.success(
+                  nextTheme === "system"
+                    ? "Theme: System Default"
+                    : `Theme: ${nextTheme.charAt(0).toUpperCase() + nextTheme.slice(1)} Mode`,
+                );
+              }}
+              className={cn(row, "w-full justify-start text-left")}
+            >
+              {theme === "system" ? (
+                <Laptop className="size-5" />
+              ) : resolvedTheme === "dark" ? (
+                <Moon className="size-5" />
+              ) : (
+                <Sun className="size-5" />
+              )}
+              Appearance: {theme === "system" ? "System Default" : `${theme.charAt(0).toUpperCase() + theme.slice(1)} Mode`}
+            </button>
             <Link to="/" hash="how" className={row}>
               <Sparkles className="size-5" /> How it works
             </Link>

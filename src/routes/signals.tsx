@@ -62,7 +62,7 @@ function SignalCard({ signal }: { signal: Signal }) {
               {signal.verified && (
                 <span
                   title="Verified Institutional Channel"
-                  className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold text-primary"
+                  className="inline-flex items-center gap-1 rounded-full bg-gold/15 text-gold border border-gold/30 px-2 py-0.5 text-[10px] font-bold"
                 >
                   <CheckCircle className="size-3" />
                   Verified
