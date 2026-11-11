@@ -4,22 +4,28 @@ import path from "path";
 
 describe("Visual System & Responsive Experience Audit (375px, 768px, 1024px, 1440px)", () => {
   it("A. verifies locked four-colour Dark Theme palette in styles.css", () => {
-    const css = fs.readFileSync(path.resolve(__dirname, "../styles.css"), "utf8");
-    expect(css).toContain("--obsidian: #090B0A;");
-    expect(css).toContain("--graphite: #171B18;");
-    expect(css).toContain("--ping-green: #C7F36B;");
-    expect(css).toContain("--gold: #D8B66A;");
-    expect(css).toContain("--foreground: #F4F2E9;");
-    expect(css).toContain("--secondary-foreground: #C0C4BA;");
-    expect(css).toContain("--muted-foreground: #9DA49A;");
+    const css = fs.readFileSync(path.resolve(__dirname, "../styles.css"), "utf8").toLowerCase();
+    expect(css).toContain("--obsidian: #090b0a;");
+    expect(css).toContain("--graphite: #171b18;");
+    expect(css).toContain("--ping-green: #c7f36b;");
+    expect(css).toContain("--gold: #d8b66a;");
+    expect(css).toContain("--foreground: #f4f2e9;");
+    expect(css).toContain("--secondary-foreground: #c0c4ba;");
+    expect(css).toContain("--muted-foreground: #9da49a;");
   });
 
   it("B. verifies Champagne Gold verified badge application across Hubs and Signals", () => {
     const indexTsx = fs.readFileSync(path.resolve(__dirname, "../routes/index.tsx"), "utf8");
     const hubsTsx = fs.readFileSync(path.resolve(__dirname, "../routes/hubs.tsx"), "utf8");
     const signalsTsx = fs.readFileSync(path.resolve(__dirname, "../routes/signals.tsx"), "utf8");
-    const signalsSlugTsx = fs.readFileSync(path.resolve(__dirname, "../routes/signals.$slug.tsx"), "utf8");
-    const hubsSlugTsx = fs.readFileSync(path.resolve(__dirname, "../routes/hubs.$slug.tsx"), "utf8");
+    const signalsSlugTsx = fs.readFileSync(
+      path.resolve(__dirname, "../routes/signals.$slug.tsx"),
+      "utf8",
+    );
+    const hubsSlugTsx = fs.readFileSync(
+      path.resolve(__dirname, "../routes/hubs.$slug.tsx"),
+      "utf8",
+    );
 
     // Index verified badges
     expect(indexTsx).toContain("bg-gold/15 text-gold border border-gold/30");
@@ -35,7 +41,10 @@ describe("Visual System & Responsive Experience Audit (375px, 768px, 1024px, 144
 
   it("E. verifies Desktop 3-column architecture (Left Sidebar, Centre Feed, Right Discovery)", () => {
     const rootTsx = fs.readFileSync(path.resolve(__dirname, "../routes/__root.tsx"), "utf8");
-    const sidebarTsx = fs.readFileSync(path.resolve(__dirname, "../components/layout/DesktopSidebar.tsx"), "utf8");
+    const sidebarTsx = fs.readFileSync(
+      path.resolve(__dirname, "../components/layout/DesktopSidebar.tsx"),
+      "utf8",
+    );
     const indexTsx = fs.readFileSync(path.resolve(__dirname, "../routes/index.tsx"), "utf8");
 
     // Root includes DesktopSidebar
@@ -51,8 +60,14 @@ describe("Visual System & Responsive Experience Audit (375px, 768px, 1024px, 144
   });
 
   it("F. verifies Mobile interaction model (compact top bar, bottom nav with safe-area spacing, touch targets)", () => {
-    const headerTsx = fs.readFileSync(path.resolve(__dirname, "../components/layout/SiteHeader.tsx"), "utf8");
-    const bottomNavTsx = fs.readFileSync(path.resolve(__dirname, "../components/layout/BottomNav.tsx"), "utf8");
+    const headerTsx = fs.readFileSync(
+      path.resolve(__dirname, "../components/layout/SiteHeader.tsx"),
+      "utf8",
+    );
+    const bottomNavTsx = fs.readFileSync(
+      path.resolve(__dirname, "../components/layout/BottomNav.tsx"),
+      "utf8",
+    );
 
     // Header is hidden on desktop, acting as mobile/tablet top bar
     expect(headerTsx).toContain("lg:hidden");

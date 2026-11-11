@@ -1,17 +1,8 @@
 import { useState } from "react";
 import { formatDistanceToNowStrict } from "date-fns";
 import { Users, Eye, Check } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useMessageReadSummary, type ReadReceiptStatus } from "@/lib/read-receipts";
 import { cn } from "@/lib/utils";
@@ -53,7 +44,7 @@ export function ReadReceiptDot({
         "relative inline-flex items-center justify-center transition-all select-none",
         status === "active" && "size-2.5",
         status !== "active" && "size-2",
-        className
+        className,
       )}
       aria-label={`Status: ${status === "active" ? "Active reading" : status === "read" ? "Read" : "Unread"}`}
       role="status"
@@ -73,7 +64,10 @@ export function ReadReceiptDot({
 
   if (!isAuthor) {
     return (
-      <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground" title={status === "active" ? "Actively reading" : status === "read" ? "Read" : "Delivered"}>
+      <span
+        className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
+        title={status === "active" ? "Actively reading" : status === "read" ? "Read" : "Delivered"}
+      >
         {dotElement}
       </span>
     );
@@ -122,7 +116,10 @@ export function ReadReceiptDot({
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       <Avatar className="size-8">
-                        <AvatarImage src={reader.avatar_url ?? undefined} alt={reader.display_name} />
+                        <AvatarImage
+                          src={reader.avatar_url ?? undefined}
+                          alt={reader.display_name}
+                        />
                         <AvatarFallback className="text-xs font-bold uppercase">
                           {(reader.display_name || reader.username || "B").slice(0, 2)}
                         </AvatarFallback>
@@ -131,9 +128,7 @@ export function ReadReceiptDot({
                         <p className="truncate text-sm font-semibold leading-tight">
                           {reader.display_name || reader.username}
                         </p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          @{reader.username}
-                        </p>
+                        <p className="truncate text-xs text-muted-foreground">@{reader.username}</p>
                       </div>
                     </div>
 

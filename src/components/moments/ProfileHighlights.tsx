@@ -33,20 +33,19 @@ export function ProfileHighlights({ profile, isMe }: ProfileHighlightsProps) {
   const deleteMutation = useDeleteHighlight();
 
   // When a highlight is tapped, fetch its moments
-  const { data: activeMoments = [] } = useQuery(
-    highlightMomentsQuery(activeHighlightId || ""),
-  );
+  const { data: activeMoments = [] } = useQuery(highlightMomentsQuery(activeHighlightId || ""));
 
-  const activeSequence: CreatorMomentsSequence[] = activeMoments.length > 0
-    ? [
-        {
-          author: profile,
-          moments: activeMoments,
-          hasUnseen: false,
-          latestCreatedAt: activeMoments[0]?.created_at || new Date().toISOString(),
-        },
-      ]
-    : [];
+  const activeSequence: CreatorMomentsSequence[] =
+    activeMoments.length > 0
+      ? [
+          {
+            author: profile,
+            moments: activeMoments,
+            hasUnseen: false,
+            latestCreatedAt: activeMoments[0]?.created_at || new Date().toISOString(),
+          },
+        ]
+      : [];
 
   const handleCreateHighlight = async (e: React.FormEvent) => {
     e.preventDefault();

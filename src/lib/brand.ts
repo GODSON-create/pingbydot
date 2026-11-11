@@ -21,10 +21,19 @@ export function getBrandLogo(): BrandLogoAsset | null {
 export function brandArtwork(color: string) {
   const logo = getBrandLogo();
   if (logo) {
-    const width = Math.min(320, 88 * logo.width / logo.height);
-    return h("img", { src: logo.artworkDataUrl, alt: "Ping by DOT", width, height: width * logo.height / logo.width, style: { objectFit: "contain" } });
+    const width = Math.min(320, (88 * logo.width) / logo.height);
+    return h("img", {
+      src: logo.artworkDataUrl,
+      alt: "Ping by DOT",
+      width,
+      height: (width * logo.height) / logo.width,
+      style: { objectFit: "contain" },
+    });
   }
-  return h("div", { style: { display: "flex", alignItems: "center", gap: 14, color } },
+  return h(
+    "div",
+    { style: { display: "flex", alignItems: "center", gap: 14, color } },
     h("span", { style: { fontSize: 64, fontWeight: 700 } }, "Ping"),
-    h("span", { style: { fontSize: 22, marginTop: 16 } }, "by DOT"));
+    h("span", { style: { fontSize: 22, marginTop: 16 } }, "by DOT"),
+  );
 }

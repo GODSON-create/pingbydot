@@ -35,7 +35,9 @@ describe("slugify", () => {
 describe("hub URLs", () => {
   it("generates correct hub and invite URLs", () => {
     expect(hubUrl("stanford-founders")).toContain("/hubs/stanford-founders");
-    expect(inviteUrl("stanford-founders", "token123")).toContain("/hubs/stanford-founders?invite=token123");
+    expect(inviteUrl("stanford-founders", "token123")).toContain(
+      "/hubs/stanford-founders?invite=token123",
+    );
   });
 });
 

@@ -10,10 +10,7 @@ import {
   type HubRole,
   type HubCategory,
 } from "./hubs";
-import {
-  signalAnalyticsQuery,
-  type SignalInstitutionType,
-} from "./signals";
+import { signalAnalyticsQuery, type SignalInstitutionType } from "./signals";
 
 describe("Hubs Critical Functionality & Repair Verification", () => {
   it("Journey 1 & 2: validates Hub creation and schema rules", () => {

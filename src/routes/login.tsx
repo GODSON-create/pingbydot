@@ -10,7 +10,9 @@ import { authDestination } from "@/lib/auth-return";
 
 export const Route = createFileRoute("/login")({
   staticData: { sitemap: false },
-  validateSearch: (search: SearchSchemaInput & { next?: unknown }) => ({ next: authDestination(search.next) }),
+  validateSearch: (search: SearchSchemaInput & { next?: unknown }) => ({
+    next: authDestination(search.next),
+  }),
   head: () => ({
     meta: [
       { name: "robots", content: "noindex, nofollow" },
@@ -29,7 +31,9 @@ function Login() {
   const navigate = useNavigate();
   const { next } = Route.useSearch();
   const { ready, user } = useAuth();
-  useEffect(() => { if (ready && user) navigate({ to: next, replace: true }); }, [ready, user, next, navigate]);
+  useEffect(() => {
+    if (ready && user) navigate({ to: next, replace: true });
+  }, [ready, user, next, navigate]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -41,10 +45,18 @@ function Login() {
     setPending(true);
     try {
       const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-      if (error) return setErr(error.message.includes("confirm") ? "Please verify your email first — check your inbox." : "Couldn't log in. Check your email and password, then try again.");
+      if (error)
+        return setErr(
+          error.message.includes("confirm")
+            ? "Please verify your email first — check your inbox."
+            : "Couldn't log in. Check your email and password, then try again.",
+        );
       navigate({ to: next });
-    } catch { setErr("Couldn't connect. Please try again."); }
-    finally { setPending(false); }
+    } catch {
+      setErr("Couldn't connect. Please try again.");
+    } finally {
+      setPending(false);
+    }
   };
 
   return (
@@ -52,15 +64,53 @@ function Login() {
       <GoogleButton label="Continue with Google" next={next} />
       <OrDivider />
       <form onSubmit={submit} className="grid gap-4">
-        <div><Label htmlFor="email">Email</Label><Input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1.5 rounded-xl" /></div>
         <div>
-          <div className="flex items-center justify-between"><Label htmlFor="password">Password</Label><Link to="/forgot-password" className="text-xs text-muted-foreground underline">Forgot?</Link></div>
-          <Input id="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1.5 rounded-xl" />
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="mt-1.5 rounded-xl"
+          />
         </div>
-        {err && <p role="alert" className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">{err}</p>}
-        <Button type="submit" variant="hero" size="lg" disabled={pending}>{pending ? "Logging in…" : "Log in"}</Button>
+        <div>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="password">Password</Label>
+            <Link to="/forgot-password" className="text-xs text-muted-foreground underline">
+              Forgot?
+            </Link>
+          </div>
+          <Input
+            id="password"
+            type="password"
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="mt-1.5 rounded-xl"
+          />
+        </div>
+        {err && (
+          <p
+            role="alert"
+            className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          >
+            {err}
+          </p>
+        )}
+        <Button type="submit" variant="hero" size="lg" disabled={pending}>
+          {pending ? "Logging in…" : "Log in"}
+        </Button>
       </form>
-      <p className="mt-6 text-center text-sm text-muted-foreground">New here? <Link to="/signup" className="font-semibold text-foreground underline">Create an account</Link></p>
+      <p className="mt-6 text-center text-sm text-muted-foreground">
+        New here?{" "}
+        <Link to="/signup" className="font-semibold text-foreground underline">
+          Create an account
+        </Link>
+      </p>
     </AuthShell>
   );
 }

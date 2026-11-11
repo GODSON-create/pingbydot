@@ -90,14 +90,16 @@ export function activeMomentsTrayQuery(currentUserId?: string) {
       // Fetch active moments
       const { data: rawMoments, error } = await supabase
         .from("moments")
-        .select(`
+        .select(
+          `
           id, author_id, media_url, media_type, caption, overlay_text, stickers, mentions,
           location, duration, audience, hub_id, is_discoverable, allow_comments, allow_sharing,
           allow_repings, expires_at, is_archived, deleted_at, view_count, like_count,
           reping_count, reply_count, created_at, updated_at,
           author:profiles!moments_author_id_fkey(id, username, display_name, avatar_url, bio, created_at),
           hub:hubs!moments_hub_id_fkey(id, name, slug)
-        `)
+        `,
+        )
         .is("deleted_at", null)
         .gt("expires_at", nowIso)
         .order("created_at", { ascending: true });
@@ -128,10 +130,7 @@ export function activeMomentsTrayQuery(currentUserId?: string) {
             .select("moment_id")
             .eq("user_id", currentUserId)
             .in("moment_id", momentIds),
-          supabase
-            .from("follows")
-            .select("following_id")
-            .eq("follower_id", currentUserId),
+          supabase.from("follows").select("following_id").eq("follower_id", currentUserId),
         ]);
 
         if (viewsRes.data) {
@@ -177,7 +176,8 @@ export function activeMomentsTrayQuery(currentUserId?: string) {
       const sequences: CreatorMomentsSequence[] = Array.from(creatorMap.values()).map(
         ({ author, moments }) => {
           const hasUnseen = moments.some((m) => !m.has_viewed && m.author_id !== currentUserId);
-          const latestCreatedAt = moments[moments.length - 1]?.created_at || new Date().toISOString();
+          const latestCreatedAt =
+            moments[moments.length - 1]?.created_at || new Date().toISOString();
           return {
             author,
             moments,
@@ -224,14 +224,16 @@ export function userActiveMomentsQuery(userId: string, currentUserId?: string) {
 
       const { data, error } = await supabase
         .from("moments")
-        .select(`
+        .select(
+          `
           id, author_id, media_url, media_type, caption, overlay_text, stickers, mentions,
           location, duration, audience, hub_id, is_discoverable, allow_comments, allow_sharing,
           allow_repings, expires_at, is_archived, deleted_at, view_count, like_count,
           reping_count, reply_count, created_at, updated_at,
           author:profiles!moments_author_id_fkey(id, username, display_name, avatar_url, bio, created_at),
           hub:hubs!moments_hub_id_fkey(id, name, slug)
-        `)
+        `,
+        )
         .eq("author_id", userId)
         .is("deleted_at", null)
         .gt("expires_at", nowIso)
@@ -287,9 +289,11 @@ export function userHighlightsQuery(userId: string) {
     queryFn: async (): Promise<Highlight[]> => {
       const { data: highlights, error } = await supabase
         .from("highlights")
-        .select(`
+        .select(
+          `
           id, user_id, title, cover_url, display_order, is_private, created_at, updated_at
-        `)
+        `,
+        )
         .eq("user_id", userId)
         .order("display_order", { ascending: true })
         .order("created_at", { ascending: false });
@@ -333,7 +337,8 @@ export function highlightMomentsQuery(highlightId: string, currentUserId?: strin
     queryFn: async (): Promise<Moment[]> => {
       const { data: items, error } = await supabase
         .from("highlight_items")
-        .select(`
+        .select(
+          `
           display_order,
           moment:moments!highlight_items_moment_id_fkey(
             id, author_id, media_url, media_type, caption, overlay_text, stickers, mentions,
@@ -342,7 +347,8 @@ export function highlightMomentsQuery(highlightId: string, currentUserId?: strin
             reping_count, reply_count, created_at, updated_at,
             author:profiles!moments_author_id_fkey(id, username, display_name, avatar_url, bio, created_at)
           )
-        `)
+        `,
+        )
         .eq("highlight_id", highlightId)
         .order("display_order", { ascending: true });
 
@@ -350,7 +356,9 @@ export function highlightMomentsQuery(highlightId: string, currentUserId?: strin
       if (!items) return [];
 
       return items
-        .filter((it) => it.moment && !(it.moment as unknown as { deleted_at: string | null }).deleted_at)
+        .filter(
+          (it) => it.moment && !(it.moment as unknown as { deleted_at: string | null }).deleted_at,
+        )
         .map((it) => {
           const m = it.moment as unknown as Moment;
           return {
@@ -375,13 +383,15 @@ export function discoverableMomentsQuery(currentUserId?: string) {
     queryFn: async (): Promise<Moment[]> => {
       const { data, error } = await supabase
         .from("moments")
-        .select(`
+        .select(
+          `
           id, author_id, media_url, media_type, caption, overlay_text, stickers, mentions,
           location, duration, audience, hub_id, is_discoverable, allow_comments, allow_sharing,
           allow_repings, expires_at, is_archived, deleted_at, view_count, like_count,
           reping_count, reply_count, created_at, updated_at,
           author:profiles!moments_author_id_fkey(id, username, display_name, avatar_url, bio, created_at)
-        `)
+        `,
+        )
         .eq("is_discoverable", true)
         .eq("audience", "public") // STRICT: Only public discoverable moments appear on For You!
         .is("deleted_at", null)
@@ -402,7 +412,10 @@ export function discoverableMomentsQuery(currentUserId?: string) {
           .from("moment_likes")
           .select("moment_id")
           .eq("user_id", currentUserId)
-          .in("moment_id", data.map((m) => m.id));
+          .in(
+            "moment_id",
+            data.map((m) => m.id),
+          );
 
         if (likes) {
           likedIds = new Set(likes.map((l) => l.moment_id));
@@ -633,10 +646,7 @@ export function useDeleteHighlight() {
 
   return useMutation({
     mutationFn: async (highlightId: string) => {
-      const { error } = await supabase
-        .from("highlights")
-        .delete()
-        .eq("id", highlightId);
+      const { error } = await supabase.from("highlights").delete().eq("id", highlightId);
 
       if (error) throw error;
     },

@@ -60,13 +60,15 @@ describe("Database RLS and Storage Security Audit", () => {
 
     const m10Sql = fs.readFileSync(
       path.join(migrationsDir, "0010_secure_media_storage_and_access_rules.sql"),
-      "utf8"
+      "utf8",
     );
     expect(m10Sql).toContain('DROP POLICY IF EXISTS "Media is public" ON storage.objects;');
     expect(m10Sql).toContain('CREATE POLICY "Users read own media" ON storage.objects');
     expect(m10Sql).toContain('DROP POLICY IF EXISTS "Profiles are public" ON public.profiles;');
     expect(m10Sql).toContain('DROP POLICY IF EXISTS "Likes are public" ON public.likes;');
-    expect(m10Sql).toContain('DROP POLICY IF EXISTS "Comment likes are public" ON public.comment_likes;');
+    expect(m10Sql).toContain(
+      'DROP POLICY IF EXISTS "Comment likes are public" ON public.comment_likes;',
+    );
     expect(m10Sql).toContain('DROP POLICY IF EXISTS "Follows are public" ON public.follows;');
   });
 
@@ -80,7 +82,7 @@ describe("Database RLS and Storage Security Audit", () => {
 
     const m11Sql = fs.readFileSync(
       path.join(migrationsDir, "0011_hubs_signals_read_receipts.sql"),
-      "utf8"
+      "utf8",
     );
     expect(m11Sql).toContain("public.hub_messages");
     expect(m11Sql).toContain("public.ping_read_receipts");
@@ -100,7 +102,7 @@ describe("Database RLS and Storage Security Audit", () => {
 
     const m12Sql = fs.readFileSync(
       path.join(migrationsDir, "0012_moments_highlights_reping.sql"),
-      "utf8"
+      "utf8",
     );
     expect(m12Sql).toContain("public.moments");
     expect(m12Sql).toContain("public.moment_views");

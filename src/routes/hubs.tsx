@@ -70,9 +70,7 @@ function HubCard({ hub }: { hub: Hub }) {
           <span
             className={cn(
               "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold",
-              isPrivate
-                ? "bg-blush text-blush-foreground"
-                : "bg-accent text-accent-foreground",
+              isPrivate ? "bg-blush text-blush-foreground" : "bg-accent text-accent-foreground",
             )}
           >
             {isPrivate ? (
@@ -124,9 +122,12 @@ function HubsDirectory() {
     ? (catParam as HubCategory)
     : null;
 
-  const { data: hubs, isLoading, error, refetch } = useQuery(
-    hubsQuery(deferredSearch, selectedCategory, 0),
-  );
+  const {
+    data: hubs,
+    isLoading,
+    error,
+    refetch,
+  } = useQuery(hubsQuery(deferredSearch, selectedCategory, 0));
 
   return (
     <div className="mx-auto max-w-6xl px-5 py-12">
@@ -137,8 +138,8 @@ function HubsDirectory() {
         </span>
         <h1 className="mt-4 font-display text-4xl font-extrabold sm:text-6xl">Hubs</h1>
         <p className="mt-3 max-w-xl text-muted-foreground text-base sm:text-lg">
-          Dedicated spaces for university clubs, accelerators, startup teams, and builder communities
-          to build in public together.
+          Dedicated spaces for university clubs, accelerators, startup teams, and builder
+          communities to build in public together.
         </p>
 
         <div className="mt-6 flex flex-wrap items-center gap-3">

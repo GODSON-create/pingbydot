@@ -4,7 +4,9 @@ describe("Moments Lifecycle & Audience Logic", () => {
   it("determines if a moment is active or expired based on 24-hour window", () => {
     function isMomentActive(createdAt: string, expiresAt?: string): boolean {
       const now = new Date();
-      const exp = expiresAt ? new Date(expiresAt) : new Date(new Date(createdAt).getTime() + 24 * 60 * 60 * 1000);
+      const exp = expiresAt
+        ? new Date(expiresAt)
+        : new Date(new Date(createdAt).getTime() + 24 * 60 * 60 * 1000);
       return now.getTime() < exp.getTime();
     }
 
@@ -97,10 +99,7 @@ describe("Moments Lifecycle & Audience Logic", () => {
 
     function filterForYouMoments(items: MomentFeedItem[]) {
       return items.filter(
-        (m) =>
-          !m.deleted_at &&
-          m.is_discoverable === true &&
-          m.audience === "public", // MUST be public!
+        (m) => !m.deleted_at && m.is_discoverable === true && m.audience === "public", // MUST be public!
       );
     }
 

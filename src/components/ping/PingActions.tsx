@@ -1,7 +1,19 @@
 import { useState } from "react";
 import { Link, useNavigate, useHydrated } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Heart, Share2, Link2, MessageCircle, Flag, LayoutGrid, Pencil, Trash2, Check, Image as ImageIcon, Building2 } from "lucide-react";
+import {
+  Heart,
+  Share2,
+  Link2,
+  MessageCircle,
+  Flag,
+  LayoutGrid,
+  Pencil,
+  Trash2,
+  Check,
+  Image as ImageIcon,
+  Building2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -17,7 +29,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,7 +47,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { ShareCardDialog } from "./ShareCardDialog";
 import { shareMessage, shareExcerpt } from "@/lib/sharing/card";
@@ -48,10 +73,16 @@ export function LikeButton({ ping }: { ping: Ping }) {
     mutationFn: async (next: boolean) => {
       if (!user) throw new Error("Please sign in again.");
       if (next) {
-        const { error } = await supabase.from("likes").insert({ user_id: user.id, ping_id: ping.id });
+        const { error } = await supabase
+          .from("likes")
+          .insert({ user_id: user.id, ping_id: ping.id });
         if (error && error.code !== "23505") throw error;
       } else {
-        const { error } = await supabase.from("likes").delete().eq("user_id", user.id).eq("ping_id", ping.id);
+        const { error } = await supabase
+          .from("likes")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("ping_id", ping.id);
         if (error) throw error;
       }
     },
@@ -72,7 +103,9 @@ export function LikeButton({ ping }: { ping: Ping }) {
 
   const onClick = () => {
     if (!user) {
-      toast("Sign in to like Pings", { action: { label: "Log in", onClick: () => navigate({ to: "/login" }) } });
+      toast("Sign in to like Pings", {
+        action: { label: "Log in", onClick: () => navigate({ to: "/login" }) },
+      });
       return;
     }
     const next = !shownLiked;
@@ -89,19 +122,36 @@ export function LikeButton({ ping }: { ping: Ping }) {
       aria-label={shownLiked ? "Unlike this Ping" : "Like this Ping"}
       className={cn(
         "group relative inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-sm font-semibold transition-colors",
-        shownLiked ? "bg-blush text-blush-foreground" : "text-muted-foreground hover:bg-blush/60 hover:text-blush-foreground",
+        shownLiked
+          ? "bg-blush text-blush-foreground"
+          : "text-muted-foreground hover:bg-blush/60 hover:text-blush-foreground",
       )}
     >
       <span className="relative inline-flex">
-        {anim > 0 && shownLiked && <span key={anim} className="absolute inset-0 rounded-full bg-blush-foreground/40 animate-burst" aria-hidden />}
-        <Heart key={`h${anim}`} className={cn("size-4", shownLiked && "fill-current animate-pop")} />
+        {anim > 0 && shownLiked && (
+          <span
+            key={anim}
+            className="absolute inset-0 rounded-full bg-blush-foreground/40 animate-burst"
+            aria-hidden
+          />
+        )}
+        <Heart
+          key={`h${anim}`}
+          className={cn("size-4", shownLiked && "fill-current animate-pop")}
+        />
       </span>
       <span className="tabular-nums">{count}</span>
     </button>
   );
 }
 
-export function ShareMenu({ ping, variant = "ghost" }: { ping: Ping; variant?: "ghost" | "outline" }) {
+export function ShareMenu({
+  ping,
+  variant = "ghost",
+}: {
+  ping: Ping;
+  variant?: "ghost" | "outline";
+}) {
   const [copied, setCopied] = useState(false);
   const [cardOpen, setCardOpen] = useState(false);
   const [hubOpen, setHubOpen] = useState(false);
@@ -123,37 +173,56 @@ export function ShareMenu({ ping, variant = "ghost" }: { ping: Ping; variant?: "
     try {
       await navigator.share({ title: "A Ping", text, url });
     } catch (e) {
-      if (!(e instanceof DOMException && e.name === "AbortError")) toast.error("Couldn't share. Try copying the link.");
+      if (!(e instanceof DOMException && e.name === "AbortError"))
+        toast.error("Couldn't share. Try copying the link.");
     }
   };
   const canNative = hydrated && typeof navigator.share === "function";
 
   return (
     <>
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant={variant} size="sm" className="h-9 text-muted-foreground" aria-label="Share this Ping">
-          {copied ? <Check /> : <Share2 />} Reping
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-52 rounded-2xl">
-        <DropdownMenuItem onSelect={() => setCardOpen(true)}><ImageIcon /> Share card preview</DropdownMenuItem>
-        {canNative && <DropdownMenuItem onSelect={native}><Share2 /> Share…</DropdownMenuItem>}
-        <DropdownMenuItem asChild>
-          <a href={`https://wa.me/?text=${encodeURIComponent(shareMessage(ping))}`} target="_blank" rel="noopener noreferrer">
-            <MessageCircle /> Share on WhatsApp
-          </a>
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => setHubOpen(true)}><Building2 /> Share to Hub</DropdownMenuItem>
-        <DropdownMenuItem onSelect={copy}><Link2 /> Copy link</DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-    <ShareCardDialog ping={ping} open={cardOpen} onOpenChange={setCardOpen} />
-    <SharePingToHubDialog ping={ping} open={hubOpen} onOpenChange={setHubOpen} />
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant={variant}
+            size="sm"
+            className="h-9 text-muted-foreground"
+            aria-label="Share this Ping"
+          >
+            {copied ? <Check /> : <Share2 />} Reping
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-52 rounded-2xl">
+          <DropdownMenuItem onSelect={() => setCardOpen(true)}>
+            <ImageIcon /> Share card preview
+          </DropdownMenuItem>
+          {canNative && (
+            <DropdownMenuItem onSelect={native}>
+              <Share2 /> Share…
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem asChild>
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(shareMessage(ping))}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <MessageCircle /> Share on WhatsApp
+            </a>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setHubOpen(true)}>
+            <Building2 /> Share to Hub
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={copy}>
+            <Link2 /> Copy link
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <ShareCardDialog ping={ping} open={cardOpen} onOpenChange={setCardOpen} />
+      <SharePingToHubDialog ping={ping} open={hubOpen} onOpenChange={setHubOpen} />
     </>
   );
 }
-
 
 export function SharePingToHubDialog({
   ping,
@@ -292,13 +361,27 @@ const REASONS = [
   { v: "other", l: "Something else" },
 ] as const;
 
-const ROW = "flex min-h-12 w-full items-center gap-3 rounded-2xl px-4 py-3 text-left font-medium hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+const ROW =
+  "flex min-h-12 w-full items-center gap-3 rounded-2xl px-4 py-3 text-left font-medium hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
-export function PingMenu({ ping, onDeleted, open, onOpenChange }: { ping: Ping; onDeleted?: () => void; open?: boolean; onOpenChange?: (o: boolean) => void }) {
+export function PingMenu({
+  ping,
+  onDeleted,
+  open,
+  onOpenChange,
+}: {
+  ping: Ping;
+  onDeleted?: () => void;
+  open?: boolean;
+  onOpenChange?: (o: boolean) => void;
+}) {
   const { user } = useAuth();
   const [innerPanel, setInnerPanel] = useState(false);
   const panel = open ?? innerPanel;
-  const setPanel = (o: boolean) => { setInnerPanel(o); onOpenChange?.(o); };
+  const setPanel = (o: boolean) => {
+    setInnerPanel(o);
+    onOpenChange?.(o);
+  };
   const [cardOpen, setCardOpen] = useState(false);
   const [hubOpen, setHubOpen] = useState(false);
   const hydrated = useHydrated();
@@ -316,7 +399,12 @@ export function PingMenu({ ping, onDeleted, open, onOpenChange }: { ping: Ping; 
   const report = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error("Please sign in again.");
-      const { error } = await supabase.from("reports").insert({ ping_id: ping.id, reporter_id: user.id, reason, details: details.trim() || null });
+      const { error } = await supabase.from("reports").insert({
+        ping_id: ping.id,
+        reporter_id: user.id,
+        reason,
+        details: details.trim() || null,
+      });
       if (error && error.code !== "23505") throw error;
     },
     onSuccess: () => setReported(true),
@@ -338,32 +426,127 @@ export function PingMenu({ ping, onDeleted, open, onOpenChange }: { ping: Ping; 
 
   return (
     <>
-      <Button variant="ghost" size="sm" className="h-9 text-muted-foreground" aria-label="Ping actions" aria-haspopup="dialog" onClick={() => setPanel(true)}>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-9 text-muted-foreground"
+        aria-label="Ping actions"
+        aria-haspopup="dialog"
+        onClick={() => setPanel(true)}
+      >
         <LayoutGrid /> <span className="sr-only sm:not-sr-only">Actions</span>
       </Button>
       <Sheet open={panel} onOpenChange={setPanel}>
-        <SheetContent side="bottom" className="mx-auto max-w-lg rounded-t-3xl pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+        <SheetContent
+          side="bottom"
+          className="mx-auto max-w-lg rounded-t-3xl pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+        >
           <SheetHeader className="text-left">
             <SheetTitle className="font-display">Ping actions</SheetTitle>
-            <SheetDescription className="line-clamp-2">{shareExcerpt(ping.content)}</SheetDescription>
+            <SheetDescription className="line-clamp-2">
+              {shareExcerpt(ping.content)}
+            </SheetDescription>
           </SheetHeader>
           <div className="mt-2 grid gap-1">
-            <button type="button" className={ROW} onClick={() => { setPanel(false); setCardOpen(true); }}><ImageIcon className="size-5" /> Share card preview</button>
-            {canNative && <button type="button" className={ROW} onClick={async () => { setPanel(false); try { await navigator.share({ title: "A Ping", text: shareExcerpt(ping.content), url }); } catch (e) { if (!(e instanceof DOMException && e.name === "AbortError")) toast.error("Couldn't share. Try copying the link."); } }}><Share2 className="size-5" /> Share…</button>}
-            <a className={ROW} href={`https://wa.me/?text=${encodeURIComponent(shareMessage(ping))}`} target="_blank" rel="noopener noreferrer" onClick={() => setPanel(false)}><MessageCircle className="size-5" /> Share link on WhatsApp</a>
-            <button type="button" className={ROW} onClick={() => { setPanel(false); setHubOpen(true); }}><Building2 className="size-5" /> Share to Hub</button>
-            <button type="button" className={ROW} onClick={async () => { setPanel(false); try { await navigator.clipboard.writeText(url); toast.success("Link copied"); } catch { toast.error("Couldn't copy. You can copy the link from the address bar."); } }}><Link2 className="size-5" /> Copy link</button>
+            <button
+              type="button"
+              className={ROW}
+              onClick={() => {
+                setPanel(false);
+                setCardOpen(true);
+              }}
+            >
+              <ImageIcon className="size-5" /> Share card preview
+            </button>
+            {canNative && (
+              <button
+                type="button"
+                className={ROW}
+                onClick={async () => {
+                  setPanel(false);
+                  try {
+                    await navigator.share({
+                      title: "A Ping",
+                      text: shareExcerpt(ping.content),
+                      url,
+                    });
+                  } catch (e) {
+                    if (!(e instanceof DOMException && e.name === "AbortError"))
+                      toast.error("Couldn't share. Try copying the link.");
+                  }
+                }}
+              >
+                <Share2 className="size-5" /> Share…
+              </button>
+            )}
+            <a
+              className={ROW}
+              href={`https://wa.me/?text=${encodeURIComponent(shareMessage(ping))}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setPanel(false)}
+            >
+              <MessageCircle className="size-5" /> Share link on WhatsApp
+            </a>
+            <button
+              type="button"
+              className={ROW}
+              onClick={() => {
+                setPanel(false);
+                setHubOpen(true);
+              }}
+            >
+              <Building2 className="size-5" /> Share to Hub
+            </button>
+            <button
+              type="button"
+              className={ROW}
+              onClick={async () => {
+                setPanel(false);
+                try {
+                  await navigator.clipboard.writeText(url);
+                  toast.success("Link copied");
+                } catch {
+                  toast.error("Couldn't copy. You can copy the link from the address bar.");
+                }
+              }}
+            >
+              <Link2 className="size-5" /> Copy link
+            </button>
             {isOwner ? (
               <>
-                <Link to="/edit/$id" params={{ id: ping.id }} className={ROW}><Pencil className="size-5" /> Edit</Link>
-                <button type="button" className={cn(ROW, "text-destructive")} onClick={() => { setPanel(false); setDeleteOpen(true); }}><Trash2 className="size-5" /> Delete</button>
+                <Link to="/edit/$id" params={{ id: ping.id }} className={ROW}>
+                  <Pencil className="size-5" /> Edit
+                </Link>
+                <button
+                  type="button"
+                  className={cn(ROW, "text-destructive")}
+                  onClick={() => {
+                    setPanel(false);
+                    setDeleteOpen(true);
+                  }}
+                >
+                  <Trash2 className="size-5" /> Delete
+                </button>
               </>
             ) : (
-              <button type="button" className={ROW} onClick={() => {
-                setPanel(false);
-                if (!user) { toast("Sign in to report a Ping", { action: { label: "Log in", onClick: () => navigate({ to: "/login" }) } }); return; }
-                setReported(false); setReportOpen(true);
-              }}><Flag className="size-5" /> Report</button>
+              <button
+                type="button"
+                className={ROW}
+                onClick={() => {
+                  setPanel(false);
+                  if (!user) {
+                    toast("Sign in to report a Ping", {
+                      action: { label: "Log in", onClick: () => navigate({ to: "/login" }) },
+                    });
+                    return;
+                  }
+                  setReported(false);
+                  setReportOpen(true);
+                }}
+              >
+                <Flag className="size-5" /> Report
+              </button>
             )}
           </div>
         </SheetContent>
@@ -375,31 +558,67 @@ export function PingMenu({ ping, onDeleted, open, onOpenChange }: { ping: Ping; 
         <DialogContent className="rounded-3xl">
           {reported ? (
             <div className="py-4 text-center">
-              <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-lime"><Check className="size-6" /></div>
-              <DialogTitle className="mt-4 font-display text-xl">Thanks for letting us know</DialogTitle>
-              <DialogDescription className="mt-2">Your report was received. We review reports and act on content that breaks the rules.</DialogDescription>
-              <Button className="mt-6" onClick={() => setReportOpen(false)}>Done</Button>
+              <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-lime">
+                <Check className="size-6" />
+              </div>
+              <DialogTitle className="mt-4 font-display text-xl">
+                Thanks for letting us know
+              </DialogTitle>
+              <DialogDescription className="mt-2">
+                Your report was received. We review reports and act on content that breaks the
+                rules.
+              </DialogDescription>
+              <Button className="mt-6" onClick={() => setReportOpen(false)}>
+                Done
+              </Button>
             </div>
           ) : (
             <>
               <DialogHeader>
                 <DialogTitle className="font-display">Report this Ping</DialogTitle>
-                <DialogDescription>Reports are private. The author won't see who reported.</DialogDescription>
+                <DialogDescription>
+                  Reports are private. The author won't see who reported.
+                </DialogDescription>
               </DialogHeader>
               <fieldset className="grid gap-2">
                 <legend className="sr-only">Reason</legend>
                 {REASONS.map((r) => (
-                  <label key={r.v} className={cn("flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 text-sm transition-colors", reason === r.v ? "border-primary bg-accent" : "hover:bg-secondary")}>
-                    <input type="radio" name="reason" value={r.v} checked={reason === r.v} onChange={() => setReason(r.v)} className="accent-[var(--primary)]" />
+                  <label
+                    key={r.v}
+                    className={cn(
+                      "flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 text-sm transition-colors",
+                      reason === r.v ? "border-primary bg-accent" : "hover:bg-secondary",
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="reason"
+                      value={r.v}
+                      checked={reason === r.v}
+                      onChange={() => setReason(r.v)}
+                      className="accent-[var(--primary)]"
+                    />
                     {r.l}
                   </label>
                 ))}
               </fieldset>
-              <label className="text-sm font-medium" htmlFor="report-details">Details (optional)</label>
-              <Textarea id="report-details" value={details} onChange={(e) => setDetails(e.target.value.slice(0, 500))} rows={3} className="rounded-2xl" />
+              <label className="text-sm font-medium" htmlFor="report-details">
+                Details (optional)
+              </label>
+              <Textarea
+                id="report-details"
+                value={details}
+                onChange={(e) => setDetails(e.target.value.slice(0, 500))}
+                rows={3}
+                className="rounded-2xl"
+              />
               <DialogFooter>
-                <Button variant="outline" onClick={() => setReportOpen(false)}>Cancel</Button>
-                <Button onClick={() => report.mutate()} disabled={report.isPending}>{report.isPending ? "Sending…" : "Send report"}</Button>
+                <Button variant="outline" onClick={() => setReportOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={() => report.mutate()} disabled={report.isPending}>
+                  {report.isPending ? "Sending…" : "Send report"}
+                </Button>
               </DialogFooter>
             </>
           )}
@@ -410,11 +629,18 @@ export function PingMenu({ ping, onDeleted, open, onOpenChange }: { ping: Ping; 
         <AlertDialogContent className="rounded-3xl">
           <AlertDialogHeader>
             <AlertDialogTitle className="font-display">Delete this Ping?</AlertDialogTitle>
-            <AlertDialogDescription>Its link will stop working and its likes will be removed. This can't be undone.</AlertDialogDescription>
+            <AlertDialogDescription>
+              Its link will stop working and its likes will be removed. This can't be undone.
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="rounded-full">Keep it</AlertDialogCancel>
-            <AlertDialogAction className="rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => del.mutate()}>Delete</AlertDialogAction>
+            <AlertDialogAction
+              className="rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => del.mutate()}
+            >
+              Delete
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

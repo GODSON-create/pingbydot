@@ -23,7 +23,12 @@ const CAT_TONE: Record<string, string> = {
 export function CategoryTag({ value }: { value: string }) {
   const c = CATEGORIES.find((x) => x.value === value);
   return (
-    <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold", CAT_TONE[value])}>
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold",
+        CAT_TONE[value],
+      )}
+    >
       <span aria-hidden>{c?.emoji}</span>
       {c?.label ?? value}
     </span>
@@ -71,12 +76,19 @@ export function PingCard({
     <article {...press} className="surface-card lift relative flex flex-col rounded-3xl p-5 sm:p-6">
       <header className="relative z-10 flex items-start gap-3">
         {ping.author && (
-          <Link to="/@{$username}" params={{ username: ping.author.username }} className="flex min-w-0 flex-1 items-center gap-3">
+          <Link
+            to="/@{$username}"
+            params={{ username: ping.author.username }}
+            className="flex min-w-0 flex-1 items-center gap-3"
+          >
             <FounderAvatar name={name} src={ping.author.avatar_url} />
             <span className="min-w-0">
               <span className="block truncate font-semibold hover:underline">{name}</span>
               <span className="block truncate text-xs text-muted-foreground">
-                @{ping.author.username} · <time dateTime={ping.created_at}>{formatDistanceToNowStrict(new Date(ping.created_at))} ago</time>
+                @{ping.author.username} ·{" "}
+                <time dateTime={ping.created_at}>
+                  {formatDistanceToNowStrict(new Date(ping.created_at))} ago
+                </time>
               </span>
             </span>
           </Link>
@@ -91,7 +103,9 @@ export function PingCard({
               onClick={(e) => e.stopPropagation()}
             >
               <span>{hubBadge.name}</span>
-              {hubBadge.intent && <span className="text-muted-foreground font-normal">#{hubBadge.intent}</span>}
+              {hubBadge.intent && (
+                <span className="text-muted-foreground font-normal">#{hubBadge.intent}</span>
+              )}
             </Link>
           )}
           <CategoryTag value={ping.category} />
@@ -99,17 +113,35 @@ export function PingCard({
       </header>
       <div className="mt-4 flex-1">
         {linkToDetail ? (
-          <Link to="/p/$id" params={{ id: ping.id }} className="block whitespace-pre-line break-words text-[15px] leading-relaxed after:absolute after:inset-0 after:content-[''] focus-visible:ring-2 focus-visible:ring-ring">
+          <Link
+            to="/p/$id"
+            params={{ id: ping.id }}
+            className="block whitespace-pre-line break-words text-[15px] leading-relaxed after:absolute after:inset-0 after:content-[''] focus-visible:ring-2 focus-visible:ring-ring"
+          >
             {ping.content.length > 420 ? ping.content.slice(0, 420) + "…" : ping.content}
           </Link>
         ) : (
           <p className="whitespace-pre-line break-words text-lg leading-relaxed">{ping.content}</p>
         )}
         <RepingAttribution ping={ping} />
-        <div className="relative z-10"><CtaLink ping={ping} /></div>
+        <div className="relative z-10">
+          <CtaLink ping={ping} />
+        </div>
       </div>
       <footer className="relative z-10 mt-4 flex items-center justify-between border-t border-border pt-3">
-        <span className="flex items-center gap-1"><LikeButton ping={ping} /><Link to="/p/$id" params={{ id: ping.id }} hash="replies-title" aria-label={`${replyCount(ping)} replies`} className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-sm text-muted-foreground hover:bg-secondary"><MessageCircle className="size-4" />{replyCount(ping)}</Link></span>
+        <span className="flex items-center gap-1">
+          <LikeButton ping={ping} />
+          <Link
+            to="/p/$id"
+            params={{ id: ping.id }}
+            hash="replies-title"
+            aria-label={`${replyCount(ping)} replies`}
+            className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-sm text-muted-foreground hover:bg-secondary"
+          >
+            <MessageCircle className="size-4" />
+            {replyCount(ping)}
+          </Link>
+        </span>
         <div className="flex items-center">
           <ShareMenu ping={ping} />
           <PingMenu ping={ping} open={actions} onOpenChange={setActions} />
@@ -124,9 +156,16 @@ export function PingCardSkeleton() {
     <div className="surface-card rounded-3xl p-6" aria-hidden>
       <div className="flex items-center gap-3">
         <div className="size-10 rounded-full bg-muted" />
-        <div className="space-y-2"><div className="h-3 w-28 rounded bg-muted" /><div className="h-2.5 w-20 rounded bg-muted" /></div>
+        <div className="space-y-2">
+          <div className="h-3 w-28 rounded bg-muted" />
+          <div className="h-2.5 w-20 rounded bg-muted" />
+        </div>
       </div>
-      <div className="mt-5 space-y-2"><div className="h-3 rounded bg-muted" /><div className="h-3 w-5/6 rounded bg-muted" /><div className="h-3 w-2/3 rounded bg-muted" /></div>
+      <div className="mt-5 space-y-2">
+        <div className="h-3 rounded bg-muted" />
+        <div className="h-3 w-5/6 rounded bg-muted" />
+        <div className="h-3 w-2/3 rounded bg-muted" />
+      </div>
     </div>
   );
 }

@@ -2,14 +2,28 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useDeferredValue } from "react";
 import { z } from "zod";
-import { Radio, Plus, CheckCircle, Search, Building, GraduationCap, Briefcase, Globe, Users } from "lucide-react";
+import {
+  Radio,
+  Plus,
+  CheckCircle,
+  Search,
+  Building,
+  GraduationCap,
+  Briefcase,
+  Globe,
+  Users,
+} from "lucide-react";
 import { signalsQuery, type Signal, type SignalInstitutionType } from "@/lib/signals";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { pageHead } from "@/lib/site";
 
-const SIGNAL_CATEGORIES: Array<{ value: SignalInstitutionType | "all"; label: string; icon: React.ComponentType<{ className?: string }> }> = [
+const SIGNAL_CATEGORIES: Array<{
+  value: SignalInstitutionType | "all";
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}> = [
   { value: "all", label: "All", icon: Radio },
   { value: "university", label: "Universities", icon: GraduationCap },
   { value: "company", label: "Companies", icon: Building },
@@ -70,7 +84,9 @@ function SignalCard({ signal }: { signal: Signal }) {
               )}
             </div>
             {signal.description && (
-              <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{signal.description}</p>
+              <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                {signal.description}
+              </p>
             )}
           </div>
         </header>
@@ -80,7 +96,8 @@ function SignalCard({ signal }: { signal: Signal }) {
             {signal.institution_type}
           </span>
           <span className="text-xs text-muted-foreground">
-            {signal.follower_count.toLocaleString()} {signal.follower_count === 1 ? "subscriber" : "subscribers"}
+            {signal.follower_count.toLocaleString()}{" "}
+            {signal.follower_count === 1 ? "subscriber" : "subscribers"}
           </span>
         </div>
       </div>
@@ -127,7 +144,8 @@ function SignalsDirectory() {
             Signals
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground sm:text-base">
-            Verified announcement feeds from universities, tech companies, accelerators, and developer collectives. Receive direct institutional broadcasts without social noise.
+            Verified announcement feeds from universities, tech companies, accelerators, and
+            developer collectives. Receive direct institutional broadcasts without social noise.
           </p>
         </div>
 

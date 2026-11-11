@@ -3,12 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 
 export type SignalInstitutionType =
-  | "university"
-  | "company"
-  | "incubator"
-  | "government"
-  | "community"
-  | "other";
+  "university" | "company" | "incubator" | "government" | "community" | "other";
 
 export interface Signal {
   id: string;
@@ -117,7 +112,9 @@ export function signalPostsQuery(signalId: string, currentUserId?: string) {
     queryFn: async (): Promise<SignalPost[]> => {
       const { data: rawPosts, error } = await supabase
         .from("signal_posts")
-        .select("id, signal_id, author_id, title, content, category, is_urgent, media_urls, created_at, updated_at")
+        .select(
+          "id, signal_id, author_id, title, content, category, is_urgent, media_urls, created_at, updated_at",
+        )
         .eq("signal_id", signalId)
         .order("created_at", { ascending: false });
 
@@ -205,7 +202,9 @@ export function signalPublishersListQuery(signalId: string) {
     queryFn: async (): Promise<SignalPublisherMember[]> => {
       const { data, error } = await supabase
         .from("signal_publishers")
-        .select("signal_id, user_id, role, created_at, profile:profiles!signal_publishers_user_id_fkey(id, username, display_name, bio, avatar_url)")
+        .select(
+          "signal_id, user_id, role, created_at, profile:profiles!signal_publishers_user_id_fkey(id, username, display_name, bio, avatar_url)",
+        )
         .eq("signal_id", signalId)
         .order("created_at", { ascending: true });
 
@@ -361,7 +360,9 @@ export function signalAnalyticsQuery(postId: string, isPublisher: boolean) {
 
 export const recentSignalBroadcastsQuery = () => ({
   queryKey: ["recent-signal-broadcasts"],
-  queryFn: async (): Promise<Record<string, { id: string; title: string; content: string; created_at: string }>> => {
+  queryFn: async (): Promise<
+    Record<string, { id: string; title: string; content: string; created_at: string }>
+  > => {
     const { data, error } = await supabase
       .from("signal_posts")
       .select("id, signal_id, title, content, created_at")
@@ -369,7 +370,8 @@ export const recentSignalBroadcastsQuery = () => ({
       .limit(50);
 
     if (error || !data) return {};
-    const map: Record<string, { id: string; title: string; content: string; created_at: string }> = {};
+    const map: Record<string, { id: string; title: string; content: string; created_at: string }> =
+      {};
     for (const p of data) {
       if (!map[p.signal_id]) {
         map[p.signal_id] = p;

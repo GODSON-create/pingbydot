@@ -216,7 +216,8 @@ function NewBroadcastDialog({
         <DialogHeader>
           <DialogTitle className="font-display text-xl">Publish Official Broadcast</DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
-            This message will be dispatched directly to all subscribers of this institutional Signal.
+            This message will be dispatched directly to all subscribers of this institutional
+            Signal.
           </DialogDescription>
         </DialogHeader>
 
@@ -350,12 +351,16 @@ function ManagePublishersDialog({
             <Users className="size-5 text-primary" /> Manage Authorized Publishers
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
-            Only authorized publishers can dispatch official institutional broadcasts on this Signal channel.
+            Only authorized publishers can dispatch official institutional broadcasts on this Signal
+            channel.
           </DialogDescription>
         </DialogHeader>
 
         {/* Add Publisher Form */}
-        <form onSubmit={handleAdd} className="mt-4 space-y-3 rounded-2xl bg-secondary/40 p-4 border border-border/50">
+        <form
+          onSubmit={handleAdd}
+          className="mt-4 space-y-3 rounded-2xl bg-secondary/40 p-4 border border-border/50"
+        >
           <Label className="text-xs font-semibold">Add Publisher by Username</Label>
           <div className="flex gap-2">
             <Input
@@ -388,9 +393,13 @@ function ManagePublishersDialog({
         {/* Publishers List */}
         <div className="mt-4 space-y-2 max-h-60 overflow-y-auto">
           {isLoading ? (
-            <div className="py-6 text-center text-xs text-muted-foreground">Loading publishers…</div>
+            <div className="py-6 text-center text-xs text-muted-foreground">
+              Loading publishers…
+            </div>
           ) : publishers.length === 0 ? (
-            <div className="py-6 text-center text-xs text-muted-foreground">No publishers found.</div>
+            <div className="py-6 text-center text-xs text-muted-foreground">
+              No publishers found.
+            </div>
           ) : (
             publishers.map((pub) => {
               const isCreator = pub.user_id === creatorId;
@@ -499,7 +508,8 @@ function RequestVerificationDialog({
             <ShieldCheck className="size-5 text-primary" /> Request Official Verification
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
-            Verify this channel as the official broadcast source for your institution. Verified channels get verified badges and priority discovery.
+            Verify this channel as the official broadcast source for your institution. Verified
+            channels get verified badges and priority discovery.
           </DialogDescription>
         </DialogHeader>
 
@@ -571,12 +581,8 @@ function SignalDetailPage() {
   const [verifyDialogOpen, setVerifyDialogOpen] = useState(false);
 
   const { data: signal, isLoading: signalLoading } = useQuery(signalBySlugQuery(slug));
-  const { data: isFollowing = false } = useQuery(
-    signalFollowingQuery(signal?.id ?? "", user?.id),
-  );
-  const { data: publisherData } = useQuery(
-    signalPublisherQuery(signal?.id ?? "", user?.id),
-  );
+  const { data: isFollowing = false } = useQuery(signalFollowingQuery(signal?.id ?? "", user?.id));
+  const { data: publisherData } = useQuery(signalPublisherQuery(signal?.id ?? "", user?.id));
   const isPublisher = publisherData?.isPublisher ?? false;
   const isSignalAdmin = publisherData?.role === "admin" || signal?.created_by === user?.id;
 
@@ -784,7 +790,8 @@ function SignalDetailPage() {
             <div className="flex items-center gap-2 text-xs font-semibold text-primary">
               <Sparkles className="size-4" />
               <span>
-                You have {publisherData?.role === "admin" ? "Admin" : "Publisher"} privileges on this Signal channel
+                You have {publisherData?.role === "admin" ? "Admin" : "Publisher"} privileges on
+                this Signal channel
               </span>
             </div>
             <div className="flex items-center gap-2">

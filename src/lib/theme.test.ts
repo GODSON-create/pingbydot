@@ -42,24 +42,24 @@ describe("Theme Management Logic", () => {
 
   it("verifies locked 4-colour dark palette tokens in styles.css", () => {
     const cssPath = path.resolve(__dirname, "../styles.css");
-    const css = fs.readFileSync(cssPath, "utf8");
+    const css = fs.readFileSync(cssPath, "utf8").toLowerCase();
 
     // Check locked four-colour Dark Theme palette
-    expect(css).toContain("--obsidian: #090B0A;");
-    expect(css).toContain("--graphite: #171B18;");
-    expect(css).toContain("--ping-green: #C7F36B;");
-    expect(css).toContain("--gold: #D8B66A;");
+    expect(css).toContain("--obsidian: #090b0a;");
+    expect(css).toContain("--graphite: #171b18;");
+    expect(css).toContain("--ping-green: #c7f36b;");
+    expect(css).toContain("--gold: #d8b66a;");
 
     // Supporting typography neutrals
-    expect(css).toContain("--foreground: #F4F2E9;");
-    expect(css).toContain("--secondary-foreground: #C0C4BA;");
-    expect(css).toContain("--muted-foreground: #9DA49A;");
+    expect(css).toContain("--foreground: #f4f2e9;");
+    expect(css).toContain("--secondary-foreground: #c0c4ba;");
+    expect(css).toContain("--muted-foreground: #9da49a;");
 
     // Semantic mappings
-    expect(css).toContain("--background: #090B0A;");
-    expect(css).toContain("--card: #171B18;");
-    expect(css).toContain("--primary: #C7F36B;");
-    expect(css).toContain("--primary-foreground: #090B0A;");
+    expect(css).toContain("--background: #090b0a;");
+    expect(css).toContain("--card: #171b18;");
+    expect(css).toContain("--primary: #c7f36b;");
+    expect(css).toContain("--primary-foreground: #090b0a;");
   });
 
   it("calculates and enforces WCAG AA and AAA contrast ratios mathematically", () => {

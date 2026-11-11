@@ -61,10 +61,12 @@ export function HubChat({ hubId, isMember, isPrivate }: HubChatProps) {
     queryFn: async (): Promise<HubMessage[]> => {
       const { data, error } = await supabase
         .from("hub_messages")
-        .select(`
+        .select(
+          `
           id, hub_id, sender_id, content, media_url, reply_to_id, is_system, reactions, deleted_at, created_at, updated_at,
           sender:profiles!hub_messages_sender_id_fkey(id, username, display_name, avatar_url)
-        `)
+        `,
+        )
         .eq("hub_id", hubId)
         .is("deleted_at", null)
         .order("created_at", { ascending: true })
@@ -98,12 +100,18 @@ export function HubChat({ hubId, isMember, isPrivate }: HubChatProps) {
 
           // If incoming message from another user, automatically mark as read if in foreground
           const msg = payload.new as Record<string, unknown> | null;
-          if (user && msg && typeof msg["sender_id"] === "string" && msg["sender_id"] !== user.id && document.visibilityState === "visible") {
+          if (
+            user &&
+            msg &&
+            typeof msg["sender_id"] === "string" &&
+            msg["sender_id"] !== user.id &&
+            document.visibilityState === "visible"
+          ) {
             if (typeof msg["id"] === "string") {
               markRead.mutate([msg["id"]]);
             }
           }
-        }
+        },
       )
       .subscribe();
 
@@ -115,9 +123,7 @@ export function HubChat({ hubId, isMember, isPrivate }: HubChatProps) {
   // Mark all unread messages on load
   useEffect(() => {
     if (user && messages.length > 0 && document.visibilityState === "visible") {
-      const unreadIds = messages
-        .filter((m) => m.sender_id !== user.id)
-        .map((m) => m.id);
+      const unreadIds = messages.filter((m) => m.sender_id !== user.id).map((m) => m.id);
       if (unreadIds.length > 0) {
         markRead.mutate(unreadIds);
       }
@@ -179,7 +185,8 @@ export function HubChat({ hubId, isMember, isPrivate }: HubChatProps) {
         </div>
         <h3 className="mt-4 font-display text-xl font-bold">Private Hub Discussion</h3>
         <p className="mt-2 max-w-md text-sm text-muted-foreground">
-          This hub conversation is private. Join or request access to participate in real-time builder discussions.
+          This hub conversation is private. Join or request access to participate in real-time
+          builder discussions.
         </p>
       </div>
     );
@@ -198,7 +205,9 @@ export function HubChat({ hubId, isMember, isPrivate }: HubChatProps) {
         </div>
 
         <div className="flex items-center gap-1.5 text-muted-foreground">
-          <span>{activeCount} {activeCount === 1 ? "builder" : "builders"} active</span>
+          <span>
+            {activeCount} {activeCount === 1 ? "builder" : "builders"} active
+          </span>
         </div>
       </div>
 
@@ -212,7 +221,8 @@ export function HubChat({ hubId, isMember, isPrivate }: HubChatProps) {
           <div className="flex h-full flex-col items-center justify-center text-center p-6 text-muted-foreground">
             <p className="font-medium text-foreground">No Pings in this Hub yet</p>
             <p className="mt-1 text-xs max-w-xs">
-              Be the first to share progress, ask a question, or introduce yourself to the collective!
+              Be the first to share progress, ask a question, or introduce yourself to the
+              collective!
             </p>
           </div>
         ) : (
@@ -224,10 +234,7 @@ export function HubChat({ hubId, isMember, isPrivate }: HubChatProps) {
             return (
               <div
                 key={msg.id}
-                className={cn(
-                  "flex gap-3 group",
-                  isMe ? "flex-row-reverse" : "flex-row"
-                )}
+                className={cn("flex gap-3 group", isMe ? "flex-row-reverse" : "flex-row")}
               >
                 {!isMe && (
                   <Avatar className="size-8 shrink-0 mt-0.5">
@@ -241,7 +248,7 @@ export function HubChat({ hubId, isMember, isPrivate }: HubChatProps) {
                 <div
                   className={cn(
                     "flex flex-col max-w-[82%] sm:max-w-[70%]",
-                    isMe ? "items-end" : "items-start"
+                    isMe ? "items-end" : "items-start",
                   )}
                 >
                   {/* Sender name for non-author */}
@@ -265,7 +272,7 @@ export function HubChat({ hubId, isMember, isPrivate }: HubChatProps) {
                       "rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap break-words leading-relaxed",
                       isMe
                         ? "bg-primary text-primary-foreground rounded-tr-sm"
-                        : "bg-secondary/70 text-foreground rounded-tl-sm border border-border/50"
+                        : "bg-secondary/70 text-foreground rounded-tl-sm border border-border/50",
                     )}
                   >
                     {msg.content}
@@ -278,11 +285,7 @@ export function HubChat({ hubId, isMember, isPrivate }: HubChatProps) {
                     </time>
 
                     {/* Three-dot Read Receipt indicator */}
-                    <ReadReceiptDot
-                      messageId={msg.id}
-                      isAuthor={isMe}
-                      isActiveReader={isActive}
-                    />
+                    <ReadReceiptDot messageId={msg.id} isAuthor={isMe} isActiveReader={isActive} />
 
                     {/* Reply action button */}
                     <button

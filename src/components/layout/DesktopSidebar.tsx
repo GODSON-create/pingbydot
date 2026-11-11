@@ -64,9 +64,7 @@ export function DesktopSidebar() {
     { to: "/hubs", label: "Hubs", icon: Building2 },
     { to: "/signals", label: "Signals", icon: Radio },
     ...(user ? [{ to: "/settings", label: "Settings", icon: Settings }] : []),
-    ...(admin.data?.isAdmin
-      ? [{ to: "/admin", label: "Administration", icon: ShieldCheck }]
-      : []),
+    ...(admin.data?.isAdmin ? [{ to: "/admin", label: "Administration", icon: ShieldCheck }] : []),
   ];
 
   const ThemeIcon = theme === "system" ? Laptop : resolvedTheme === "dark" ? Moon : Sun;
@@ -82,7 +80,10 @@ export function DesktopSidebar() {
           <Link to="/" className="inline-flex items-center gap-2 group" aria-label="Ping by DOT">
             <BrandLogo />
             <span className="hidden xl:inline-block font-display font-extrabold text-lg text-foreground tracking-tight group-hover:text-primary transition-colors">
-              Ping <span className="text-[10px] text-muted-foreground font-sans font-normal uppercase">by DOT</span>
+              Ping{" "}
+              <span className="text-[10px] text-muted-foreground font-sans font-normal uppercase">
+                by DOT
+              </span>
             </span>
           </Link>
         </div>
@@ -179,7 +180,11 @@ export function DesktopSidebar() {
             <DropdownMenuContent align="end" side="top" className="w-56 rounded-2xl p-1.5 mb-2">
               {profile && (
                 <DropdownMenuItem asChild className="rounded-xl">
-                  <Link to="/@{$username}" params={{ username: profile.username }} className="flex items-center gap-2">
+                  <Link
+                    to="/@{$username}"
+                    params={{ username: profile.username }}
+                    className="flex items-center gap-2"
+                  >
                     <User className="size-4" /> View profile
                   </Link>
                 </DropdownMenuItem>
@@ -197,7 +202,10 @@ export function DesktopSidebar() {
                 </DropdownMenuItem>
               )}
               <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={signOut} className="rounded-xl text-destructive flex items-center gap-2">
+              <DropdownMenuItem
+                onSelect={signOut}
+                className="rounded-xl text-destructive flex items-center gap-2"
+              >
                 <LogOut className="size-4" /> Log out
               </DropdownMenuItem>
             </DropdownMenuContent>

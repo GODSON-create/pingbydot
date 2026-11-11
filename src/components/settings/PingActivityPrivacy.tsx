@@ -121,8 +121,8 @@ export function PingActivityPrivacy({ userId }: PingActivityPrivacyProps) {
       <div className="mt-4 rounded-xl bg-muted/40 p-3.5 text-xs text-muted-foreground flex items-center gap-2">
         <Shield className="h-4 w-4 shrink-0 text-primary" />
         <span>
-          <strong>Reciprocal Privacy:</strong> Ping strictly enforces mutual visibility. If you
-          turn off read receipts or active status, you will not receive those indicators from other
+          <strong>Reciprocal Privacy:</strong> Ping strictly enforces mutual visibility. If you turn
+          off read receipts or active status, you will not receive those indicators from other
           builders.
         </span>
       </div>

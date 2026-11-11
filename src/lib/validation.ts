@@ -15,17 +15,27 @@ export const PING_MAX = 2000;
 export const pingSchema = z
   .object({
     category: z.enum(["progress", "idea", "launch", "milestone", "question", "opportunity"]),
-    content: z.string().trim().min(1, "Write something to share").max(PING_MAX, `Keep it under ${PING_MAX} characters`),
+    content: z
+      .string()
+      .trim()
+      .min(1, "Write something to share")
+      .max(PING_MAX, `Keep it under ${PING_MAX} characters`),
     cta_url: z
       .string()
       .trim()
       .max(500)
-      .refine((v) => v === "" || /^https?:\/\/[^\s.]+\.[^\s]+$/i.test(v), "Use a full link starting with https://")
+      .refine(
+        (v) => v === "" || /^https?:\/\/[^\s.]+\.[^\s]+$/i.test(v),
+        "Use a full link starting with https://",
+      )
       .optional()
       .default(""),
     cta_label: z.string().trim().max(40, "Keep the button label short").optional().default(""),
   })
-  .refine((v) => !(v.cta_label && !v.cta_url), { message: "Add a link for your button", path: ["cta_url"] });
+  .refine((v) => !(v.cta_label && !v.cta_url), {
+    message: "Add a link for your button",
+    path: ["cta_url"],
+  });
 
 export const usernameSchema = z
   .string()

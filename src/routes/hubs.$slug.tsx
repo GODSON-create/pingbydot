@@ -153,7 +153,10 @@ function MemberRow({
     }
   };
 
-  const manageRole = async (action: "approve" | "decline" | "remove" | "role", newRole?: string) => {
+  const manageRole = async (
+    action: "approve" | "decline" | "remove" | "role",
+    newRole?: string,
+  ) => {
     try {
       const { error } = await supabase.rpc("manage_hub_member", {
         _hub: hubId,
@@ -166,8 +169,8 @@ function MemberRow({
         action === "remove"
           ? "Removed from Hub."
           : action === "role"
-          ? `Updated role to ${newRole}.`
-          : "Action completed.",
+            ? `Updated role to ${newRole}.`
+            : "Action completed.",
       );
       onRefetch();
     } catch (e: any) {
@@ -325,7 +328,9 @@ function PendingRequestsSection({
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="font-semibold text-xs truncate">{name}</span>
-                    <span className="text-[11px] text-muted-foreground truncate">@{profile?.username}</span>
+                    <span className="text-[11px] text-muted-foreground truncate">
+                      @{profile?.username}
+                    </span>
                   </div>
                   {profile?.bio && (
                     <p className="text-[11px] text-muted-foreground line-clamp-1">{profile.bio}</p>
@@ -515,7 +520,9 @@ function EditHubDialog({
 
           {/* Resources Manager */}
           <div>
-            <Label className="text-xs font-semibold">Official Resources ({resources.length}/10)</Label>
+            <Label className="text-xs font-semibold">
+              Official Resources ({resources.length}/10)
+            </Label>
             <div className="mt-2 space-y-2">
               {resources.map((res, i) => (
                 <div
@@ -621,8 +628,8 @@ function HubFeedItemCard({
         action === "pin"
           ? "Ping pinned to Hub!"
           : action === "unpin"
-          ? "Ping unpinned."
-          : "Ping removed from Hub.",
+            ? "Ping unpinned."
+            : "Ping removed from Hub.",
       );
       onModerated();
     } catch (e: any) {
@@ -655,8 +662,8 @@ function HubFeedItemCard({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="rounded-2xl w-44">
-              {isStaff && (
-                item.is_pinned ? (
+              {isStaff &&
+                (item.is_pinned ? (
                   <DropdownMenuItem onSelect={() => handleModerate("unpin")}>
                     <PinOff className="size-3.5 mr-2" /> Unpin from Hub
                   </DropdownMenuItem>
@@ -664,8 +671,7 @@ function HubFeedItemCard({
                   <DropdownMenuItem onSelect={() => handleModerate("pin")}>
                     <Pin className="size-3.5 mr-2" /> Pin to Hub
                   </DropdownMenuItem>
-                )
-              )}
+                ))}
               <DropdownMenuItem
                 onSelect={() => handleModerate("remove")}
                 className="text-destructive focus:text-destructive"
@@ -696,9 +702,11 @@ function HubDetail() {
   const activeTab = tabParam || "feed";
 
   // Hub data query
-  const { data: hubData, isLoading: hubLoading, error: hubErrorData } = useQuery(
-    hubQuery(slug, activeIntent),
-  );
+  const {
+    data: hubData,
+    isLoading: hubLoading,
+    error: hubErrorData,
+  } = useQuery(hubQuery(slug, activeIntent));
   const hub = hubData?.hub;
 
   // Membership status
@@ -792,7 +800,7 @@ function HubDetail() {
   }
 
   const categoryInfo = HUB_CATEGORIES.find((c) => c.value === hub.category);
-  const feedItems = isPrivate ? privateFeed ?? [] : hubData?.feed ?? [];
+  const feedItems = isPrivate ? (privateFeed ?? []) : (hubData?.feed ?? []);
   const pinnedPings = feedItems.filter((i) => i.is_pinned);
   const regularPings = feedItems.filter((i) => !i.is_pinned);
   const canViewFeed = canSeeHubContent(hub.access, membership?.role);
@@ -818,14 +826,15 @@ function HubDetail() {
                       {isMember
                         ? "You are already an active member of this hub."
                         : isPending
-                        ? "Your request to join is pending review."
-                        : "Accept this invitation to instantly join this hub and access discussions."}
+                          ? "Your request to join is pending review."
+                          : "Accept this invitation to instantly join this hub and access discussions."}
                     </p>
                   </div>
                 </div>
                 <div>
                   {user ? (
-                    !isMember && !isPending && (
+                    !isMember &&
+                    !isPending && (
                       <Button
                         variant="hero"
                         size="sm"
@@ -843,7 +852,10 @@ function HubDetail() {
                       size="sm"
                       className="rounded-full px-5 text-xs font-semibold shadow-lift shrink-0"
                     >
-                      <Link to="/login" search={{ next: `/hubs/${hub.slug}?invite=${inviteTokenParam}` }}>
+                      <Link
+                        to="/login"
+                        search={{ next: `/hubs/${hub.slug}?invite=${inviteTokenParam}` }}
+                      >
                         Sign in to Accept
                       </Link>
                     </Button>
@@ -941,7 +953,12 @@ function HubDetail() {
                       <LogOut className="size-4" /> Leave
                     </Button>
                   ) : isPending ? (
-                    <Button variant="secondary" size="sm" disabled className="rounded-full h-10 px-4">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled
+                      className="rounded-full h-10 px-4"
+                    >
                       Request Pending
                     </Button>
                   ) : (
@@ -956,7 +973,12 @@ function HubDetail() {
                     </Button>
                   )
                 ) : (
-                  <Button asChild variant="hero" size="sm" className="rounded-full h-10 px-5 shadow-lift">
+                  <Button
+                    asChild
+                    variant="hero"
+                    size="sm"
+                    className="rounded-full h-10 px-5 shadow-lift"
+                  >
                     <Link to="/login" search={{ next: `/hubs/${hub.slug}` }}>
                       Sign in to Join
                     </Link>
@@ -1219,13 +1241,7 @@ function HubDetail() {
       />
 
       {/* Edit Hub Settings Dialog */}
-      {canEdit && (
-        <EditHubDialog
-          hub={hub}
-          open={editOpen}
-          onOpenChange={setEditOpen}
-        />
-      )}
+      {canEdit && <EditHubDialog hub={hub} open={editOpen} onOpenChange={setEditOpen} />}
     </div>
   );
 }

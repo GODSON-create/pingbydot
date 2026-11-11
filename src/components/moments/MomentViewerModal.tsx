@@ -214,10 +214,7 @@ export function MomentViewerModal({
               const isPassed = idx < momentIdx;
               const isCurrent = idx === momentIdx;
               return (
-                <div
-                  key={m.id}
-                  className="h-1 flex-1 overflow-hidden rounded-full bg-white/25"
-                >
+                <div key={m.id} className="h-1 flex-1 overflow-hidden rounded-full bg-white/25">
                   <div
                     className="h-full bg-white transition-all duration-75"
                     style={{
@@ -244,7 +241,9 @@ export function MomentViewerModal({
                   className="font-bold text-white hover:underline flex items-center gap-1"
                 >
                   {currentSequence.author.display_name || currentSequence.author.username}
-                  <span className="font-normal text-white/70">@{currentSequence.author.username}</span>
+                  <span className="font-normal text-white/70">
+                    @{currentSequence.author.username}
+                  </span>
                 </Link>
 
                 <div className="flex items-center gap-1.5 text-[10px] text-white/60">
@@ -287,7 +286,10 @@ export function MomentViewerModal({
                 <DropdownMenuTrigger className="rounded-full bg-black/40 p-2 text-white/90 hover:bg-black/60 focus:outline-none">
                   <MoreVertical className="size-4" />
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48 rounded-2xl bg-neutral-900 border-white/10 text-white">
+                <DropdownMenuContent
+                  align="end"
+                  className="w-48 rounded-2xl bg-neutral-900 border-white/10 text-white"
+                >
                   <DropdownMenuItem onClick={handleShare}>
                     <Share2 className="size-4 mr-2" /> Share Moment
                   </DropdownMenuItem>

@@ -109,7 +109,8 @@ export function topBuilders<T extends { author: { username: string } | null }>(i
     if (!it.author) continue;
     const c = counts.get(it.author.username);
     if (c) c.count++;
-    else counts.set(it.author.username, { author: it.author as NonNullable<T["author"]>, count: 1 });
+    else
+      counts.set(it.author.username, { author: it.author as NonNullable<T["author"]>, count: 1 });
   }
   return [...counts.values()].sort((a, b) => b.count - a.count).slice(0, n);
 }

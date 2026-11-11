@@ -38,8 +38,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() => {
     if (typeof window === "undefined") return "light";
-    const initialTheme =
-      (localStorage.getItem(THEME_STORAGE_KEY) as Theme) || "system";
+    const initialTheme = (localStorage.getItem(THEME_STORAGE_KEY) as Theme) || "system";
     return initialTheme === "system" ? getSystemTheme() : initialTheme;
   });
 

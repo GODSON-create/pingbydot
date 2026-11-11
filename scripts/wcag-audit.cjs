@@ -6,7 +6,7 @@ function oklchToRgb(l, c, h) {
 
   const l_ = l + 0.3963377774 * a + 0.2158037573 * b;
   const m_ = l - 0.1055613458 * a - 0.0638541728 * b;
-  const s_ = l - 0.0894841775 * a - 1.2914855480 * b;
+  const s_ = l - 0.0894841775 * a - 1.291485548 * b;
 
   const L = l_ ** 3;
   const M = m_ ** 3;
@@ -14,7 +14,7 @@ function oklchToRgb(l, c, h) {
 
   let r = +4.0767416621 * L - 3.3077115913 * M + 0.2309699292 * S;
   let g = -1.2684380046 * L + 2.6097574011 * M - 0.3413183965 * S;
-  let bl = -0.0041960863 * L - 0.7034186147 * M + 1.7076147010 * S;
+  let bl = -0.0041960863 * L - 0.7034186147 * M + 1.707614701 * S;
 
   const toGamma = (v) => {
     v = Math.max(0, Math.min(1, v));
@@ -33,7 +33,10 @@ function oklchToRgb(l, c, h) {
   // Relative luminance Y according to WCAG 2.1
   const Y = 0.2126 * toLinear(R) + 0.7152 * toLinear(G) + 0.0722 * toLinear(B);
 
-  const toHex = (n) => Math.round(n * 255).toString(16).padStart(2, "0");
+  const toHex = (n) =>
+    Math.round(n * 255)
+      .toString(16)
+      .padStart(2, "0");
   const hex = `#${toHex(R)}${toHex(G)}${toHex(B)}`;
 
   return { Y, hex, R, G, B };
@@ -70,15 +73,15 @@ const darkPalette = {
   card: [0.175, 0.014, 150],
   secondary: [0.23, 0.016, 150],
   muted: [0.21, 0.015, 150],
-  popover: [0.20, 0.016, 150],
+  popover: [0.2, 0.016, 150],
   input_well: [0.145, 0.012, 150],
-  
+
   border: [0.36, 0.02, 150],
   input_border: [0.49, 0.025, 150],
   control_border: [0.49, 0.025, 150],
 
   foreground: [0.965, 0.006, 100],
-  secondary_fg: [0.90, 0.01, 150],
+  secondary_fg: [0.9, 0.01, 150],
   muted_fg: [0.76, 0.015, 150],
   disabled_fg: [0.52, 0.015, 150],
 
@@ -94,7 +97,7 @@ const darkPalette = {
   blush_bg: [0.28, 0.05, 18],
   blush_fg: [0.92, 0.05, 18],
 
-  sun_bg: [0.30, 0.07, 75],
+  sun_bg: [0.3, 0.07, 75],
   sun_fg: [0.94, 0.08, 75],
 
   destructive: [0.55, 0.22, 27],

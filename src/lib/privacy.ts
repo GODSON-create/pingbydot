@@ -54,15 +54,15 @@ export function useUserPrivacy(userId: string | undefined) {
     mutationFn: async (updated: Partial<UserPrivacyPreferences>) => {
       if (!userId) throw new Error("Not logged in");
 
-      const { error } = await supabase
-        .from("user_privacy_preferences")
-        .upsert({
-          user_id: userId,
-          read_receipts_enabled: updated.read_receipts_enabled ?? query.data?.read_receipts_enabled ?? true,
-          active_presence_enabled: updated.active_presence_enabled ?? query.data?.active_presence_enabled ?? true,
-          last_active_enabled: updated.last_active_enabled ?? query.data?.last_active_enabled ?? true,
-          updated_at: new Date().toISOString(),
-        });
+      const { error } = await supabase.from("user_privacy_preferences").upsert({
+        user_id: userId,
+        read_receipts_enabled:
+          updated.read_receipts_enabled ?? query.data?.read_receipts_enabled ?? true,
+        active_presence_enabled:
+          updated.active_presence_enabled ?? query.data?.active_presence_enabled ?? true,
+        last_active_enabled: updated.last_active_enabled ?? query.data?.last_active_enabled ?? true,
+        updated_at: new Date().toISOString(),
+      });
 
       if (error) throw error;
     },

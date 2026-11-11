@@ -152,7 +152,8 @@ export function BottomNav() {
             <button
               type="button"
               onClick={() => {
-                const nextTheme = theme === "system" ? "light" : theme === "light" ? "dark" : "system";
+                const nextTheme =
+                  theme === "system" ? "light" : theme === "light" ? "dark" : "system";
                 setTheme(nextTheme);
                 toast.success(
                   nextTheme === "system"
@@ -169,7 +170,10 @@ export function BottomNav() {
               ) : (
                 <Sun className="size-5" />
               )}
-              Appearance: {theme === "system" ? "System Default" : `${theme.charAt(0).toUpperCase() + theme.slice(1)} Mode`}
+              Appearance:{" "}
+              {theme === "system"
+                ? "System Default"
+                : `${theme.charAt(0).toUpperCase() + theme.slice(1)} Mode`}
             </button>
             <Link to="/" hash="how" className={row}>
               <Sparkles className="size-5" /> How it works

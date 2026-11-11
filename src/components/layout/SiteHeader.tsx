@@ -36,14 +36,21 @@ export function useSignOut() {
   };
 }
 
-const navLink = "rounded-full px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground";
+const navLink =
+  "rounded-full px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground";
 
 export function SiteHeader() {
   const { user, profile, ready } = useAuth();
   const { theme, resolvedTheme, setTheme } = useTheme();
   const signOut = useSignOut();
   const verifyAdmin = useServerFn(checkAdminAccess);
-  const admin = useQuery({ queryKey: ["admin-access", user?.id], queryFn: () => verifyAdmin(), enabled: ready && !!user, retry: false, staleTime: 0 });
+  const admin = useQuery({
+    queryKey: ["admin-access", user?.id],
+    queryFn: () => verifyAdmin(),
+    enabled: ready && !!user,
+    retry: false,
+    staleTime: 0,
+  });
 
   const toggleTheme = () => {
     const nextTheme = theme === "system" ? "light" : theme === "light" ? "dark" : "system";
@@ -56,9 +63,27 @@ export function SiteHeader() {
       <div className="glass mx-auto flex h-16 max-w-6xl items-center justify-between rounded-full px-4 sm:px-6">
         <Wordmark />
         <nav className="hidden items-center gap-1 md:flex" aria-label="Main">
-          <Link to="/explore" className={navLink} activeProps={{ className: "text-foreground bg-secondary" }}>Explore</Link>
-          <Link to="/hubs" className={navLink} activeProps={{ className: "text-foreground bg-secondary" }}>Hubs</Link>
-          <Link to="/signals" className={navLink} activeProps={{ className: "text-foreground bg-secondary" }}>Signals</Link>
+          <Link
+            to="/explore"
+            className={navLink}
+            activeProps={{ className: "text-foreground bg-secondary" }}
+          >
+            Explore
+          </Link>
+          <Link
+            to="/hubs"
+            className={navLink}
+            activeProps={{ className: "text-foreground bg-secondary" }}
+          >
+            Hubs
+          </Link>
+          <Link
+            to="/signals"
+            className={navLink}
+            activeProps={{ className: "text-foreground bg-secondary" }}
+          >
+            Signals
+          </Link>
         </nav>
         <div className="flex items-center gap-2">
           {/* Quick Theme Toggle */}
@@ -73,44 +98,71 @@ export function SiteHeader() {
           </button>
 
           <div className="hidden items-center gap-2 md:flex">
-          {ready && user ? (
-            <>
-              <Button asChild size="sm" variant="hero">
-                <Link to="/create"><Plus /> New Ping</Link>
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="Account menu">
-                  <FounderAvatar name={profile?.display_name || profile?.username || "You"} src={profile?.avatar_url} size="sm" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-52 rounded-2xl">
-                  {profile && (
+            {ready && user ? (
+              <>
+                <Button asChild size="sm" variant="hero">
+                  <Link to="/create">
+                    <Plus /> New Ping
+                  </Link>
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label="Account menu"
+                  >
+                    <FounderAvatar
+                      name={profile?.display_name || profile?.username || "You"}
+                      src={profile?.avatar_url}
+                      size="sm"
+                    />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-52 rounded-2xl">
+                    {profile && (
+                      <DropdownMenuItem asChild>
+                        <Link to="/@{$username}" params={{ username: profile.username }}>
+                          <User /> My profile
+                        </Link>
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem asChild>
-                      <Link to="/@{$username}" params={{ username: profile.username }}><User /> My profile</Link>
+                      <Link to="/hubs">
+                        <Building2 /> Hubs
+                      </Link>
                     </DropdownMenuItem>
-                  )}
-                  <DropdownMenuItem asChild>
-                    <Link to="/hubs"><Building2 /> Hubs</Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/signals"><Radio /> Signals</Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/settings"><Settings /> Settings</Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  {admin.data?.isAdmin && <DropdownMenuItem asChild><Link to="/admin"><Settings /> Administration</Link></DropdownMenuItem>}
-                  <DropdownMenuItem onSelect={signOut}><LogOut /> Log out</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </>
-          ) : (
-            <>
-              <Link to="/login" className={navLink}>Log in</Link>
-              <Button asChild size="sm" variant="hero">
-                <Link to="/signup">Create your first Ping</Link>
-              </Button>
-            </>
-          )}
+                    <DropdownMenuItem asChild>
+                      <Link to="/signals">
+                        <Radio /> Signals
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to="/settings">
+                        <Settings /> Settings
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    {admin.data?.isAdmin && (
+                      <DropdownMenuItem asChild>
+                        <Link to="/admin">
+                          <Settings /> Administration
+                        </Link>
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem onSelect={signOut}>
+                      <LogOut /> Log out
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            ) : (
+              <>
+                <Link to="/login" className={navLink}>
+                  Log in
+                </Link>
+                <Button asChild size="sm" variant="hero">
+                  <Link to="/signup">Create your first Ping</Link>
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </div>

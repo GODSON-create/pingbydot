@@ -122,9 +122,7 @@ function HomeHubCard({
           <span
             className={cn(
               "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider",
-              isPrivate
-                ? "bg-blush text-blush-foreground"
-                : "bg-accent text-accent-foreground",
+              isPrivate ? "bg-blush text-blush-foreground" : "bg-accent text-accent-foreground",
             )}
           >
             {isPrivate ? (
@@ -351,9 +349,7 @@ function HomePage() {
   const { data: myPendingHubs = new Set<string>() } = useQuery(myPendingHubsQuery(user?.id));
 
   const { data: signals = [], isLoading: signalsLoading } = useQuery(signalsQuery());
-  const { data: followedSignals = new Set<string>() } = useQuery(
-    myFollowedSignalsQuery(user?.id),
-  );
+  const { data: followedSignals = new Set<string>() } = useQuery(myFollowedSignalsQuery(user?.id));
   const { data: recentBroadcasts = {} } = useQuery(recentSignalBroadcastsQuery());
 
   const displayedPings = activeTab === "following" ? followingPings : forYouPings;
@@ -382,13 +378,23 @@ function HomePage() {
 
           <div className="flex items-center gap-2">
             {user ? (
-              <Button asChild variant="hero" size="sm" className="rounded-full shadow-lift h-9 px-4">
+              <Button
+                asChild
+                variant="hero"
+                size="sm"
+                className="rounded-full shadow-lift h-9 px-4"
+              >
                 <Link to="/create">
                   <Plus className="size-4" /> Post a Ping
                 </Link>
               </Button>
             ) : (
-              <Button asChild variant="hero" size="sm" className="rounded-full shadow-lift h-9 px-5">
+              <Button
+                asChild
+                variant="hero"
+                size="sm"
+                className="rounded-full shadow-lift h-9 px-5"
+              >
                 <Link to="/signup">Join Ping</Link>
               </Button>
             )}
@@ -517,7 +523,9 @@ function HomePage() {
             ) : activeTab === "following" && !user ? (
               <div className="surface-card rounded-3xl p-10 text-center border border-border/60">
                 <Users className="mx-auto size-10 text-primary" />
-                <h3 className="mt-3 font-display font-bold text-lg">See updates from people you follow</h3>
+                <h3 className="mt-3 font-display font-bold text-lg">
+                  See updates from people you follow
+                </h3>
                 <p className="mt-1 text-xs text-muted-foreground max-w-sm mx-auto">
                   Log in to create a tailored timeline of founders and collaborators you care about.
                 </p>
@@ -536,8 +544,8 @@ function HomePage() {
                   {activeTab === "following"
                     ? "Your following feed is quiet"
                     : categoryFilter
-                    ? `No Pings tagged #${categoryFilter} yet`
-                    : "No Pings shared yet"}
+                      ? `No Pings tagged #${categoryFilter} yet`
+                      : "No Pings shared yet"}
                 </h3>
                 <p className="mt-1 text-xs text-muted-foreground max-w-sm mx-auto">
                   {activeTab === "following"
@@ -563,14 +571,24 @@ function HomePage() {
             <div className="flex items-center justify-center gap-3 pt-4">
               {page > 0 && (
                 <Button asChild variant="outline" size="sm" className="rounded-xl">
-                  <Link to="/" search={{ tab: activeTab, c: categoryFilter ?? undefined, page: Math.max(0, page - 1) }}>
+                  <Link
+                    to="/"
+                    search={{
+                      tab: activeTab,
+                      c: categoryFilter ?? undefined,
+                      page: Math.max(0, page - 1),
+                    }}
+                  >
                     Newer Pings
                   </Link>
                 </Button>
               )}
               {displayedPings.length >= 25 && (
                 <Button asChild variant="outline" size="sm" className="rounded-xl">
-                  <Link to="/" search={{ tab: activeTab, c: categoryFilter ?? undefined, page: page + 1 }}>
+                  <Link
+                    to="/"
+                    search={{ tab: activeTab, c: categoryFilter ?? undefined, page: page + 1 }}
+                  >
                     Older Pings
                   </Link>
                 </Button>
@@ -599,7 +617,12 @@ function HomePage() {
                 <span>Community Hubs</span>
               </h2>
               <div className="flex items-center gap-2">
-                <Button asChild variant="ghost" size="sm" className="h-7 text-xs px-2 text-primary font-semibold">
+                <Button
+                  asChild
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs px-2 text-primary font-semibold"
+                >
                   <Link to="/hubs">Browse All</Link>
                 </Button>
                 <Button asChild variant="outline" size="sm" className="h-7 text-xs px-2 rounded-lg">
@@ -625,16 +648,18 @@ function HomePage() {
                   </Button>
                 </div>
               ) : (
-                hubs.slice(0, 3).map((hub) => (
-                  <HomeHubCard
-                    key={hub.id}
-                    hub={hub}
-                    isMember={myHubIds.has(hub.id)}
-                    isPending={myPendingHubs.has(hub.id)}
-                    isOwner={hub.owner_id === user?.id}
-                    currentUserId={user?.id}
-                  />
-                ))
+                hubs
+                  .slice(0, 3)
+                  .map((hub) => (
+                    <HomeHubCard
+                      key={hub.id}
+                      hub={hub}
+                      isMember={myHubIds.has(hub.id)}
+                      isPending={myPendingHubs.has(hub.id)}
+                      isOwner={hub.owner_id === user?.id}
+                      currentUserId={user?.id}
+                    />
+                  ))
               )}
             </div>
           </section>
@@ -650,7 +675,12 @@ function HomePage() {
                 <span>Official Signals</span>
               </h2>
               <div className="flex items-center gap-2">
-                <Button asChild variant="ghost" size="sm" className="h-7 text-xs px-2 text-primary font-semibold">
+                <Button
+                  asChild
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs px-2 text-primary font-semibold"
+                >
                   <Link to="/signals">Browse All</Link>
                 </Button>
                 <Button asChild variant="outline" size="sm" className="h-7 text-xs px-2 rounded-lg">
@@ -676,15 +706,17 @@ function HomePage() {
                   </Button>
                 </div>
               ) : (
-                signals.slice(0, 3).map((signal) => (
-                  <HomeSignalCard
-                    key={signal.id}
-                    signal={signal}
-                    isFollowing={followedSignals.has(signal.id)}
-                    latestPost={recentBroadcasts[signal.id]}
-                    currentUserId={user?.id}
-                  />
-                ))
+                signals
+                  .slice(0, 3)
+                  .map((signal) => (
+                    <HomeSignalCard
+                      key={signal.id}
+                      signal={signal}
+                      isFollowing={followedSignals.has(signal.id)}
+                      latestPost={recentBroadcasts[signal.id]}
+                      currentUserId={user?.id}
+                    />
+                  ))
               )}
             </div>
           </section>

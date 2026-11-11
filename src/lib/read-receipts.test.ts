@@ -29,7 +29,8 @@ describe("Ping Read Receipts & Reciprocal Privacy Logic", () => {
         return {
           canViewReceipts: false,
           readers: [],
-          notice: "You have disabled read receipts. Turn them on in Settings to see who has read your Pings.",
+          notice:
+            "You have disabled read receipts. Turn them on in Settings to see who has read your Pings.",
         };
       }
 

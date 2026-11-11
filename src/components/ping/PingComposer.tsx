@@ -162,7 +162,9 @@ export function PingComposer({
       )}
 
       <div className="mt-6">
-        <Label htmlFor="content" className="text-sm font-semibold">Your story</Label>
+        <Label htmlFor="content" className="text-sm font-semibold">
+          Your story
+        </Label>
         <Textarea
           id="content"
           value={d.content}
@@ -175,7 +177,11 @@ export function PingComposer({
         />
         <div id="content-help" className="mt-1.5 flex justify-between text-xs">
           <span className="text-destructive">{errors.content}</span>
-          <span className={cn("tabular-nums", left < 0 ? "text-destructive" : "text-muted-foreground")}>{left}</span>
+          <span
+            className={cn("tabular-nums", left < 0 ? "text-destructive" : "text-muted-foreground")}
+          >
+            {left}
+          </span>
         </div>
       </div>
 
@@ -205,7 +211,9 @@ export function PingComposer({
               className="mt-1.5 rounded-xl bg-card"
               maxLength={40}
             />
-            {errors.cta_label && <p className="mt-1 text-xs text-destructive">{errors.cta_label}</p>}
+            {errors.cta_label && (
+              <p className="mt-1 text-xs text-destructive">{errors.cta_label}</p>
+            )}
           </div>
           <button
             type="button"

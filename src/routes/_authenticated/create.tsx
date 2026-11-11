@@ -73,8 +73,12 @@ function Create() {
   return (
     <div className="mx-auto max-w-2xl px-5 py-12">
       <span className="sticker -rotate-2 bg-blush text-blush-foreground">new Ping</span>
-      <h1 className="mt-4 font-display text-4xl font-extrabold sm:text-5xl">What are you building?</h1>
-      <p className="mt-2 text-muted-foreground">Share a step, however small. Every Ping gets its own public link.</p>
+      <h1 className="mt-4 font-display text-4xl font-extrabold sm:text-5xl">
+        What are you building?
+      </h1>
+      <p className="mt-2 text-muted-foreground">
+        Share a step, however small. Every Ping gets its own public link.
+      </p>
       <div className="mt-8">
         <PingComposer
           initial={initialHubId ? { hub_id: initialHubId } : undefined}

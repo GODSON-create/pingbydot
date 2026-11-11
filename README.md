@@ -14,6 +14,7 @@ IMPORTANT MOTION AND FINISH: The site must feel crafted and alive, not “backco
 APP STRUCTURE
 Build a single application containing both public marketing pages and the real product.
 Routes/pages:
+
 - / : high-quality public landing page
 - /explore : public discovery/feed of sample or real public Pings
 - /signup and /login : account flows
@@ -21,10 +22,11 @@ Routes/pages:
 - /p/:id or an equivalent stable public Ping route
 - /@:username or an equivalent public founder profile route
 - /settings : profile/account settings
-Ensure routing and mobile navigation work. Include a clean not-found state.
+  Ensure routing and mobile navigation work. Include a clean not-found state.
 
 LANDING PAGE EXPERIENCE
 Create a visually rich but clear narrative:
+
 1. Responsive header with Ping wordmark, Explore, About/how it works, Log in, and a prominent “Create your first Ping” CTA.
 2. Hero with headline around “You’re building something. Let the world see it.” and supporting copy explaining that people share progress, ideas, milestones, and opportunities, connect with people who care, and give ideas somewhere to go. Primary CTA: “Create your first Ping”; secondary CTA: “Explore Pings”.
 3. A layered, animated visual composition of realistic example Ping cards, founder identities, reactions, and share cues. It should clearly demonstrate the product, not just abstract blobs. Cards should feel lively, subtly float, and have varied but consistent composition.
@@ -32,9 +34,10 @@ Create a visually rich but clear narrative:
 5. Interactive product demo embedded on the page: visitors can switch among a few example Pings, inspect a founder profile preview, and see the share-link treatment. The demo is explicitly a preview; it must not pretend to publish real data. Make interactions actually work.
 6. Feature/value sections covering public shareable links, founder profiles, reactions, unlimited Pings, and discovery.
 7. A closing invitation and footer. Include an ARISE opportunity callout linking exactly to https://JoinArise.cv, with careful neutral wording and no implication that likes or joining Ping guarantees funding.
-Avoid generic template filler, repeated paragraphs, fake statistics, fake testimonials, or invented traction numbers. Use grounded sample content and label it as demo/sample content where needed.
+   Avoid generic template filler, repeated paragraphs, fake statistics, fake testimonials, or invented traction numbers. Use grounded sample content and label it as demo/sample content where needed.
 
 CORE MVP PRODUCT
+
 - Auth: signup/login/logout, email verification and password recovery where supported by the selected backend.
 - Profile: unique username, display name, avatar/profile image where feasible, short bio; editable settings.
 - Pings: authenticated users can create unlimited text Pings; support optional image upload only if it fits cleanly with storage/security. Optional external call-to-action URL on a Ping (website, waitlist, buy, contact).

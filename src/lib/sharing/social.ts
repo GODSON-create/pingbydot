@@ -11,7 +11,14 @@ function artworkPalette(): CardPalette {
     if (!value) throw new Error("Missing artwork token");
     return value;
   };
-  return { paper: token("paper"), ink: token("ink"), forest: token("forest"), lime: token("lime"), muted: token("muted"), border: token("border") };
+  return {
+    paper: token("paper"),
+    ink: token("ink"),
+    forest: token("forest"),
+    lime: token("lime"),
+    muted: token("muted"),
+    border: token("border"),
+  };
 }
 
 export const renderSocialPng = createServerOnlyFn(async (ping: SharePing) => {
@@ -27,6 +34,9 @@ export const renderSocialPng = createServerOnlyFn(async (ping: SharePing) => {
   const x = (1200 - 1080 * scale) / 2;
   const framed = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630"><rect width="1200" height="630" fill="${colors.paper}"/><g transform="translate(${x} 24) scale(${scale})">${card}</g></svg>`;
   const renderer = new Resvg(framed);
-  try { return renderer.render().asPng(); }
-  finally { renderer.free(); }
+  try {
+    return renderer.render().asPng();
+  } finally {
+    renderer.free();
+  }
 });

@@ -1,11 +1,7 @@
 import { useState } from "react";
 import { Sparkles, Heart, Repeat2, Play, Flame } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  discoverableMomentsQuery,
-  type Moment,
-  type CreatorMomentsSequence,
-} from "@/lib/moments";
+import { discoverableMomentsQuery, type Moment, type CreatorMomentsSequence } from "@/lib/moments";
 import { FounderAvatar } from "@/components/ping/Avatar";
 import { MomentViewerModal } from "./MomentViewerModal";
 import { useAuth } from "@/lib/auth";
@@ -65,9 +61,16 @@ export function DiscoverableMomentsFeed() {
             className="group relative aspect-[9/14] rounded-2xl overflow-hidden bg-black cursor-pointer shadow-sm hover:scale-[1.02] transition-all"
           >
             {m.media_type === "video" ? (
-              <video src={m.media_url} className="h-full w-full object-cover opacity-90 group-hover:opacity-100" />
+              <video
+                src={m.media_url}
+                className="h-full w-full object-cover opacity-90 group-hover:opacity-100"
+              />
             ) : (
-              <img src={m.media_url} alt="Discoverable moment" className="h-full w-full object-cover opacity-90 group-hover:opacity-100" />
+              <img
+                src={m.media_url}
+                alt="Discoverable moment"
+                className="h-full w-full object-cover opacity-90 group-hover:opacity-100"
+              />
             )}
 
             {/* Gradient Overlay */}

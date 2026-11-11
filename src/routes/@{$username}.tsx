@@ -5,7 +5,7 @@ import { useSuspenseQuery, useQuery, useMutation, useQueryClient } from "@tansta
 import { format } from "date-fns";
 import { Link2, UserPlus, Check, Building2 } from "lucide-react";
 import { toast } from "sonner";
-import { profileQuery } from "@/lib/pings";
+import { profileQuery, type Profile, type Ping } from "@/lib/pings";
 import { FounderAvatar } from "@/components/ping/Avatar";
 import { PingCard } from "@/components/ping/PingCard";
 import { ErrorComponent } from "@/routes/__root";
@@ -53,7 +53,13 @@ export const Route = createFileRoute("/@{$username}")({
   component: ProfilePage,
 });
 
-function FollowButton({ profileId, currentUserId }: { profileId: string; currentUserId?: string | undefined }) {
+function FollowButton({
+  profileId,
+  currentUserId,
+}: {
+  profileId: string;
+  currentUserId?: string | undefined;
+}) {
   const qc = useQueryClient();
   const { data: follow } = useQuery(followQuery(profileId, currentUserId));
 
@@ -106,7 +112,7 @@ function FollowButton({ profileId, currentUserId }: { profileId: string; current
       onClick={() => {
         if (!currentUserId) {
           toast("Sign in to follow founders", {
-            action: { label: "Log in", onClick: () => window.location.href = "/login" },
+            action: { label: "Log in", onClick: () => (window.location.href = "/login") },
           });
           return;
         }
@@ -128,13 +134,27 @@ function FollowButton({ profileId, currentUserId }: { profileId: string; current
 
 function ProfilePage() {
   const { username } = Route.useParams();
-  const { user } = useAuth();
   const { data } = useSuspenseQuery(profileQuery(username));
   if (!data) return null;
+  return (
+    <ProfileContent
+      data={data as { profile: Profile; pings: Ping[]; connections: any[] }}
+      username={username}
+    />
+  );
+}
 
+function ProfileContent({
+  data,
+  username,
+}: {
+  data: { profile: Profile; pings: Ping[]; connections: any[] };
+  username: string;
+}) {
+  const { user } = useAuth();
   const { profile, pings, connections } = data;
   const isMe = user?.id === profile.id;
-  const name = profile.display_name || profile.username;
+  const name = profile.display_name || profile.username || username;
 
   // Follow counts and status
   const { data: follow } = useQuery(followQuery(profile.id, user?.id));
@@ -157,21 +177,30 @@ function ProfilePage() {
                   <h1 className="font-display text-3xl font-extrabold sm:text-4xl">{name}</h1>
                 </div>
                 <p className="text-muted-foreground text-sm">
-                  @{profile.username} · on Ping since {format(new Date(profile.created_at), "MMM yyyy")}
+                  @{profile.username} · on Ping since{" "}
+                  {format(new Date(profile.created_at), "MMM yyyy")}
                 </p>
 
                 {/* Follower counts */}
                 <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
                   <span>
-                    <strong className="text-foreground">{(follow?.followers ?? 0).toLocaleString()}</strong> followers
+                    <strong className="text-foreground">
+                      {(follow?.followers ?? 0).toLocaleString()}
+                    </strong>{" "}
+                    followers
                   </span>
                   <span>·</span>
                   <span>
-                    <strong className="text-foreground">{(follow?.following ?? 0).toLocaleString()}</strong> following
+                    <strong className="text-foreground">
+                      {(follow?.following ?? 0).toLocaleString()}
+                    </strong>{" "}
+                    following
                   </span>
                 </div>
 
-                {profile.bio && <p className="mt-3 max-w-xl whitespace-pre-line text-sm">{profile.bio}</p>}
+                {profile.bio && (
+                  <p className="mt-3 max-w-xl whitespace-pre-line text-sm">{profile.bio}</p>
+                )}
               </div>
 
               <div className="flex gap-2 sm:flex-col shrink-0">

@@ -150,7 +150,9 @@ function CreateSignalPage() {
           <Radio className="size-6" />
         </div>
         <div>
-          <h1 className="font-display text-2xl font-extrabold sm:text-3xl">Register Signal Channel</h1>
+          <h1 className="font-display text-2xl font-extrabold sm:text-3xl">
+            Register Signal Channel
+          </h1>
           <p className="text-xs sm:text-sm text-muted-foreground">
             Establish an official broadcast frequency for announcements, releases, and alerts.
           </p>
@@ -177,7 +179,9 @@ function CreateSignalPage() {
             Signal URL Slug <span className="text-destructive">*</span>
           </Label>
           <div className="mt-1.5 flex items-center rounded-2xl border border-input bg-background/50 px-3 h-11 focus-within:ring-2 focus-within:ring-ring">
-            <span className="text-xs text-muted-foreground select-none shrink-0">pingbydot.lovable.app/signals/</span>
+            <span className="text-xs text-muted-foreground select-none shrink-0">
+              pingbydot.lovable.app/signals/
+            </span>
             <input
               id={slugId}
               value={slug}
@@ -262,7 +266,9 @@ function CreateSignalPage() {
         <div className="rounded-2xl bg-secondary/50 p-4 border border-border/60 flex items-start gap-3">
           <Sparkles className="size-5 text-primary shrink-0 mt-0.5" />
           <div className="text-xs text-muted-foreground">
-            <strong className="text-foreground">Official Verification:</strong> Signal channels are designated for authorized institutional broadcasts. You will initially be granted the Publisher role to post immediate broadcasts.
+            <strong className="text-foreground">Official Verification:</strong> Signal channels are
+            designated for authorized institutional broadcasts. You will initially be granted the
+            Publisher role to post immediate broadcasts.
           </div>
         </div>
 

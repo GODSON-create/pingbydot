@@ -1,7 +1,13 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Repeat2, Lock, ShieldAlert, Sparkles } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { FounderAvatar } from "@/components/ping/Avatar";
@@ -73,7 +79,9 @@ export function RePingModal({ moment, open, onOpenChange, onSuccess }: RePingMod
             <div>
               <p className="font-bold">Distribution Restricted</p>
               <p className="mt-0.5 text-muted-foreground">
-                This Moment belongs to a <strong>{moment.audience === "hub" ? "private Hub" : "Close Circle"}</strong>. To preserve community privacy, it cannot be re-pinged.
+                This Moment belongs to a{" "}
+                <strong>{moment.audience === "hub" ? "private Hub" : "Close Circle"}</strong>. To
+                preserve community privacy, it cannot be re-pinged.
               </p>
             </div>
           </div>
