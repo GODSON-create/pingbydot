@@ -12,9 +12,16 @@ import {
   ShieldAlert,
   UserCheck,
   UserPlus,
+  UserX,
   LogOut,
   MoreVertical,
   Check,
+  Settings,
+  Pencil,
+  Trash2,
+  Plus,
+  Clock,
+  PinOff,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -24,8 +31,11 @@ import {
   HUB_INTENTS,
   canSeeHubContent,
   isHubStaff,
+  type Hub,
+  type HubCategory,
   type HubIntent,
   type HubRole,
+  type HubResource,
 } from "@/lib/hubs";
 import {
   hubQuery,
@@ -38,6 +48,8 @@ import { PingCard, PingCardSkeleton } from "@/components/ping/PingCard";
 import { FounderAvatar } from "@/components/ping/Avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   DropdownMenu,
@@ -45,6 +57,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { HubShareModal } from "@/components/hubs/HubShareModal";
 import { HubChat } from "@/components/hubs/HubChat";
 import { cn } from "@/lib/utils";
@@ -105,7 +124,9 @@ function MemberRow({
 
   const toggleFollow = async () => {
     if (!currentUserId || !profile?.id) {
-      toast("Sign in to follow founders", { action: { label: "Log in", onClick: () => window.location.href = "/login" } });
+      toast("Sign in to follow founders", {
+        action: { label: "Log in", onClick: () => (window.location.href = "/login") },
+      });
       return;
     }
     setFollowLoading(true);
@@ -132,69 +153,72 @@ function MemberRow({
     }
   };
 
-  const manageRole = async (action: string, role?: string) => {
+  const manageRole = async (action: "approve" | "decline" | "remove" | "role", newRole?: string) => {
     try {
       const { error } = await supabase.rpc("manage_hub_member", {
         _hub: hubId,
         _user: member.user_id,
         _action: action,
-        ...(role ? { _role: role } : {}),
+        ...(newRole ? { _role: newRole } : {}),
       });
-      if (error) {
-        toast.error(hubError(error, "Action failed."));
-      } else {
-        toast.success("Member updated!");
-        onRefetch();
-      }
-    } catch (e) {
-      toast.error(hubError(e, "Action failed."));
+      if (error) throw error;
+      toast.success(
+        action === "remove"
+          ? "Removed from Hub."
+          : action === "role"
+          ? `Updated role to ${newRole}.`
+          : "Action completed.",
+      );
+      onRefetch();
+    } catch (e: any) {
+      toast.error(hubError(e, "Could not update member."));
     }
   };
 
   const isSelf = currentUserId === member.user_id;
 
   return (
-    <div className="surface-card flex flex-wrap items-center justify-between gap-3 rounded-2xl p-4 sm:p-5">
-      <div className="flex items-center gap-3.5 min-w-0">
-        <FounderAvatar name={name} src={profile?.avatar_url ?? null} size="md" />
+    <div className="surface-card flex items-center justify-between gap-4 rounded-2xl p-4 border border-border">
+      <Link
+        to="/@{$username}"
+        params={{ username: profile?.username ?? "" }}
+        className="flex items-center gap-3 min-w-0"
+      >
+        <FounderAvatar name={name} src={profile?.avatar_url} size="md" />
         <div className="min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Link
-              to="/@{$username}"
-              params={{ username: profile?.username ?? "" }}
-              className="font-semibold text-sm sm:text-base hover:underline truncate"
-            >
-              {name}
-            </Link>
-            <span
-              className={cn(
-                "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
-                member.role === "owner"
-                  ? "bg-lime text-lime-foreground"
-                  : member.role === "admin"
-                  ? "bg-primary text-primary-foreground"
-                  : member.role === "moderator"
-                  ? "bg-accent text-accent-foreground"
-                  : "bg-secondary text-secondary-foreground",
-              )}
-            >
-              {member.role}
-            </span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="font-display font-bold text-sm truncate">{name}</span>
+            <span className="text-xs text-muted-foreground truncate">@{profile?.username}</span>
+            {member.role === "owner" && (
+              <span className="rounded-full bg-lime/20 text-lime-foreground px-2 py-0.5 text-[10px] font-bold border border-lime/30">
+                Owner
+              </span>
+            )}
+            {member.role === "admin" && (
+              <span className="rounded-full bg-primary/20 text-primary px-2 py-0.5 text-[10px] font-bold border border-primary/30">
+                Admin
+              </span>
+            )}
+            {member.role === "moderator" && (
+              <span className="rounded-full bg-accent text-accent-foreground px-2 py-0.5 text-[10px] font-bold">
+                Mod
+              </span>
+            )}
           </div>
           {profile?.bio && (
             <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1">{profile.bio}</p>
           )}
         </div>
-      </div>
+      </Link>
 
       <div className="flex items-center gap-2 shrink-0">
         {!isSelf && currentUserId && (
           <Button
+            variant={isFollowing ? "secondary" : "outline"}
             size="sm"
-            variant={isFollowing ? "outline" : "hero"}
             onClick={toggleFollow}
             disabled={followLoading}
-            className="rounded-full text-xs h-8 px-3"
+            className="rounded-full h-8 px-3 text-xs gap-1"
           >
             {isFollowing ? (
               <>
@@ -250,12 +274,419 @@ function MemberRow({
   );
 }
 
+function PendingRequestsSection({
+  hubId,
+  onProcessed,
+}: {
+  hubId: string;
+  onProcessed: () => void;
+}) {
+  const { data: pendingMembers = [], refetch } = useQuery(hubMembersQuery(hubId, "", 0, "pending"));
+
+  if (!pendingMembers || pendingMembers.length === 0) return null;
+
+  const handleAction = async (userId: string, action: "approve" | "decline") => {
+    try {
+      const { error } = await supabase.rpc("manage_hub_member", {
+        _hub: hubId,
+        _user: userId,
+        _action: action,
+      });
+      if (error) throw error;
+      toast.success(action === "approve" ? "Member approved!" : "Request declined.");
+      refetch();
+      onProcessed();
+    } catch (e: any) {
+      toast.error(hubError(e, `Could not ${action} request.`));
+    }
+  };
+
+  return (
+    <div className="surface-card rounded-3xl p-5 sm:p-6 border border-amber-500/30 bg-amber-500/5 mb-6">
+      <div className="flex items-center gap-2 text-sm font-bold text-amber-500 mb-3">
+        <Clock className="size-4" />
+        <span>Pending Access Requests ({pendingMembers.length})</span>
+      </div>
+      <div className="space-y-3">
+        {pendingMembers.map((req) => {
+          const profile = req.profile;
+          const name = profile?.display_name || profile?.username || "Builder";
+          return (
+            <div
+              key={req.user_id}
+              className="flex items-center justify-between gap-4 rounded-2xl bg-card p-3 border border-border"
+            >
+              <Link
+                to="/@{$username}"
+                params={{ username: profile?.username ?? "" }}
+                className="flex items-center gap-3 min-w-0"
+              >
+                <FounderAvatar name={name} src={profile?.avatar_url} size="sm" />
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-semibold text-xs truncate">{name}</span>
+                    <span className="text-[11px] text-muted-foreground truncate">@{profile?.username}</span>
+                  </div>
+                  {profile?.bio && (
+                    <p className="text-[11px] text-muted-foreground line-clamp-1">{profile.bio}</p>
+                  )}
+                </div>
+              </Link>
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Button
+                  size="sm"
+                  variant="hero"
+                  className="rounded-xl h-8 px-3 text-xs"
+                  onClick={() => handleAction(req.user_id, "approve")}
+                >
+                  Approve
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="rounded-xl h-8 px-3 text-xs text-destructive hover:bg-destructive/10"
+                  onClick={() => handleAction(req.user_id, "decline")}
+                >
+                  Decline
+                </Button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function EditHubDialog({
+  hub,
+  open,
+  onOpenChange,
+}: {
+  hub: Hub;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const qc = useQueryClient();
+  const [name, setName] = useState(hub.name);
+  const [tagline, setTagline] = useState(hub.tagline || "");
+  const [description, setDescription] = useState(hub.description || "");
+  const [rules, setRules] = useState(hub.rules || "");
+  const [category, setCategory] = useState<HubCategory>(hub.category);
+  const [access, setAccess] = useState<"public" | "private">(hub.access);
+  const [resources, setResources] = useState<HubResource[]>(hub.resources || []);
+  const [newResLabel, setNewResLabel] = useState("");
+  const [newResUrl, setNewResUrl] = useState("");
+
+  const updateMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.rpc("update_hub", {
+        _hub: hub.id,
+        _name: name.trim(),
+        _tagline: tagline.trim(),
+        _description: description.trim(),
+        _rules: rules.trim(),
+        _category: category,
+        _access: access,
+        _resources: resources as any,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hub", hub.slug] });
+      qc.invalidateQueries({ queryKey: ["hubs"] });
+      toast.success("Hub settings updated!");
+      onOpenChange(false);
+    },
+    onError: (e: any) => {
+      toast.error(hubError(e, "Could not update hub settings."));
+    },
+  });
+
+  const handleAddResource = () => {
+    if (!newResLabel.trim() || !newResUrl.trim()) return;
+    if (!/^https:\/\//i.test(newResUrl.trim())) {
+      toast.error("Resource URL must begin with https://");
+      return;
+    }
+    setResources([...resources, { label: newResLabel.trim(), url: newResUrl.trim() }]);
+    setNewResLabel("");
+    setNewResUrl("");
+  };
+
+  const handleRemoveResource = (index: number) => {
+    setResources(resources.filter((_, i) => i !== index));
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg rounded-3xl p-6 sm:p-8 max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="font-display text-xl flex items-center gap-2">
+            <Settings className="size-5 text-primary" /> Edit Hub Settings
+          </DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground">
+            Update your hub identity, visibility, guidelines, and official resources.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            updateMutation.mutate();
+          }}
+          className="mt-4 space-y-4"
+        >
+          <div>
+            <Label className="text-xs font-semibold">Hub Name</Label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="mt-1 rounded-xl"
+              required
+              minLength={2}
+              maxLength={60}
+            />
+          </div>
+
+          <div>
+            <Label className="text-xs font-semibold">Tagline</Label>
+            <Input
+              value={tagline}
+              onChange={(e) => setTagline(e.target.value)}
+              placeholder="e.g. Where European AI founders share daily progress"
+              className="mt-1 rounded-xl"
+              maxLength={120}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs font-semibold">Category</Label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value as HubCategory)}
+                className="mt-1 flex h-10 w-full rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                {HUB_CATEGORIES.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.emoji} {c.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <Label className="text-xs font-semibold">Access Visibility</Label>
+              <select
+                value={access}
+                onChange={(e) => setAccess(e.target.value as "public" | "private")}
+                className="mt-1 flex h-10 w-full rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="public">🌐 Public (Anyone can join & view)</option>
+                <option value="private">🔒 Private (Request or invite only)</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <Label className="text-xs font-semibold">Description / About</Label>
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Describe the mission and scope of this Hub…"
+              rows={4}
+              className="mt-1 rounded-xl resize-none text-xs"
+            />
+          </div>
+
+          <div>
+            <Label className="text-xs font-semibold">Community Guidelines / Rules</Label>
+            <Textarea
+              value={rules}
+              onChange={(e) => setRules(e.target.value)}
+              placeholder="1. Build in public with integrity&#10;2. Help fellow founders&#10;3. No unsolicited sales spam"
+              rows={3}
+              className="mt-1 rounded-xl resize-none text-xs"
+            />
+          </div>
+
+          {/* Resources Manager */}
+          <div>
+            <Label className="text-xs font-semibold">Official Resources ({resources.length}/10)</Label>
+            <div className="mt-2 space-y-2">
+              {resources.map((res, i) => (
+                <div
+                  key={i}
+                  className="flex items-center justify-between gap-2 rounded-xl bg-secondary/50 p-2.5 text-xs border border-border/50"
+                >
+                  <div className="min-w-0">
+                    <p className="font-semibold truncate">{res.label}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">{res.url}</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-6 text-muted-foreground hover:text-destructive shrink-0"
+                    onClick={() => handleRemoveResource(i)}
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                </div>
+              ))}
+
+              {resources.length < 10 && (
+                <div className="flex gap-2 pt-1">
+                  <Input
+                    placeholder="Link Label (e.g. Handbook)"
+                    value={newResLabel}
+                    onChange={(e) => setNewResLabel(e.target.value)}
+                    className="rounded-xl h-8 text-xs w-1/3"
+                  />
+                  <Input
+                    placeholder="https://…"
+                    value={newResUrl}
+                    onChange={(e) => setNewResUrl(e.target.value)}
+                    className="rounded-xl h-8 text-xs flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddResource}
+                    className="rounded-xl h-8 px-2.5 text-xs shrink-0"
+                  >
+                    <Plus className="size-3.5" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="pt-2 flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              className="rounded-xl"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="hero"
+              disabled={updateMutation.isPending}
+              className="rounded-xl"
+            >
+              {updateMutation.isPending ? "Saving…" : "Save Changes"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function HubFeedItemCard({
+  item,
+  hubId,
+  hubName,
+  hubSlug,
+  isStaff,
+  currentUserId,
+  onModerated,
+}: {
+  item: { intent: HubIntent | null; is_pinned: boolean; created_at: string; ping: any };
+  hubId: string;
+  hubName: string;
+  hubSlug: string;
+  isStaff: boolean;
+  currentUserId?: string | undefined;
+  onModerated: () => void;
+}) {
+  const canModerate = isStaff || (currentUserId && item.ping.user_id === currentUserId);
+
+  const handleModerate = async (action: "pin" | "unpin" | "remove") => {
+    try {
+      const { error } = await supabase.rpc("moderate_hub_ping", {
+        _hub: hubId,
+        _ping: item.ping.id,
+        _action: action,
+      });
+      if (error) throw error;
+      toast.success(
+        action === "pin"
+          ? "Ping pinned to Hub!"
+          : action === "unpin"
+          ? "Ping unpinned."
+          : "Ping removed from Hub.",
+      );
+      onModerated();
+    } catch (e: any) {
+      toast.error(hubError(e, `Could not ${action} ping.`));
+    }
+  };
+
+  return (
+    <div className="relative group">
+      <PingCard
+        ping={item.ping}
+        hubBadge={{
+          name: hubName,
+          slug: hubSlug,
+          intent: item.intent,
+        }}
+      />
+
+      {canModerate && (
+        <div className="absolute top-4 right-4 z-10">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="secondary"
+                size="icon"
+                className="size-7 rounded-full opacity-80 group-hover:opacity-100 shadow-sm border border-border"
+                aria-label="Moderate Hub Ping"
+              >
+                <MoreVertical className="size-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="rounded-2xl w-44">
+              {isStaff && (
+                item.is_pinned ? (
+                  <DropdownMenuItem onSelect={() => handleModerate("unpin")}>
+                    <PinOff className="size-3.5 mr-2" /> Unpin from Hub
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem onSelect={() => handleModerate("pin")}>
+                    <Pin className="size-3.5 mr-2" /> Pin to Hub
+                  </DropdownMenuItem>
+                )
+              )}
+              <DropdownMenuItem
+                onSelect={() => handleModerate("remove")}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="size-3.5 mr-2" /> Remove from Hub
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function HubDetail() {
   const { slug } = Route.useParams();
   const { intent: intentParam, tab: tabParam, invite: inviteTokenParam } = Route.useSearch();
   const { user } = useAuth();
   const qc = useQueryClient();
   const [shareOpen, setShareOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [memberSearch, setMemberSearch] = useState("");
   const deferredMemberSearch = useDeferredValue(memberSearch);
 
@@ -276,6 +707,7 @@ function HubDetail() {
   const isPending = membership?.status === "pending";
   const isStaff = isHubStaff(membership?.role);
   const isOwner = membership?.role === "owner";
+  const canEdit = isOwner || membership?.role === "admin";
 
   // Private hub feed query (viewer-scoped)
   const isPrivate = hub?.access === "private";
@@ -370,6 +802,57 @@ function HubDetail() {
       {/* Cover Banner */}
       <section className="bg-hero">
         <div className="mx-auto max-w-5xl px-5 pb-8 pt-10">
+          {/* Invitation Acceptance Banner */}
+          {inviteTokenParam && (
+            <div className="mb-6 rounded-3xl border border-primary/30 bg-primary/10 p-5 sm:p-6 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex size-10 items-center justify-center rounded-2xl bg-primary text-primary-foreground shrink-0 font-bold">
+                    <UserPlus className="size-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-display font-bold text-sm sm:text-base text-foreground">
+                      You have been invited to join {hub.name}!
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {isMember
+                        ? "You are already an active member of this hub."
+                        : isPending
+                        ? "Your request to join is pending review."
+                        : "Accept this invitation to instantly join this hub and access discussions."}
+                    </p>
+                  </div>
+                </div>
+                <div>
+                  {user ? (
+                    !isMember && !isPending && (
+                      <Button
+                        variant="hero"
+                        size="sm"
+                        className="rounded-full px-5 text-xs font-semibold shadow-lift shrink-0"
+                        onClick={() => joinMutation.mutate()}
+                        disabled={joinMutation.isPending}
+                      >
+                        {joinMutation.isPending ? "Joining…" : "Accept & Join Hub"}
+                      </Button>
+                    )
+                  ) : (
+                    <Button
+                      asChild
+                      variant="hero"
+                      size="sm"
+                      className="rounded-full px-5 text-xs font-semibold shadow-lift shrink-0"
+                    >
+                      <Link to="/login" search={{ next: `/hubs/${hub.slug}?invite=${inviteTokenParam}` }}>
+                        Sign in to Accept
+                      </Link>
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="surface-card relative overflow-hidden rounded-[2.5rem] p-6 sm:p-10 border border-border shadow-lift">
             <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-start gap-4 sm:gap-5 min-w-0">
@@ -421,7 +904,7 @@ function HubDetail() {
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 shrink-0 flex-wrap">
                 <Button
                   variant="outline"
                   size="sm"
@@ -430,6 +913,17 @@ function HubDetail() {
                 >
                   <Share2 className="size-4" /> Share
                 </Button>
+
+                {canEdit && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditOpen(true)}
+                    className="rounded-full h-10 px-4 gap-1.5"
+                  >
+                    <Settings className="size-4" /> Edit Hub
+                  </Button>
+                )}
 
                 {user ? (
                   isOwner ? (
@@ -563,16 +1057,19 @@ function HubDetail() {
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                       {pinnedPings.map((item) => (
-                        <div key={item.ping.id} className="relative">
-                          <PingCard
-                            ping={item.ping}
-                            hubBadge={{
-                              name: hub.name,
-                              slug: hub.slug,
-                              intent: item.intent,
-                            }}
-                          />
-                        </div>
+                        <HubFeedItemCard
+                          key={item.ping.id}
+                          item={item}
+                          hubId={hub.id}
+                          hubName={hub.name}
+                          hubSlug={hub.slug}
+                          isStaff={isStaff}
+                          currentUserId={user?.id}
+                          onModerated={() => {
+                            qc.invalidateQueries({ queryKey: ["hub", slug] });
+                            qc.invalidateQueries({ queryKey: ["hub-member-feed", hub.id] });
+                          }}
+                        />
                       ))}
                     </div>
                   </div>
@@ -589,13 +1086,17 @@ function HubDetail() {
                 {regularPings.length > 0 && (
                   <div className="grid gap-5 sm:grid-cols-2">
                     {regularPings.map((item) => (
-                      <PingCard
+                      <HubFeedItemCard
                         key={item.ping.id}
-                        ping={item.ping}
-                        hubBadge={{
-                          name: hub.name,
-                          slug: hub.slug,
-                          intent: item.intent,
+                        item={item}
+                        hubId={hub.id}
+                        hubName={hub.name}
+                        hubSlug={hub.slug}
+                        isStaff={isStaff}
+                        currentUserId={user?.id}
+                        onModerated={() => {
+                          qc.invalidateQueries({ queryKey: ["hub", slug] });
+                          qc.invalidateQueries({ queryKey: ["hub-member-feed", hub.id] });
                         }}
                       />
                     ))}
@@ -612,7 +1113,9 @@ function HubDetail() {
                     </p>
                     {isMember && (
                       <Button asChild variant="hero" className="mt-5 rounded-full">
-                        <Link to="/create">Post a Ping</Link>
+                        <Link to="/create" search={{ hub: hub.id }}>
+                          Post a Ping to Hub
+                        </Link>
                       </Button>
                     )}
                   </div>
@@ -623,6 +1126,17 @@ function HubDetail() {
 
           {/* TAB 2: MEMBERS DIRECTORY */}
           <TabsContent value="members" className="mt-6 space-y-4">
+            {/* Pending Requests for Staff */}
+            {isStaff && (
+              <PendingRequestsSection
+                hubId={hub.id}
+                onProcessed={() => {
+                  refetchMembers();
+                  qc.invalidateQueries({ queryKey: ["hub", slug] });
+                }}
+              />
+            )}
+
             <div className="relative">
               <Input
                 value={memberSearch}
@@ -697,7 +1211,21 @@ function HubDetail() {
       </section>
 
       {/* Share Modal */}
-      <HubShareModal hub={hub} open={shareOpen} onClose={() => setShareOpen(false)} isStaff={isStaff} />
+      <HubShareModal
+        hub={hub}
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        isStaff={isStaff}
+      />
+
+      {/* Edit Hub Settings Dialog */}
+      {canEdit && (
+        <EditHubDialog
+          hub={hub}
+          open={editOpen}
+          onOpenChange={setEditOpen}
+        />
+      )}
     </div>
   );
 }

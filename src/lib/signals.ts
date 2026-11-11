@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 
 export type SignalInstitutionType =
   | "university"
@@ -20,6 +21,8 @@ export interface Signal {
   website_url: string | null;
   institution_type: string;
   verified: boolean;
+  verification_status?: string;
+  verification_details?: Record<string, unknown>;
   follower_count: number;
   post_count?: number;
   created_by?: string;
@@ -47,6 +50,20 @@ export interface SignalPostAnalytics {
   read_percentage: number;
 }
 
+export interface SignalPublisherMember {
+  signal_id: string;
+  user_id: string;
+  role: "admin" | "publisher";
+  created_at: string;
+  profile: {
+    id: string;
+    username: string;
+    display_name: string;
+    bio: string;
+    avatar_url: string | null;
+  } | null;
+}
+
 export function signalsQuery(filters?: { search?: string; category?: string }) {
   return {
     queryKey: ["signals", filters?.search, filters?.category],
@@ -54,7 +71,7 @@ export function signalsQuery(filters?: { search?: string; category?: string }) {
       let q = supabase
         .from("signals")
         .select(
-          "id, slug, name, tagline, description, avatar_url, cover_url, website_url, institution_type, verified, follower_count, post_count, created_by, created_at",
+          "id, slug, name, tagline, description, avatar_url, cover_url, website_url, institution_type, verified, verification_status, follower_count, post_count, created_by, created_at",
         )
         .order("verified", { ascending: false })
         .order("follower_count", { ascending: false });
@@ -82,7 +99,7 @@ export function signalBySlugQuery(slug: string) {
       const { data, error } = await supabase
         .from("signals")
         .select(
-          "id, slug, name, tagline, description, avatar_url, cover_url, website_url, institution_type, verified, follower_count, post_count, created_by, created_at",
+          "id, slug, name, tagline, description, avatar_url, cover_url, website_url, institution_type, verified, verification_status, verification_details, follower_count, post_count, created_by, created_at",
         )
         .eq("slug", slug)
         .maybeSingle();
@@ -151,7 +168,7 @@ export function signalFollowingQuery(signalId: string, userId?: string) {
       if (!userId) return false;
       const { data, error } = await supabase
         .from("signal_followers")
-        .select("id")
+        .select("signal_id, user_id")
         .eq("signal_id", signalId)
         .eq("user_id", userId)
         .maybeSingle();
@@ -166,7 +183,7 @@ export function signalPublisherQuery(signalId: string, userId?: string) {
   return {
     queryKey: ["signal-publisher", signalId, userId],
     enabled: Boolean(signalId && userId),
-    queryFn: async (): Promise<{ isPublisher: boolean; role?: string }> => {
+    queryFn: async (): Promise<{ isPublisher: boolean; role?: "admin" | "publisher" }> => {
       if (!userId) return { isPublisher: false };
       const { data, error } = await supabase
         .from("signal_publishers")
@@ -176,7 +193,27 @@ export function signalPublisherQuery(signalId: string, userId?: string) {
         .maybeSingle();
 
       if (error || !data) return { isPublisher: false };
-      return { isPublisher: true, role: (data as { role: string }).role };
+      return { isPublisher: true, role: (data as { role: "admin" | "publisher" }).role };
+    },
+  };
+}
+
+export function signalPublishersListQuery(signalId: string) {
+  return {
+    queryKey: ["signal-publishers", signalId],
+    enabled: Boolean(signalId),
+    queryFn: async (): Promise<SignalPublisherMember[]> => {
+      const { data, error } = await supabase
+        .from("signal_publishers")
+        .select("signal_id, user_id, role, created_at, profile:profiles!signal_publishers_user_id_fkey(id, username, display_name, bio, avatar_url)")
+        .eq("signal_id", signalId)
+        .order("created_at", { ascending: true });
+
+      if (error) {
+        console.warn("Failed to load signal publishers:", error);
+        return [];
+      }
+      return (data ?? []) as unknown as SignalPublisherMember[];
     },
   };
 }
@@ -232,6 +269,53 @@ export function useCreateSignalPost(signalId: string) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["signal-posts", signalId] });
+      qc.invalidateQueries({ queryKey: ["signal", signalId] });
+    },
+  });
+}
+
+export function useManageSignalPublisher(signalId: string) {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      username,
+      action,
+      role = "publisher",
+    }: {
+      username: string;
+      action: "add" | "remove" | "role";
+      role?: "admin" | "publisher";
+    }) => {
+      const { error } = await supabase.rpc("manage_signal_publisher", {
+        _signal: signalId,
+        _username: username.trim(),
+        _action: action,
+        _role: role,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["signal-publishers", signalId] });
+      qc.invalidateQueries({ queryKey: ["signal-publisher", signalId] });
+    },
+  });
+}
+
+export function useRequestSignalVerification(signalId: string) {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (details?: Json) => {
+      const { error } = await supabase.rpc("request_signal_verification", {
+        _signal: signalId,
+        ...(details ? { _details: details } : {}),
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["signal"] });
+      qc.invalidateQueries({ queryKey: ["signals"] });
     },
   });
 }
@@ -267,8 +351,8 @@ export function signalAnalyticsQuery(postId: string, isPublisher: boolean) {
       const res = data as unknown as Record<string, unknown>;
       return {
         post_id: (res["post_id"] as string) || postId,
-        total_delivered: Number(res["total_delivered"] ?? 0),
-        total_read: Number(res["total_read"] ?? 0),
+        total_delivered: Number(res["total_recipients"] ?? res["total_delivered"] ?? 0),
+        total_read: Number(res["read_count"] ?? res["total_read"] ?? 0),
         read_percentage: Number(res["read_percentage"] ?? 0),
       };
     },

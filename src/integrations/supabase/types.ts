@@ -1589,6 +1589,42 @@ export type Database = {
         Args: { _hub: string; _intent?: string; _ping: string }
         Returns: undefined
       }
+      manage_signal_publisher: {
+        Args: {
+          _action: string
+          _role?: string
+          _signal: string
+          _username: string
+        }
+        Returns: undefined
+      }
+      request_signal_verification: {
+        Args: {
+          _details?: Json
+          _signal: string
+        }
+        Returns: undefined
+      }
+      verify_signal: {
+        Args: {
+          _signal: string
+          _status: string
+        }
+        Returns: undefined
+      }
+      update_hub: {
+        Args: {
+          _access?: string
+          _category?: string
+          _description?: string
+          _hub: string
+          _name: string
+          _resources?: Json
+          _rules?: string
+          _tagline?: string
+        }
+        Returns: Database["public"]["Tables"]["hubs"]["Row"]
+      }
     }
     Enums: {
       [_ in never]: never

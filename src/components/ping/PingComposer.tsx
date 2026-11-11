@@ -26,7 +26,7 @@ export function PingComposer({
   pending,
   onSubmit,
 }: {
-  initial?: Partial<PingDraft>;
+  initial?: Partial<PingDraft> | undefined;
   submitLabel: string;
   pending: boolean;
   onSubmit: (d: PingDraft) => void;

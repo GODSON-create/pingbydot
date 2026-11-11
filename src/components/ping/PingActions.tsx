@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { Link, useNavigate, useHydrated } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Heart, Share2, Link2, MessageCircle, Flag, LayoutGrid, Pencil, Trash2, Check, Image as ImageIcon } from "lucide-react";
+import { Heart, Share2, Link2, MessageCircle, Flag, LayoutGrid, Pencil, Trash2, Check, Image as ImageIcon, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { likeCount, myLikesQuery, pingUrl, type Ping } from "@/lib/pings";
+import { myHubsQuery } from "@/lib/hub-queries";
+import { HUB_INTENTS, type HubIntent } from "@/lib/hubs";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -101,6 +104,7 @@ export function LikeButton({ ping }: { ping: Ping }) {
 export function ShareMenu({ ping, variant = "ghost" }: { ping: Ping; variant?: "ghost" | "outline" }) {
   const [copied, setCopied] = useState(false);
   const [cardOpen, setCardOpen] = useState(false);
+  const [hubOpen, setHubOpen] = useState(false);
   const hydrated = useHydrated();
   const url = pingUrl(ping.id);
   const text = shareExcerpt(ping.content);
@@ -140,11 +144,143 @@ export function ShareMenu({ ping, variant = "ghost" }: { ping: Ping; variant?: "
             <MessageCircle /> Share on WhatsApp
           </a>
         </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => setHubOpen(true)}><Building2 /> Share to Hub</DropdownMenuItem>
         <DropdownMenuItem onSelect={copy}><Link2 /> Copy link</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
     <ShareCardDialog ping={ping} open={cardOpen} onOpenChange={setCardOpen} />
+    <SharePingToHubDialog ping={ping} open={hubOpen} onOpenChange={setHubOpen} />
     </>
+  );
+}
+
+
+export function SharePingToHubDialog({
+  ping,
+  open,
+  onOpenChange,
+}: {
+  ping: Ping;
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+}) {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const { data: myHubs = [], isLoading } = useQuery(myHubsQuery(user?.id));
+  const [selectedHub, setSelectedHub] = useState("");
+  const [selectedIntent, setSelectedIntent] = useState<HubIntent | "">("");
+
+  const shareMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedHub) throw new Error("Select a hub to share to.");
+      const { error } = await supabase.rpc("share_ping_to_hub", {
+        _hub: selectedHub,
+        _ping: ping.id,
+        ...(selectedIntent ? { _intent: selectedIntent } : {}),
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Ping shared to Hub!");
+      qc.invalidateQueries({ queryKey: ["hub"] });
+      qc.invalidateQueries({ queryKey: ["hubs"] });
+      onOpenChange(false);
+    },
+    onError: (e: any) => {
+      toast.error(e.message || "Failed to share Ping to hub.");
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md rounded-3xl p-6">
+        <DialogHeader>
+          <DialogTitle className="font-display text-xl flex items-center gap-2">
+            <Building2 className="size-5 text-primary" /> Share to a Hub
+          </DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground">
+            Feature this update inside one of the community Hubs you belong to.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            shareMutation.mutate();
+          }}
+          className="mt-4 space-y-4"
+        >
+          <div>
+            <Label className="text-xs font-semibold">Choose Hub</Label>
+            {isLoading ? (
+              <p className="mt-2 text-xs text-muted-foreground">Loading your hubs…</p>
+            ) : myHubs.length === 0 ? (
+              <div className="mt-2 rounded-2xl bg-secondary/50 p-4 text-center text-xs text-muted-foreground border border-border">
+                You haven't joined any Hubs yet. Browse and join a Hub first!
+              </div>
+            ) : (
+              <select
+                value={selectedHub}
+                onChange={(e) => setSelectedHub(e.target.value)}
+                className="mt-1 flex h-10 w-full rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                required
+              >
+                <option value="">Select a Hub…</option>
+                {myHubs.map((h) => (
+                  <option key={h.hub.id} value={h.hub.id}>
+                    {h.hub.name} ({h.role})
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {myHubs.length > 0 && (
+            <div>
+              <Label className="text-xs font-semibold">Hub Tag / Intent (Optional)</Label>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {HUB_INTENTS.map((intent) => (
+                  <button
+                    key={intent.value}
+                    type="button"
+                    onClick={() =>
+                      setSelectedIntent(selectedIntent === intent.value ? "" : intent.value)
+                    }
+                    className={cn(
+                      "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                      selectedIntent === intent.value
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-card hover:bg-secondary text-muted-foreground",
+                    )}
+                  >
+                    <span>{intent.emoji}</span> {intent.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="pt-2 flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              className="rounded-xl"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="hero"
+              disabled={!selectedHub || shareMutation.isPending}
+              className="rounded-xl"
+            >
+              {shareMutation.isPending ? "Sharing…" : "Share Ping"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -164,6 +300,7 @@ export function PingMenu({ ping, onDeleted, open, onOpenChange }: { ping: Ping; 
   const panel = open ?? innerPanel;
   const setPanel = (o: boolean) => { setInnerPanel(o); onOpenChange?.(o); };
   const [cardOpen, setCardOpen] = useState(false);
+  const [hubOpen, setHubOpen] = useState(false);
   const hydrated = useHydrated();
   const canNative = hydrated && typeof navigator.share === "function";
   const url = pingUrl(ping.id);
@@ -214,6 +351,7 @@ export function PingMenu({ ping, onDeleted, open, onOpenChange }: { ping: Ping; 
             <button type="button" className={ROW} onClick={() => { setPanel(false); setCardOpen(true); }}><ImageIcon className="size-5" /> Share card preview</button>
             {canNative && <button type="button" className={ROW} onClick={async () => { setPanel(false); try { await navigator.share({ title: "A Ping", text: shareExcerpt(ping.content), url }); } catch (e) { if (!(e instanceof DOMException && e.name === "AbortError")) toast.error("Couldn't share. Try copying the link."); } }}><Share2 className="size-5" /> Share…</button>}
             <a className={ROW} href={`https://wa.me/?text=${encodeURIComponent(shareMessage(ping))}`} target="_blank" rel="noopener noreferrer" onClick={() => setPanel(false)}><MessageCircle className="size-5" /> Share link on WhatsApp</a>
+            <button type="button" className={ROW} onClick={() => { setPanel(false); setHubOpen(true); }}><Building2 className="size-5" /> Share to Hub</button>
             <button type="button" className={ROW} onClick={async () => { setPanel(false); try { await navigator.clipboard.writeText(url); toast.success("Link copied"); } catch { toast.error("Couldn't copy. You can copy the link from the address bar."); } }}><Link2 className="size-5" /> Copy link</button>
             {isOwner ? (
               <>
@@ -231,6 +369,7 @@ export function PingMenu({ ping, onDeleted, open, onOpenChange }: { ping: Ping; 
         </SheetContent>
       </Sheet>
       <ShareCardDialog ping={ping} open={cardOpen} onOpenChange={setCardOpen} />
+      <SharePingToHubDialog ping={ping} open={hubOpen} onOpenChange={setHubOpen} />
 
       <Dialog open={reportOpen} onOpenChange={setReportOpen}>
         <DialogContent className="rounded-3xl">
