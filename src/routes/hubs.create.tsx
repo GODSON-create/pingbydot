@@ -145,12 +145,24 @@ function CreateHub() {
           resources: parsed.data.resources,
           owner_id: user.id,
         })
-        .select("slug")
+        .select("id, slug")
         .single();
 
       if (insertError) {
         throw insertError;
       }
+
+      // ATOMIC OWNER MEMBERSHIP GUARANTEE:
+      // In case the DB trigger is pending, ensure owner membership is present immediately
+      await supabase.from("hub_members").upsert(
+        {
+          hub_id: newHub.id,
+          user_id: user.id,
+          role: "owner",
+          status: "active",
+        },
+        { onConflict: "hub_id,user_id" },
+      );
 
       return newHub.slug;
     },

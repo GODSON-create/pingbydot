@@ -13,6 +13,8 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { initializeNativeApp } from "@/lib/native";
+import { useNavigate } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth";
 import { ThemeProvider } from "@/lib/theme";
 import { SiteHeader } from "@/components/layout/SiteHeader";
@@ -137,6 +139,10 @@ function RootShell({ children }: { children: ReactNode }) {
 }
 
 function RootComponent() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    initializeNativeApp((path) => navigate({ to: path as any }));
+  }, [navigate]);
   const { queryClient } = Route.useRouteContext();
   const { pathname } = useLocation();
   return (

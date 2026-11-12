@@ -83,6 +83,8 @@ function CreateSignalPage() {
 
     setIsSubmitting(true);
     try {
+      let createdSlug: string | undefined;
+
       const { data, error } = await supabase.rpc("create_signal", {
         _name: name.trim(),
         _slug: slug.trim(),
@@ -91,17 +93,50 @@ function CreateSignalPage() {
         ...(websiteUrl.trim() ? { _website_url: websiteUrl.trim() } : {}),
       });
 
-      if (error) {
-        if (error.message.includes("unique") || error.code === "23505") {
-          setErrors({ slug: "This channel slug is already claimed. Please choose another." });
-          return;
+      if (!error && data) {
+        createdSlug = slug.trim();
+      } else {
+        // Fallback direct insert
+        const { data: directSignal, error: directErr } = await supabase
+          .from("signals")
+          .insert({
+            name: name.trim(),
+            slug: slug.trim(),
+            institution_type: category,
+            description: description.trim(),
+            website_url: websiteUrl.trim() || null,
+            avatar_url: avatarUrl.trim() || null,
+            created_by: user.id,
+            verified: false,
+            verification_status: "unverified",
+          })
+          .select("id, slug")
+          .single();
+
+        if (directErr) {
+          if (directErr.message.includes("unique") || directErr.code === "23505") {
+            setErrors({ slug: "This channel slug is already claimed. Please choose another." });
+            return;
+          }
+          throw directErr;
         }
-        throw error;
+
+        // Ensure creator is registered as admin publisher
+        await supabase.from("signal_publishers").upsert(
+          {
+            signal_id: directSignal.id,
+            user_id: user.id,
+            role: "admin",
+            assigned_by: user.id,
+          },
+          { onConflict: "signal_id,user_id" },
+        );
+
+        createdSlug = directSignal.slug;
       }
 
       toast.success("Signal channel successfully registered!");
-      const targetSlug = slug.trim();
-      navigate({ to: "/signals/$slug", params: { slug: targetSlug } });
+      navigate({ to: "/signals/$slug", params: { slug: createdSlug || slug.trim() } });
     } catch (err: unknown) {
       console.error("Create signal error:", err);
       toast.error(err instanceof Error ? err.message : "Failed to create Signal channel.");

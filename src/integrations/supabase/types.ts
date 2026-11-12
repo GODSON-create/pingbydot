@@ -150,6 +150,179 @@ export type Database = {
           },
         ];
       };
+      conversations: {
+        Row: {
+          id: string;
+          type: string;
+          created_by: string | null;
+          last_message_at: string;
+          last_message_preview: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          type?: string;
+          created_by?: string | null;
+          last_message_at?: string;
+          last_message_preview?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          type?: string;
+          created_by?: string | null;
+          last_message_at?: string;
+          last_message_preview?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "conversations_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      conversation_members: {
+        Row: {
+          conversation_id: string;
+          user_id: string;
+          role: string;
+          joined_at: string;
+          last_read_at: string;
+          is_muted: boolean;
+          is_archived: boolean;
+          hidden_at: string | null;
+        };
+        Insert: {
+          conversation_id: string;
+          user_id: string;
+          role?: string;
+          joined_at?: string;
+          last_read_at?: string;
+          is_muted?: boolean;
+          is_archived?: boolean;
+          hidden_at?: string | null;
+        };
+        Update: {
+          conversation_id?: string;
+          user_id?: string;
+          role?: string;
+          joined_at?: string;
+          last_read_at?: string;
+          is_muted?: boolean;
+          is_archived?: boolean;
+          hidden_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "conversation_members_conversation_id_fkey";
+            columns: ["conversation_id"];
+            isOneToOne: false;
+            referencedRelation: "conversations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "conversation_members_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      private_messages: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          sender_id: string;
+          content: string;
+          media_url: string | null;
+          media_type: string | null;
+          status: string;
+          deleted_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          conversation_id: string;
+          sender_id: string;
+          content: string;
+          media_url?: string | null;
+          media_type?: string | null;
+          status?: string;
+          deleted_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          conversation_id?: string;
+          sender_id?: string;
+          content?: string;
+          media_url?: string | null;
+          media_type?: string | null;
+          status?: string;
+          deleted_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "private_messages_conversation_id_fkey";
+            columns: ["conversation_id"];
+            isOneToOne: false;
+            referencedRelation: "conversations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "private_messages_sender_id_fkey";
+            columns: ["sender_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      user_blocks: {
+        Row: {
+          blocker_id: string;
+          blocked_id: string;
+          created_at: string;
+        };
+        Insert: {
+          blocker_id: string;
+          blocked_id: string;
+          created_at?: string;
+        };
+        Update: {
+          blocker_id?: string;
+          blocked_id?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "user_blocks_blocker_id_fkey";
+            columns: ["blocker_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_blocks_blocked_id_fkey";
+            columns: ["blocked_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       follows: {
         Row: {
           created_at: string;
@@ -1465,6 +1638,40 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      get_or_create_direct_conversation: {
+        Args: { p_target_user_id: string };
+        Returns: string;
+      };
+      send_private_message: {
+        Args: {
+          p_conversation_id: string;
+          p_content: string;
+          p_media_url?: string | null;
+          p_media_type?: string | null;
+        };
+        Returns: Json;
+      };
+      mark_conversation_read: {
+        Args: { p_conversation_id: string };
+        Returns: undefined;
+      };
+      hide_or_delete_conversation: {
+        Args: { p_conversation_id: string };
+        Returns: undefined;
+      };
+      block_user: {
+        Args: { p_target_id: string };
+        Returns: undefined;
+      };
+      unblock_user: {
+        Args: { p_target_id: string };
+        Returns: undefined;
+      };
+      delete_user_account: {
+        Args: Record<PropertyKey, never>;
+        Returns: undefined;
+      };
+
       create_hub: {
         Args: {
           _access?: string;

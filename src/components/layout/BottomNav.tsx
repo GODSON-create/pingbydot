@@ -16,6 +16,7 @@ import {
   UserPlus,
   Building2,
   Radio,
+  MessageSquare,
   Sun,
   Moon,
   Laptop,
@@ -144,6 +145,11 @@ export function BottomNav() {
             <Link to="/signals" className={row}>
               <Radio className="size-5" /> Official Signals
             </Link>
+            {user && (
+              <Link to="/messages" className={row}>
+                <MessageSquare className="size-5" /> Direct Messages
+              </Link>
+            )}
             {user && (
               <Link to="/hubs/create" className={row}>
                 <Plus className="size-5" /> Create a Hub

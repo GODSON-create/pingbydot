@@ -4,6 +4,7 @@ import {
   Compass,
   Building2,
   Radio,
+  MessageSquare,
   Settings,
   Plus,
   ShieldCheck,
@@ -63,6 +64,7 @@ export function DesktopSidebar() {
     { to: "/explore", label: "Explore", icon: Compass },
     { to: "/hubs", label: "Hubs", icon: Building2 },
     { to: "/signals", label: "Signals", icon: Radio },
+    ...(user ? [{ to: "/messages", label: "Messages", icon: MessageSquare }] : []),
     ...(user ? [{ to: "/settings", label: "Settings", icon: Settings }] : []),
     ...(admin.data?.isAdmin ? [{ to: "/admin", label: "Administration", icon: ShieldCheck }] : []),
   ];

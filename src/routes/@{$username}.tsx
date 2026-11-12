@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { pageHead, siteUrl, NOINDEX } from "@/lib/site";
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
 import { useSuspenseQuery, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Link2, UserPlus, Check, Building2 } from "lucide-react";
+import { Link2, UserPlus, Check, Building2, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { profileQuery, type Profile, type Ping } from "@/lib/pings";
+import { useGetOrCreateDirectConversation } from "@/lib/messages";
 import { FounderAvatar } from "@/components/ping/Avatar";
 import { PingCard } from "@/components/ping/PingCard";
 import { ErrorComponent } from "@/routes/__root";
@@ -152,6 +153,8 @@ function ProfileContent({
   username: string;
 }) {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const startChatMutation = useGetOrCreateDirectConversation();
   const { profile, pings, connections } = data;
   const isMe = user?.id === profile.id;
   const name = profile.display_name || profile.username || username;
@@ -205,6 +208,26 @@ function ProfileContent({
 
               <div className="flex gap-2 sm:flex-col shrink-0">
                 {!isMe && <FollowButton profileId={profile.id} currentUserId={user?.id} />}
+                {!isMe && user && (
+                  <Button
+                    size="sm"
+                    className="rounded-full bg-primary text-primary-foreground font-semibold hover:bg-primary/90"
+                    disabled={startChatMutation.isPending}
+                    onClick={async () => {
+                      try {
+                        const convId = await startChatMutation.mutateAsync(profile.id);
+                        navigate({
+                          to: "/messages",
+                          search: { conversationId: convId },
+                        });
+                      } catch (e: any) {
+                        toast.error(e.message || "Failed to start direct conversation");
+                      }
+                    }}
+                  >
+                    <MessageSquare className="size-4 mr-1.5" /> Message
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   size="sm"
