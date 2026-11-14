@@ -3,7 +3,7 @@ import { readFileSync } from "fs";
 import { resolve } from "path";
 
 describe("Product Completion Sprint - Verification Suite", () => {
-  it("Migration 0015 contains all required RPCs and security constraints", () => {
+  it("Migration 0015 contains all required RPCs, reaction tracking, and security constraints", () => {
     const migrationPath = resolve(
       process.cwd(),
       "drizzle/migrations/0015_product_completion_sprint.sql",
@@ -15,20 +15,28 @@ describe("Product Completion Sprint - Verification Suite", () => {
     expect(sql).toContain("DELETE FROM public.hubs WHERE id = _hub");
     expect(sql).toContain("Owners delete own hubs");
 
-    // 2. Update signal
+    // 2. Update signal with input validation & admin check
     expect(sql).toContain("CREATE OR REPLACE FUNCTION public.update_signal");
     expect(sql).toContain("public.signal_role(_signal, v_caller) <> 'admin'");
+    expect(sql).toContain("Signal name must be between 2 and 100 characters");
+    expect(sql).toContain("Invalid institution type");
 
-    // 3. Hub message reaction
+    // 3. Hub message reaction tracking & genuine toggle
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS public.hub_message_reactions");
+    expect(sql).toContain("UNIQUE (message_id, user_id, reaction)");
     expect(sql).toContain("CREATE OR REPLACE FUNCTION public.toggle_hub_message_reaction");
     expect(sql).toContain("public.can_view_hub_content(v_hub_id)");
+    expect(sql).toContain("DELETE FROM public.hub_message_reactions");
+    expect(sql).toContain("ON CONFLICT (message_id, user_id, reaction) DO NOTHING");
 
-    // 4. Re-Ping audience expansion protection
+    // 4. Re-Ping audience expansion protection & follower verification
     expect(sql).toContain("v_moment.audience = 'followers' AND _audience = 'public'");
     expect(sql).toContain("Re-Ping cannot expand a followers-only moment to public audience.");
+    expect(sql).toContain("You must follow the creator to re-ping this moment");
 
     // 5. Highlights management
     expect(sql).toContain("CREATE OR REPLACE FUNCTION public.update_highlight");
+    expect(sql).toContain("Highlight title must be between 1 and 100 characters");
     expect(sql).toContain("CREATE OR REPLACE FUNCTION public.remove_moment_from_highlight");
   });
 

@@ -956,6 +956,45 @@ export type Database = {
           },
         ];
       };
+      hub_message_reactions: {
+        Row: {
+          created_at: string;
+          id: string;
+          message_id: string;
+          reaction: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          message_id: string;
+          reaction: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          message_id?: string;
+          reaction?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "hub_message_reactions_message_id_fkey";
+            columns: ["message_id"];
+            isOneToOne: false;
+            referencedRelation: "hub_messages";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "hub_message_reactions_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       ping_read_receipts: {
         Row: {
           delivered_at: string;
