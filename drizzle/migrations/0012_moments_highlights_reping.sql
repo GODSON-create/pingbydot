@@ -137,21 +137,21 @@ ALTER TABLE public.highlights ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.highlight_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_close_circle ENABLE ROW LEVEL SECURITY;
 
--- PERMISSIONS
-GRANT ALL ON public.moments TO authenticated;
+-- PERMISSIONS (Operation-specific least privilege, avoiding broad ALL)
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.moments TO authenticated;
 GRANT SELECT ON public.moments TO anon;
-GRANT ALL ON public.moment_views TO authenticated;
+GRANT SELECT, INSERT ON public.moment_views TO authenticated;
 GRANT SELECT ON public.moment_views TO anon;
-GRANT ALL ON public.moment_likes TO authenticated;
+GRANT SELECT, INSERT, DELETE ON public.moment_likes TO authenticated;
 GRANT SELECT ON public.moment_likes TO anon;
-GRANT ALL ON public.moment_replies TO authenticated;
-GRANT ALL ON public.moment_repings TO authenticated;
+GRANT SELECT, INSERT ON public.moment_replies TO authenticated;
+GRANT SELECT, INSERT, DELETE ON public.moment_repings TO authenticated;
 GRANT SELECT ON public.moment_repings TO anon;
-GRANT ALL ON public.highlights TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.highlights TO authenticated;
 GRANT SELECT ON public.highlights TO anon;
-GRANT ALL ON public.highlight_items TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.highlight_items TO authenticated;
 GRANT SELECT ON public.highlight_items TO anon;
-GRANT ALL ON public.user_close_circle TO authenticated;
+GRANT SELECT, INSERT, DELETE ON public.user_close_circle TO authenticated;
 
 -- RLS POLICIES FOR MOMENTS
 CREATE POLICY "Moments viewable by authorized audience" ON public.moments
@@ -407,6 +407,11 @@ BEGIN
     RAISE EXCEPTION 'Private Hub and Close Circle moments cannot be re-pinged.';
   END IF;
 
+  -- DISTRIBUTION RULE: Followers-only moment can NEVER be expanded to public
+  IF v_moment.audience = 'followers' AND COALESCE(_audience, 'public') = 'public' THEN
+    RAISE EXCEPTION 'Cannot expand a followers-only moment to public.';
+  END IF;
+
   IF NOT v_moment.allow_repings THEN
     RAISE EXCEPTION 'The creator has disabled re-pings for this moment.';
   END IF;
@@ -458,18 +463,18 @@ $$;
 -- ENABLE REALTIME
 DO $$
 BEGIN
-  ALTER PUBLICATION supabase_realtime ADD TABLE public.moments;
-EXCEPTION WHEN OTHERS THEN NULL;
-END $$;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.moments;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
 
-DO $$
-BEGIN
-  ALTER PUBLICATION supabase_realtime ADD TABLE public.moment_likes;
-EXCEPTION WHEN OTHERS THEN NULL;
-END $$;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.moment_likes;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
 
-DO $$
-BEGIN
-  ALTER PUBLICATION supabase_realtime ADD TABLE public.moment_repings;
-EXCEPTION WHEN OTHERS THEN NULL;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.moment_repings;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
 END $$;

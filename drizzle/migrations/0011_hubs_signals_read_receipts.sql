@@ -8,7 +8,25 @@ GRANT INSERT ON public.hubs TO authenticated;
 
 DROP POLICY IF EXISTS "Users can join or be added to hubs" ON public.hub_members;
 CREATE POLICY "Users can join or be added to hubs" ON public.hub_members FOR INSERT TO authenticated
-  WITH CHECK (user_id = (select auth.uid()) OR public.hub_role(hub_id, (select auth.uid())) IN ('owner','admin','moderator'));
+  WITH CHECK (
+    (
+      user_id = (select auth.uid())
+      AND role = 'member'
+      AND (
+        status = 'pending'
+        OR (
+          status = 'active'
+          AND EXISTS (
+            SELECT 1 FROM public.hubs
+            WHERE id = hub_members.hub_id
+              AND access = 'public'
+              AND hidden_at IS NULL
+          )
+        )
+      )
+    )
+    OR public.hub_role(hub_id, (select auth.uid())) IN ('owner','admin','moderator')
+  );
 
 DROP POLICY IF EXISTS "Staff can update hub members" ON public.hub_members;
 CREATE POLICY "Staff can update hub members" ON public.hub_members FOR UPDATE TO authenticated
@@ -396,7 +414,41 @@ CREATE POLICY "Signal publishers are readable" ON public.signal_publishers FOR S
 
 DROP POLICY IF EXISTS "Signal admins manage publishers" ON public.signal_publishers;
 CREATE POLICY "Signal admins manage publishers" ON public.signal_publishers FOR INSERT TO authenticated
-  WITH CHECK (public.signal_role(signal_id, (select auth.uid())) = 'admin' OR user_id = (select auth.uid()));
+  WITH CHECK (public.signal_role(signal_id, (select auth.uid())) = 'admin');
+
+-- RPC to securely add a publisher (Admin only)
+CREATE OR REPLACE FUNCTION public.add_signal_publisher(
+  _signal uuid,
+  _user uuid,
+  _role text DEFAULT 'publisher'
+) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Sign in required'; END IF;
+  IF public.signal_role(_signal, auth.uid()) <> 'admin' THEN
+    RAISE EXCEPTION 'Only signal admins can add publishers';
+  END IF;
+  IF _role NOT IN ('admin', 'publisher') THEN
+    RAISE EXCEPTION 'Invalid role: must be admin or publisher';
+  END IF;
+  INSERT INTO public.signal_publishers (signal_id, user_id, role, assigned_by)
+  VALUES (_signal, _user, _role, auth.uid())
+  ON CONFLICT (signal_id, user_id) DO UPDATE SET role = _role;
+END $$;
+GRANT EXECUTE ON FUNCTION public.add_signal_publisher(uuid, uuid, text) TO authenticated, service_role;
+
+-- RPC to securely remove a publisher (Admin only)
+CREATE OR REPLACE FUNCTION public.remove_signal_publisher(
+  _signal uuid,
+  _user uuid
+) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Sign in required'; END IF;
+  IF public.signal_role(_signal, auth.uid()) <> 'admin' THEN
+    RAISE EXCEPTION 'Only signal admins can remove publishers';
+  END IF;
+  DELETE FROM public.signal_publishers WHERE signal_id = _signal AND user_id = _user;
+END $$;
+GRANT EXECUTE ON FUNCTION public.remove_signal_publisher(uuid, uuid) TO authenticated, service_role;
 
 DROP POLICY IF EXISTS "Signal admins delete publishers" ON public.signal_publishers;
 CREATE POLICY "Signal admins delete publishers" ON public.signal_publishers FOR DELETE TO authenticated
