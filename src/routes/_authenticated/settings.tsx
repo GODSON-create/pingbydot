@@ -13,6 +13,18 @@ import { useSignOut } from "@/components/layout/SiteHeader";
 import { ConnectionsEditor } from "@/components/connections/ConnectionsEditor";
 import { PingActivityPrivacy } from "@/components/settings/PingActivityPrivacy";
 import { AppearanceSettings } from "@/components/settings/AppearanceSettings";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { ShieldAlert, FileText, Shield, Trash2 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   staticData: { sitemap: false },
@@ -38,6 +50,23 @@ function Settings() {
     Partial<Record<"username" | "display_name" | "bio" | "avatar_url", string>>
   >({});
   const [saving, setSaving] = useState(false);
+
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+
+  const handleDeleteAccount = async () => {
+    try {
+      setIsDeletingAccount(true);
+      const { error } = await supabase.rpc("delete_user_account");
+      if (error) throw error;
+      toast.success("Your account and data have been permanently deleted.");
+      signOut();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete account. Please try again.");
+    } finally {
+      setIsDeletingAccount(false);
+    }
+  };
+
   const [pw, setPw] = useState({ current: "", next: "" });
 
   useEffect(() => {
@@ -220,6 +249,75 @@ function Settings() {
           </Button>
         </form>
       )}
+
+      {/* Legal & Compliance Disclosures (App Store & Google Play) */}
+      <div className="surface-card mt-6 rounded-3xl p-6 space-y-3">
+        <p className="font-display text-sm font-bold flex items-center gap-2">
+          <FileText className="size-4 text-primary" /> Legal & Terms
+        </p>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Review Ping by DOT community standards, user-generated content policies, and data handling
+          practices.
+        </p>
+        <div className="flex flex-wrap gap-4 pt-1 text-xs">
+          <Link
+            to="/privacy"
+            className="text-primary hover:underline font-semibold flex items-center gap-1"
+          >
+            <Shield className="size-3.5" /> Privacy Policy
+          </Link>
+          <span className="text-muted-foreground">•</span>
+          <Link
+            to="/terms"
+            className="text-primary hover:underline font-semibold flex items-center gap-1"
+          >
+            <FileText className="size-3.5" /> Terms of Service & EULA
+          </Link>
+        </div>
+      </div>
+
+      {/* Danger Zone: Account Deletion (Apple App Store Guideline 5.1.1(v)) */}
+      <div className="surface-card mt-6 rounded-3xl p-6 border border-destructive/30 bg-destructive/5 space-y-4">
+        <div>
+          <p className="font-display text-base font-bold text-destructive flex items-center gap-2">
+            <ShieldAlert className="size-5" /> Danger Zone
+          </p>
+          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+            Permanently delete your Ping account, profile, all published Pings, comments, private
+            conversations, and uploaded media. This action is irreversible.
+          </p>
+        </div>
+
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="destructive" size="sm" className="rounded-xl font-bold">
+              <Trash2 className="size-4 mr-1.5" /> Delete Account
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent className="rounded-3xl border border-destructive/30 bg-card">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="font-display text-lg font-bold text-destructive flex items-center gap-2">
+                <ShieldAlert className="size-5" /> Permanently Delete Account?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-xs text-muted-foreground leading-relaxed">
+                Are you absolutely sure? This will instantly and permanently erase your account
+                credentials, username, profile details, pings, comments, private direct messages,
+                and storage assets. There is no recovery.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="mt-4">
+              <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteAccount}
+                disabled={isDeletingAccount}
+                className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90 font-bold"
+              >
+                {isDeletingAccount ? "Deleting..." : "Yes, Delete Everything"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
 
       <div className="surface-card mt-6 flex items-center justify-between rounded-3xl p-6">
         <div>

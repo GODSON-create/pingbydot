@@ -127,10 +127,7 @@ export function MomentsTray({ className }: { className?: string }) {
       )}
 
       {/* Creator Composer Modal */}
-      <MomentComposer
-        open={composerOpen}
-        onOpenChange={setComposerOpen}
-      />
+      <MomentComposer open={composerOpen} onOpenChange={setComposerOpen} />
     </section>
   );
 }

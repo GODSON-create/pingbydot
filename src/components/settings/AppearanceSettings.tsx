@@ -30,7 +30,7 @@ export function AppearanceSettings() {
     {
       value: "dark",
       label: "Dark Theme",
-      description: "Deep obsidian night with Ping emerald accents",
+      description: "Deep charcoal with forest undertones & bright Ping-green accents",
       icon: Moon,
     },
     {
@@ -76,7 +76,9 @@ export function AppearanceSettings() {
                 <div
                   className={cn(
                     "flex size-9 items-center justify-center rounded-xl",
-                    isSelected ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground",
+                    isSelected
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-secondary text-secondary-foreground",
                   )}
                 >
                   <Icon className="size-4" />
@@ -89,7 +91,9 @@ export function AppearanceSettings() {
               </div>
               <div className="mt-4">
                 <p className="font-display text-sm font-bold text-foreground">{opt.label}</p>
-                <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{opt.description}</p>
+                <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                  {opt.description}
+                </p>
               </div>
             </button>
           );

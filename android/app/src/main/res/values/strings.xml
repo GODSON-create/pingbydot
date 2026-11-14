@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Ping by DOT</string>
+    <string name="title_activity_main">Ping by DOT</string>
+    <string name="package_name">app.lovable.pingbydot</string>
+    <string name="custom_url_scheme">app.lovable.pingbydot</string>
+</resources>

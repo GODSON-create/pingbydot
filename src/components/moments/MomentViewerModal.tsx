@@ -36,6 +36,8 @@ import {
   type Moment,
 } from "@/lib/moments";
 import { useAuth } from "@/lib/auth";
+import { useQuery } from "@tanstack/react-query";
+import { userHighlightsQuery, useCreateHighlight } from "@/lib/moments";
 import { RePingModal } from "./RePingModal";
 import { Link } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
@@ -63,6 +65,11 @@ export function MomentViewerModal({
   const [isMuted, setIsMuted] = useState(true);
   const [replyText, setReplyText] = useState("");
   const [repingModalOpen, setRepingModalOpen] = useState(false);
+  const [highlightDialogOpen, setHighlightDialogOpen] = useState(false);
+  const [newHighlightTitle, setNewHighlightTitle] = useState("");
+  const addHighlightItemMutation = useAddMomentToHighlight();
+  const createHighlightMutation = useCreateHighlight();
+  const { data: userHighlights = [] } = useQuery(userHighlightsQuery(user?.id ?? ""));
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const viewMutation = useViewMoment();
@@ -194,6 +201,41 @@ export function MomentViewerModal({
     }
   };
 
+  const handleAddToHighlight = async (highlightId: string) => {
+    if (!currentMoment) return;
+    try {
+      await addHighlightItemMutation.mutateAsync({
+        highlightId,
+        momentId: currentMoment.id,
+      });
+      toast.success("Moment saved to Highlight!");
+      setHighlightDialogOpen(false);
+    } catch {
+      toast.error("Could not add moment to highlight.");
+    }
+  };
+
+  const handleCreateAndAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newHighlightTitle.trim() || !currentMoment) return;
+    try {
+      const newHl = await createHighlightMutation.mutateAsync({
+        title: newHighlightTitle.trim(),
+      });
+      if (newHl?.id) {
+        await addHighlightItemMutation.mutateAsync({
+          highlightId: newHl.id,
+          momentId: currentMoment.id,
+        });
+      }
+      toast.success("Created highlight and saved moment!");
+      setNewHighlightTitle("");
+      setHighlightDialogOpen(false);
+    } catch {
+      toast.error("Failed to create highlight.");
+    }
+  };
+
   const handleDelete = async () => {
     try {
       await deleteMutation.mutateAsync(currentMoment.id);
@@ -214,10 +256,7 @@ export function MomentViewerModal({
               const isPassed = idx < momentIdx;
               const isCurrent = idx === momentIdx;
               return (
-                <div
-                  key={m.id}
-                  className="h-1 flex-1 overflow-hidden rounded-full bg-white/25"
-                >
+                <div key={m.id} className="h-1 flex-1 overflow-hidden rounded-full bg-white/25">
                   <div
                     className="h-full bg-white transition-all duration-75"
                     style={{
@@ -244,7 +283,9 @@ export function MomentViewerModal({
                   className="font-bold text-white hover:underline flex items-center gap-1"
                 >
                   {currentSequence.author.display_name || currentSequence.author.username}
-                  <span className="font-normal text-white/70">@{currentSequence.author.username}</span>
+                  <span className="font-normal text-white/70">
+                    @{currentSequence.author.username}
+                  </span>
                 </Link>
 
                 <div className="flex items-center gap-1.5 text-[10px] text-white/60">
@@ -287,14 +328,22 @@ export function MomentViewerModal({
                 <DropdownMenuTrigger className="rounded-full bg-black/40 p-2 text-white/90 hover:bg-black/60 focus:outline-none">
                   <MoreVertical className="size-4" />
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48 rounded-2xl bg-neutral-900 border-white/10 text-white">
+                <DropdownMenuContent
+                  align="end"
+                  className="w-48 rounded-2xl bg-neutral-900 border-white/10 text-white"
+                >
                   <DropdownMenuItem onClick={handleShare}>
                     <Share2 className="size-4 mr-2" /> Share Moment
                   </DropdownMenuItem>
                   {isOwner && (
-                    <DropdownMenuItem onClick={handleDelete} className="text-destructive">
-                      <Trash2 className="size-4 mr-2" /> Delete Moment
-                    </DropdownMenuItem>
+                    <>
+                      <DropdownMenuItem onClick={() => setHighlightDialogOpen(true)}>
+                        <Sparkles className="size-4 mr-2 text-primary" /> Add to Highlights
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={handleDelete} className="text-destructive">
+                        <Trash2 className="size-4 mr-2" /> Delete Moment
+                      </DropdownMenuItem>
+                    </>
                   )}
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -452,6 +501,51 @@ export function MomentViewerModal({
             </button>
           </footer>
         </div>
+
+        {/* Add to Highlights Dialog */}
+        <Dialog open={highlightDialogOpen} onOpenChange={setHighlightDialogOpen}>
+          <DialogContent className="sm:max-w-md rounded-3xl p-6 bg-card text-card-foreground">
+            <div className="flex items-center gap-2 text-primary font-bold text-sm">
+              <Sparkles className="size-4" />
+              <span>Save to Highlights</span>
+            </div>
+            <h3 className="font-display text-lg font-bold mt-1">Keep this moment permanently</h3>
+
+            <div className="mt-4 space-y-2 max-h-48 overflow-y-auto">
+              {userHighlights.map((hl) => (
+                <button
+                  key={hl.id}
+                  type="button"
+                  onClick={() => handleAddToHighlight(hl.id)}
+                  className="w-full flex items-center justify-between p-3 rounded-2xl bg-secondary/50 hover:bg-secondary border border-border/50 text-xs font-semibold text-left transition-colors"
+                >
+                  <span className="truncate">{hl.title}</span>
+                  <Plus className="size-3.5 text-primary" />
+                </button>
+              ))}
+            </div>
+
+            <form
+              onSubmit={handleCreateAndAdd}
+              className="mt-4 pt-3 border-t border-border flex gap-2"
+            >
+              <Input
+                value={newHighlightTitle}
+                onChange={(e) => setNewHighlightTitle(e.target.value)}
+                placeholder="New Highlight name…"
+                className="h-9 rounded-xl text-xs flex-1"
+              />
+              <Button
+                type="submit"
+                size="sm"
+                variant="hero"
+                className="rounded-xl h-9 text-xs px-3"
+              >
+                Create & Add
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
 
         {/* Re-Ping Dialog */}
         <RePingModal

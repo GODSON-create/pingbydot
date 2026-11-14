@@ -15,7 +15,13 @@ import {
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -113,9 +119,7 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
   };
 
   const updateActiveDraft = (patch: Partial<MomentDraft>) => {
-    setDrafts((prev) =>
-      prev.map((d, idx) => (idx === activeDraftIdx ? { ...d, ...patch } : d)),
-    );
+    setDrafts((prev) => prev.map((d, idx) => (idx === activeDraftIdx ? { ...d, ...patch } : d)));
   };
 
   const addSticker = (emoji: string) => {
@@ -168,7 +172,8 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
 
         // If it's a real file, upload to Supabase Storage
         if (d.mediaFile) {
-          const ext = d.mediaFile.name.split(".").pop() || (d.mediaType === "video" ? "mp4" : "jpg");
+          const ext =
+            d.mediaFile.name.split(".").pop() || (d.mediaType === "video" ? "mp4" : "jpg");
           const path = `${user.id}/moments/${Date.now()}_${i}.${ext}`;
 
           const { data: uploadRes, error: uploadErr } = await supabase.storage
@@ -265,7 +270,8 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
             </div>
             <h3 className="mt-4 font-display text-lg font-bold">Capture or upload media</h3>
             <p className="mt-1 text-xs text-muted-foreground max-w-xs">
-              Upload photos or short vertical videos up to 25MB. Add captions, overlays, stickers, and tags.
+              Upload photos or short vertical videos up to 25MB. Add captions, overlays, stickers,
+              and tags.
             </p>
             <div className="mt-6 flex gap-3">
               <Button
@@ -289,7 +295,9 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
                   type="button"
                   onClick={() => setActiveDraftIdx(idx)}
                   className={`relative shrink-0 size-14 rounded-xl overflow-hidden border-2 transition-all ${
-                    idx === activeDraftIdx ? "border-primary ring-2 ring-primary/30" : "border-border opacity-70"
+                    idx === activeDraftIdx
+                      ? "border-primary ring-2 ring-primary/30"
+                      : "border-border opacity-70"
                   }`}
                 >
                   {d.mediaType === "video" ? (
@@ -317,9 +325,17 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
             {activeDraft && (
               <div className="relative aspect-[9/14] w-full max-h-72 rounded-2xl overflow-hidden bg-black flex items-center justify-center shadow-inner">
                 {activeDraft.mediaType === "video" ? (
-                  <video src={activeDraft.mediaUrl} controls className="h-full w-full object-contain" />
+                  <video
+                    src={activeDraft.mediaUrl}
+                    controls
+                    className="h-full w-full object-contain"
+                  />
                 ) : (
-                  <img src={activeDraft.mediaUrl} alt="Preview" className="h-full w-full object-contain" />
+                  <img
+                    src={activeDraft.mediaUrl}
+                    alt="Preview"
+                    className="h-full w-full object-contain"
+                  />
                 )}
 
                 {activeDraft.overlayText && (
@@ -478,7 +494,10 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
                 {activeDraft.audience === "public" && (
                   <div className="flex items-center justify-between rounded-xl bg-secondary/50 p-3 border border-border/50">
                     <div>
-                      <Label htmlFor="discoverable-toggle" className="text-xs font-semibold cursor-pointer">
+                      <Label
+                        htmlFor="discoverable-toggle"
+                        className="text-xs font-semibold cursor-pointer"
+                      >
                         Opt into "For You" Feed
                       </Label>
                       <p className="text-[11px] text-muted-foreground">

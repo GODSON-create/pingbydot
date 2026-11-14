@@ -1,13 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 
 export type SignalInstitutionType =
-  | "university"
-  | "company"
-  | "incubator"
-  | "government"
-  | "community"
-  | "other";
+  "university" | "company" | "incubator" | "government" | "community" | "other";
 
 export interface Signal {
   id: string;
@@ -20,6 +16,8 @@ export interface Signal {
   website_url: string | null;
   institution_type: string;
   verified: boolean;
+  verification_status?: string;
+  verification_details?: Record<string, unknown>;
   follower_count: number;
   post_count?: number;
   created_by?: string;
@@ -47,6 +45,20 @@ export interface SignalPostAnalytics {
   read_percentage: number;
 }
 
+export interface SignalPublisherMember {
+  signal_id: string;
+  user_id: string;
+  role: "admin" | "publisher";
+  created_at: string;
+  profile: {
+    id: string;
+    username: string;
+    display_name: string;
+    bio: string;
+    avatar_url: string | null;
+  } | null;
+}
+
 export function signalsQuery(filters?: { search?: string; category?: string }) {
   return {
     queryKey: ["signals", filters?.search, filters?.category],
@@ -54,7 +66,7 @@ export function signalsQuery(filters?: { search?: string; category?: string }) {
       let q = supabase
         .from("signals")
         .select(
-          "id, slug, name, tagline, description, avatar_url, cover_url, website_url, institution_type, verified, follower_count, post_count, created_by, created_at",
+          "id, slug, name, tagline, description, avatar_url, cover_url, website_url, institution_type, verified, verification_status, follower_count, post_count, created_by, created_at",
         )
         .order("verified", { ascending: false })
         .order("follower_count", { ascending: false });
@@ -82,7 +94,7 @@ export function signalBySlugQuery(slug: string) {
       const { data, error } = await supabase
         .from("signals")
         .select(
-          "id, slug, name, tagline, description, avatar_url, cover_url, website_url, institution_type, verified, follower_count, post_count, created_by, created_at",
+          "id, slug, name, tagline, description, avatar_url, cover_url, website_url, institution_type, verified, verification_status, verification_details, follower_count, post_count, created_by, created_at",
         )
         .eq("slug", slug)
         .maybeSingle();
@@ -100,7 +112,9 @@ export function signalPostsQuery(signalId: string, currentUserId?: string) {
     queryFn: async (): Promise<SignalPost[]> => {
       const { data: rawPosts, error } = await supabase
         .from("signal_posts")
-        .select("id, signal_id, author_id, title, content, category, is_urgent, media_urls, created_at, updated_at")
+        .select(
+          "id, signal_id, author_id, title, content, category, is_urgent, media_urls, created_at, updated_at",
+        )
         .eq("signal_id", signalId)
         .order("created_at", { ascending: false });
 
@@ -151,7 +165,7 @@ export function signalFollowingQuery(signalId: string, userId?: string) {
       if (!userId) return false;
       const { data, error } = await supabase
         .from("signal_followers")
-        .select("id")
+        .select("signal_id, user_id")
         .eq("signal_id", signalId)
         .eq("user_id", userId)
         .maybeSingle();
@@ -166,7 +180,7 @@ export function signalPublisherQuery(signalId: string, userId?: string) {
   return {
     queryKey: ["signal-publisher", signalId, userId],
     enabled: Boolean(signalId && userId),
-    queryFn: async (): Promise<{ isPublisher: boolean; role?: string }> => {
+    queryFn: async (): Promise<{ isPublisher: boolean; role?: "admin" | "publisher" }> => {
       if (!userId) return { isPublisher: false };
       const { data, error } = await supabase
         .from("signal_publishers")
@@ -176,7 +190,29 @@ export function signalPublisherQuery(signalId: string, userId?: string) {
         .maybeSingle();
 
       if (error || !data) return { isPublisher: false };
-      return { isPublisher: true, role: (data as { role: string }).role };
+      return { isPublisher: true, role: (data as { role: "admin" | "publisher" }).role };
+    },
+  };
+}
+
+export function signalPublishersListQuery(signalId: string) {
+  return {
+    queryKey: ["signal-publishers", signalId],
+    enabled: Boolean(signalId),
+    queryFn: async (): Promise<SignalPublisherMember[]> => {
+      const { data, error } = await supabase
+        .from("signal_publishers")
+        .select(
+          "signal_id, user_id, role, created_at, profile:profiles!signal_publishers_user_id_fkey(id, username, display_name, bio, avatar_url)",
+        )
+        .eq("signal_id", signalId)
+        .order("created_at", { ascending: true });
+
+      if (error) {
+        console.warn("Failed to load signal publishers:", error);
+        return [];
+      }
+      return (data ?? []) as unknown as SignalPublisherMember[];
     },
   };
 }
@@ -196,6 +232,44 @@ export function useSignalFollow(signalId: string, userId?: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["signal-following", signalId, userId] });
       qc.invalidateQueries({ queryKey: ["signal"] });
+      qc.invalidateQueries({ queryKey: ["signals"] });
+    },
+  });
+}
+
+export function useUpdateSignal(signalId: string) {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: {
+      name: string;
+      tagline?: string;
+      description?: string;
+      website_url?: string;
+      avatar_url?: string;
+      institution_type?: string;
+    }) => {
+      const { data, error } = await supabase.rpc("update_signal", {
+        _signal: signalId,
+        _name: payload.name.trim(),
+        ...(payload.tagline !== undefined ? { _tagline: payload.tagline.trim() } : {}),
+        ...(payload.description !== undefined ? { _description: payload.description.trim() } : {}),
+        ...(payload.website_url !== undefined
+          ? { _website_url: payload.website_url.trim() || null }
+          : {}),
+        ...(payload.avatar_url !== undefined
+          ? { _avatar_url: payload.avatar_url.trim() || null }
+          : {}),
+        ...(payload.institution_type !== undefined
+          ? { _institution_type: payload.institution_type }
+          : {}),
+      });
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["signal", signalId] });
       qc.invalidateQueries({ queryKey: ["signals"] });
     },
   });
@@ -232,6 +306,53 @@ export function useCreateSignalPost(signalId: string) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["signal-posts", signalId] });
+      qc.invalidateQueries({ queryKey: ["signal", signalId] });
+    },
+  });
+}
+
+export function useManageSignalPublisher(signalId: string) {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      username,
+      action,
+      role = "publisher",
+    }: {
+      username: string;
+      action: "add" | "remove" | "role";
+      role?: "admin" | "publisher";
+    }) => {
+      const { error } = await supabase.rpc("manage_signal_publisher", {
+        _signal: signalId,
+        _username: username.trim(),
+        _action: action,
+        _role: role,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["signal-publishers", signalId] });
+      qc.invalidateQueries({ queryKey: ["signal-publisher", signalId] });
+    },
+  });
+}
+
+export function useRequestSignalVerification(signalId: string) {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (details?: Json) => {
+      const { error } = await supabase.rpc("request_signal_verification", {
+        _signal: signalId,
+        ...(details ? { _details: details } : {}),
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["signal"] });
+      qc.invalidateQueries({ queryKey: ["signals"] });
     },
   });
 }
@@ -267,10 +388,48 @@ export function signalAnalyticsQuery(postId: string, isPublisher: boolean) {
       const res = data as unknown as Record<string, unknown>;
       return {
         post_id: (res["post_id"] as string) || postId,
-        total_delivered: Number(res["total_delivered"] ?? 0),
-        total_read: Number(res["total_read"] ?? 0),
+        total_delivered: Number(res["total_recipients"] ?? res["total_delivered"] ?? 0),
+        total_read: Number(res["read_count"] ?? res["total_read"] ?? 0),
         read_percentage: Number(res["read_percentage"] ?? 0),
       };
     },
   };
 }
+
+export const recentSignalBroadcastsQuery = () => ({
+  queryKey: ["recent-signal-broadcasts"],
+  queryFn: async (): Promise<
+    Record<string, { id: string; title: string; content: string; created_at: string }>
+  > => {
+    const { data, error } = await supabase
+      .from("signal_posts")
+      .select("id, signal_id, title, content, created_at")
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    if (error || !data) return {};
+    const map: Record<string, { id: string; title: string; content: string; created_at: string }> =
+      {};
+    for (const p of data) {
+      if (!map[p.signal_id]) {
+        map[p.signal_id] = p;
+      }
+    }
+    return map;
+  },
+});
+
+export const myFollowedSignalsQuery = (userId: string | undefined) => ({
+  queryKey: ["my-followed-signals", userId],
+  enabled: !!userId,
+  queryFn: async (): Promise<Set<string>> => {
+    if (!userId) return new Set<string>();
+    const { data, error } = await supabase
+      .from("signal_followers")
+      .select("signal_id")
+      .eq("user_id", userId);
+
+    if (error || !data) return new Set<string>();
+    return new Set(data.map((r) => r.signal_id));
+  },
+});

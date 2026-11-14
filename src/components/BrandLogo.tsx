@@ -7,10 +7,24 @@ export function BrandLogo({ className }: { className?: string }) {
   const [failed, setFailed] = useState(false);
   return (
     <span className={cn("inline-flex h-8 w-36 items-center", className)}>
-      {!failed ? (
+      {logo && !failed ? (
         <span className="flex h-full w-full items-center">
-          <img src={logo.src} alt="Ping by DOT" width={logo.width} height={logo.height} onError={() => setFailed(true)} className="max-h-full max-w-full object-contain dark:hidden" />
-          <img src={logo.darkSrc ?? logo.src} alt="Ping by DOT" width={logo.width} height={logo.height} onError={() => setFailed(true)} className="hidden max-h-full max-w-full object-contain dark:block" />
+          <img
+            src={logo.src}
+            alt="Ping by DOT"
+            width={logo.width}
+            height={logo.height}
+            onError={() => setFailed(true)}
+            className="max-h-full max-w-full object-contain dark:hidden"
+          />
+          <img
+            src={logo.darkSrc ?? logo.src}
+            alt="Ping by DOT"
+            width={logo.width}
+            height={logo.height}
+            onError={() => setFailed(true)}
+            className="hidden max-h-full max-w-full object-contain dark:block"
+          />
         </span>
       ) : (
         <span className="inline-flex items-baseline gap-1.5 font-display text-2xl font-extrabold text-foreground">

@@ -17,7 +17,12 @@ export const commentReportSchema = z.object({
   details: z.string().trim().max(500).default(""),
 });
 
-export type CommentAuthor = { id: string; username: string; display_name: string; avatar_url: string | null };
+export type CommentAuthor = {
+  id: string;
+  username: string;
+  display_name: string;
+  avatar_url: string | null;
+};
 
 export type CommentRow = {
   id: string;
@@ -43,7 +48,9 @@ export function replyDepth(parentDepth: number) {
 
 /** Builds chronological nested threads. Deleted comments without live replies are dropped. */
 export function buildThreads(rows: CommentRow[]): CommentNode[] {
-  const sorted = [...rows].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
+  const sorted = [...rows].sort(
+    (a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id),
+  );
   const byId = new Map<string, CommentNode>();
   for (const r of sorted) byId.set(r.id, { ...r, replies: [] });
   const roots: CommentNode[] = [];
@@ -59,22 +66,31 @@ export function buildThreads(rows: CommentRow[]): CommentNode[] {
   return prune(roots);
 }
 
-export const canModifyComment = (comment: Pick<CommentRow, "user_id" | "deleted_at">, userId: string | undefined) =>
-  !!userId && comment.user_id === userId && !comment.deleted_at;
+export const canModifyComment = (
+  comment: Pick<CommentRow, "user_id" | "deleted_at">,
+  userId: string | undefined,
+) => !!userId && comment.user_id === userId && !comment.deleted_at;
 
 export const commentLikeCount = (c: Pick<CommentRow, "likes">) => c.likes?.[0]?.count ?? 0;
 
 export type RepingSource = {
   source_ping_id: string | null;
   source_comment_id: string | null;
-  source_comment: { id: string; ping_id: string; content: string; deleted_at: string | null; author: { username: string; display_name: string } | null } | null;
+  source_comment: {
+    id: string;
+    ping_id: string;
+    content: string;
+    deleted_at: string | null;
+    author: { username: string; display_name: string } | null;
+  } | null;
 };
 
 /** Attribution for a Ping created from a reply. Hidden/deleted sources never expose their text. */
 export function repingAttribution(p: RepingSource) {
   if (!p.source_comment_id && !p.source_ping_id) return null;
   const c = p.source_comment;
-  if (!c || c.deleted_at || !c.content) return { available: false as const, pingId: p.source_ping_id };
+  if (!c || c.deleted_at || !c.content)
+    return { available: false as const, pingId: p.source_ping_id };
   return {
     available: true as const,
     pingId: c.ping_id,
