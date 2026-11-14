@@ -19,10 +19,8 @@ export const SITE_NAME = "Ping by DOT";
 
 export const siteUrl = (path = "/") => new URL(path, SITE_ORIGIN).href;
 
-// PENDING OFFICIAL LOGO: set this to the absolute public URL of the approved
-// Ping by DOT logo once the file is installed (e.g. `${SITE_ORIGIN}/brand/ping-logo.png`).
-// Kept null so no broken or placeholder logo URL is ever published.
-export const OFFICIAL_LOGO_URL: string | null = null;
+// Local, first-party Ping by DOT brand asset used in structured data and social previews.
+export const OFFICIAL_LOGO_URL: string | null = siteUrl("/brand/ping-logo.svg");
 
 export function siteJsonLd() {
   const organization: Record<string, unknown> = {
