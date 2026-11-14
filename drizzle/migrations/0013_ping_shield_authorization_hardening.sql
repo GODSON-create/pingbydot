@@ -224,3 +224,126 @@ REVOKE ALL ON FUNCTION public.toggle_like_moment(uuid, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.toggle_like_moment(uuid, text) TO authenticated, service_role;
 REVOKE ALL ON FUNCTION public.delete_reping(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.delete_reping(uuid) TO authenticated, service_role;
+
+
+-- Central visibility predicate used by both policies and SECURITY DEFINER RPCs.
+CREATE OR REPLACE FUNCTION public.can_view_moment(_moment_id uuid, _viewer uuid DEFAULT auth.uid())
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.moments m
+    WHERE m.id = _moment_id
+      AND m.deleted_at IS NULL
+      AND m.expires_at > now()
+      AND (
+        m.author_id = _viewer
+        OR m.audience = 'public'
+        OR (
+          _viewer IS NOT NULL AND m.audience = 'followers'
+          AND EXISTS (
+            SELECT 1 FROM public.follows f
+            WHERE f.follower_id = _viewer AND f.following_id = m.author_id
+          )
+        )
+        OR (
+          _viewer IS NOT NULL AND m.audience = 'hub'
+          AND EXISTS (
+            SELECT 1 FROM public.hub_members hm
+            WHERE hm.hub_id = m.hub_id AND hm.user_id = _viewer AND hm.status = 'active'
+          )
+        )
+        OR (
+          _viewer IS NOT NULL AND m.audience = 'close_circle'
+          AND EXISTS (
+            SELECT 1 FROM public.user_close_circle cc
+            WHERE cc.user_id = m.author_id AND cc.member_id = _viewer
+          )
+        )
+      )
+  );
+$$;
+REVOKE ALL ON FUNCTION public.can_view_moment(uuid, uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.can_view_moment(uuid, uuid) TO anon, authenticated, service_role;
+
+DROP POLICY IF EXISTS "Moments viewable by authorized audience" ON public.moments;
+CREATE POLICY "Moments viewable by authorized audience"
+  ON public.moments FOR SELECT TO anon, authenticated
+  USING (public.can_view_moment(id, (select auth.uid())));
+
+DROP POLICY IF EXISTS "Moment likes viewable by eligible viewers" ON public.moment_likes;
+CREATE POLICY "Moment likes viewable by eligible viewers"
+  ON public.moment_likes FOR SELECT TO anon, authenticated
+  USING (public.can_view_moment(moment_id, (select auth.uid())));
+
+DROP POLICY IF EXISTS "Repings viewable according to original moment" ON public.moment_repings;
+CREATE POLICY "Repings viewable according to original moment"
+  ON public.moment_repings FOR SELECT TO anon, authenticated
+  USING (
+    user_id = (select auth.uid())
+    OR public.can_view_moment(moment_id, (select auth.uid()))
+  );
+
+-- SECURITY DEFINER RPCs must enforce the same visibility predicate as table reads.
+CREATE OR REPLACE FUNCTION public.view_moment(_moment_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  _viewer uuid := auth.uid();
+BEGIN
+  IF _viewer IS NULL THEN RAISE EXCEPTION 'Authentication required'; END IF;
+  IF NOT public.can_view_moment(_moment_id, _viewer) THEN
+    RAISE EXCEPTION 'Moment not found';
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.moments WHERE id = _moment_id AND author_id = _viewer) THEN
+    RETURN;
+  END IF;
+
+  INSERT INTO public.moment_views (moment_id, viewer_id)
+  VALUES (_moment_id, _viewer)
+  ON CONFLICT (moment_id, viewer_id) DO UPDATE SET viewed_at = now();
+
+  UPDATE public.moments
+  SET view_count = (SELECT count(*) FROM public.moment_views WHERE moment_id = _moment_id)
+  WHERE id = _moment_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.toggle_like_moment(_moment_id uuid, _reaction text DEFAULT '❤️')
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  _viewer uuid := auth.uid();
+  _liked boolean;
+BEGIN
+  IF _viewer IS NULL THEN RAISE EXCEPTION 'Authentication required'; END IF;
+  IF NOT public.can_view_moment(_moment_id, _viewer) THEN
+    RAISE EXCEPTION 'Moment not found';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM public.moment_likes WHERE moment_id = _moment_id AND user_id = _viewer) THEN
+    DELETE FROM public.moment_likes WHERE moment_id = _moment_id AND user_id = _viewer;
+    _liked := false;
+  ELSE
+    INSERT INTO public.moment_likes (moment_id, user_id, reaction)
+    VALUES (_moment_id, _viewer, left(coalesce(_reaction, '❤️'), 16));
+    _liked := true;
+  END IF;
+
+  UPDATE public.moments
+  SET like_count = (SELECT count(*) FROM public.moment_likes WHERE moment_id = _moment_id)
+  WHERE id = _moment_id;
+
+  RETURN _liked;
+END;
+$$;
