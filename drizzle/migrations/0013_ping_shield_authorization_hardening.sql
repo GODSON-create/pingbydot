@@ -347,3 +347,40 @@ BEGIN
   RETURN _liked;
 END;
 $$;
+
+
+-- Direct Re-Ping inserts must preserve the original audience too; the RPC alone
+-- is not the security boundary because authenticated clients can call PostgREST.
+DROP POLICY IF EXISTS "Users create repings" ON public.moment_repings;
+CREATE POLICY "Users create repings"
+  ON public.moment_repings
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    user_id = (select auth.uid())
+    AND audience IN ('public', 'followers')
+    AND EXISTS (
+      SELECT 1
+      FROM public.moments m
+      WHERE m.id = moment_repings.moment_id
+        AND m.deleted_at IS NULL
+        AND m.expires_at > now()
+        AND m.allow_repings = true
+        AND m.audience IN ('public', 'followers')
+        AND public.can_view_moment(m.id, (select auth.uid()))
+        AND (m.audience <> 'followers' OR audience = 'followers')
+    )
+  );
+
+-- A user may edit only their own post while they remain an authorized publisher.
+DROP POLICY IF EXISTS "Publishers update own posts" ON public.signal_posts;
+CREATE POLICY "Publishers update own posts"
+  ON public.signal_posts
+  FOR UPDATE TO authenticated
+  USING (
+    public.signal_role(signal_id, (select auth.uid())) IN ('admin', 'publisher')
+    AND (author_id = (select auth.uid()) OR public.signal_role(signal_id, (select auth.uid())) = 'admin')
+  )
+  WITH CHECK (
+    public.signal_role(signal_id, (select auth.uid())) IN ('admin', 'publisher')
+    AND (author_id = (select auth.uid()) OR public.signal_role(signal_id, (select auth.uid())) = 'admin')
+  );
