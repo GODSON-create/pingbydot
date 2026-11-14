@@ -38,9 +38,7 @@ describe("Product Completion Sprint - Verification Suite", () => {
 
     expect(code).toContain('const isFollowersOnly = moment?.audience === "followers";');
     expect(code).toContain("disabled={isFollowersOnly}");
-    expect(code).toContain(
-      "Original moment is Followers Only. Audience cannot be expanded to Public.",
-    );
+    expect(code).toMatch(/Original moment is Followers Only[\s\S]*?cannot be expanded to Public/);
   });
 
   it("Includes Delete Hub action in Hub settings with confirmation dialog", () => {

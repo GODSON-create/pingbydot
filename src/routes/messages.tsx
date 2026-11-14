@@ -7,6 +7,7 @@ import {
   userConversationsQuery,
   conversationMessagesQuery,
   type Conversation,
+  useGetOrCreateDirectConversation,
 } from "@/lib/messages";
 import { ConversationList } from "@/components/messages/ConversationList";
 import { DirectMessageChat } from "@/components/messages/DirectMessageChat";
@@ -42,6 +43,23 @@ function MessagesPage() {
   const { user, ready } = useAuth();
   const navigate = useNavigate();
   const search = Route.useSearch();
+
+  const getOrCreateMutation = useGetOrCreateDirectConversation();
+
+  // If userId query param is provided, open/create conversation with that user
+  useEffect(() => {
+    if (search.userId && user && search.userId !== user.id) {
+      getOrCreateMutation
+        .mutateAsync(search.userId)
+        .then((convId) => {
+          if (convId) {
+            setActiveConversationId(convId);
+            navigate({ to: "/messages", search: { conversationId: convId } });
+          }
+        })
+        .catch(console.error);
+    }
+  }, [search.userId, user]);
 
   const [activeConversationId, setActiveConversationId] = useState<string | undefined>(
     search.conversationId,

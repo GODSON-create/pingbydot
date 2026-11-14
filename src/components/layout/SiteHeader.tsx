@@ -1,5 +1,16 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Plus, LogOut, Settings, User, Building2, Radio, Sun, Moon, Laptop } from "lucide-react";
+import {
+  Plus,
+  LogOut,
+  Settings,
+  User,
+  Building2,
+  Radio,
+  MessageSquare,
+  Sun,
+  Moon,
+  Laptop,
+} from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { checkAdminAccess } from "@/lib/admin.functions";
@@ -132,6 +143,11 @@ export function SiteHeader() {
                     <DropdownMenuItem asChild>
                       <Link to="/signals">
                         <Radio /> Signals
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to="/messages">
+                        <MessageSquare /> Messages
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>

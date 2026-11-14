@@ -13,6 +13,7 @@ A read-only live database inspection found only migrations 1–10 in `drizzle.__
 `comment_likes, comment_reports, comments, follows, hub_invites, hub_members, hub_pings, hubs, likes, moderation_audit, notifications, pings, profile_connections, profiles, reports, user_roles`.
 
 Migrations 0011 and 0012 are present in the repository but not recorded as applied. Their intended tables are absent:
+
 - 0011: `user_privacy_preferences, hub_messages, ping_read_receipts, signals, signal_publishers, signal_followers, signal_posts, signal_reads`.
 - 0012: `moments, moment_views, moment_likes, moment_replies, moment_repings, highlights, highlight_items, user_close_circle`.
 
@@ -38,6 +39,7 @@ The repo roadmap still lists incomplete work: Explore/Ping details/public share 
 ## Required V1 scope — must work end to end
 
 ### A. Identity, signup and profiles
+
 - Email signup/login, Google login if configured, OTP/reset if configured, session refresh, logout and protected routes.
 - First-time profile creation is atomic/idempotent; no duplicate profile race, missing profile, or "Something went wrong saving your profile".
 - Remove the access-code question entirely from UI, validation, state, backend gate and tests.
@@ -45,6 +47,7 @@ The repo roadmap still lists incomplete work: Explore/Ping details/public share 
 - Test fresh account, returning account, duplicate username, missing profile recovery, two simultaneous signups, signed-out route access.
 
 ### B. Core Pings and Explore
+
 - Create multiple Pings; edit/delete own Pings; unique stable public links; public share page works signed out.
 - Explore loads, search/filter/pagination work, no empty feed caused by client auth assumptions; public SSR reads use only public fields.
 - Likes are unique per user/Ping; comments/replies and re-pings preserve attribution; shares resolve to canonical URL.
@@ -52,29 +55,34 @@ The repo roadmap still lists incomplete work: Explore/Ping details/public share 
 - Validate upload MIME/size, storage policies and signed/public URL handling.
 
 ### C. Hubs
+
 - Create/list/search/view public and private Hubs; join/leave/invite/revoke; membership roles; Hub Pings; pinned feed; resources; member directory.
 - Hub messages: send/edit/delete only own message or staff; membership gating; replies; Realtime; read/delivery receipts; unread counts.
 - Prevent non-members from reading private Hub messages or private member lists. Prevent member self-promotion to owner/admin/moderator.
 - Verify counter consistency and concurrent join/leave.
 
 ### D. Moments and Highlights
+
 - Upload/create image/video Moment, audience selection (public/followers/hub/close-circle), expiration/archive/delete, views, reactions, replies, share/re-ping rules.
 - Highlights create/edit/reorder/delete and add/remove Moments; private Highlights and their media must remain private.
 - Validate storage access, MIME/size, media URL authorization, Realtime and counter integrity.
 - Close Circle membership is owner-managed and private.
 
 ### E. Signals
+
 - Create Signal; owner/verified status; follower subscriptions; publishers; publish announcements/alerts/opportunities/events; mark read; analytics.
 - Critical: no user can self-assign Signal admin/publisher role. Only creator bootstrap through trusted RPC and authorized admin operations.
 - Analytics only visible to Signal admins/publishers. Counts use safe concurrency and accurate denominator.
 
 ### F. One-to-one chats (missing implementation)
+
 - Implement actual direct conversations, not just Moment replies or Hub messages.
 - Add normalized schema for conversations, conversation_members and conversation_messages (or justify simpler schema), unique pair/conversation semantics, participant-only RLS, message ownership, blocking/reporting controls, pagination, Realtime, delivery/read receipts, unread counts and safe notification fan-out.
 - No public/anon access to direct-message rows. No user can add a third participant or read another pair's conversation.
 - Add routes and UI for inbox, conversation list, thread, send, empty state, loading/error, responsive mobile back navigation. Test with two independent accounts.
 
 ### G. Shell, navigation, notifications and admin
+
 - Audit desktop/mobile/iOS/Android web layouts separately. No clipped controls, dead navigation, inaccessible touch targets or overflow.
 - Header, desktop sidebar/navigation and mobile bottom nav point to working destinations; all CTAs work.
 - Notifications are scoped to recipient; mark read/unread; no duplicate fan-out.
@@ -95,32 +103,39 @@ The repo roadmap still lists incomplete work: Explore/Ping details/public share 
 ## Execution order
 
 Phase 0 — inventory and baseline:
+
 - Run `bun install --frozen-lockfile` or the lockfile-appropriate install; inspect package manager/lockfile.
 - Run `bun test`, `bun run lint`, `bun run build`; record failures before edits.
 - Inspect current live DB with preflight SQL and compare every migration against actual state.
 - Map routes, components, hooks, RPCs and table dependencies. Make a feature matrix with code present / DB present / permissions present / tests / browser QA.
 
 Phase 1 — secure DB foundation:
+
 - Correct and review migrations 0011 and 0012. Add a proper new migration for direct messages after schema design.
 - Run migrations against a disposable/staging clone first; run schema and RLS tests. Back up production. Then apply pending migrations 0011 onward in order using Drizzle migration runner with secure migration credentials.
 - Never manually apply 0012 before fixing its grants/RLS/RPC behavior. Update the Drizzle journal only through normal migration authoring.
 
 Phase 2 — V1 implementation:
+
 - Fix signup/profile, Explore, Ping details/share, Hubs/messages, Moments/Highlights, Signals and direct messages.
 - Add unit/integration tests, role-based RLS tests and two-account browser E2E.
 - Fix all critical/high issues before proceeding.
 
 Phase 3 — V2:
+
 - Complete Connections, mobile navigation, Shield controls, analytics, admin/referral and performance improvements.
 - Run mobile/desktop visual and functional QA.
 
 Phase 4 — release candidate:
+
 - Production build passes; lint and tests pass; migrations verified; no unresolved critical/high security findings; every route checked; two-account privacy checks pass; backups/restore plan confirmed.
 - Provide exact list of features verified, not just implemented; remaining medium/low issues; migration IDs and hashes; commit/PR; preview URL.
 - Keep PR draft until owner reviews. Do not publish production; owner will click Publish and connect domain after acceptance.
 
 ## Required final report
+
 Return:
+
 - Feature matrix V1 and V2 with status (verified / implemented-not-verified / blocked / not started).
 - Files changed and commits.
 - DB migrations changed/applied and exact migration ledger result.

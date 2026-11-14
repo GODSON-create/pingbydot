@@ -390,3 +390,72 @@ BEGIN
 END;
 $$;
 GRANT EXECUTE ON FUNCTION public.delete_user_account() TO authenticated, service_role;
+
+
+-- 11. V1/V2 POSTFLIGHT COMPATIBILITY (table & function signatures)
+CREATE TABLE IF NOT EXISTS public.conversation_messages (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  conversation_id uuid NOT NULL REFERENCES public.conversations(id) ON DELETE CASCADE,
+  sender_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  content text NOT NULL CHECK (char_length(btrim(content)) BETWEEN 1 AND 5000),
+  media_url text,
+  reply_to_id uuid REFERENCES public.conversation_messages(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  deleted_at timestamptz
+);
+
+ALTER TABLE public.conversation_messages ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.conversation_messages TO authenticated;
+GRANT ALL ON public.conversation_messages TO service_role;
+
+DROP POLICY IF EXISTS "Conversation messages visible to participants" ON public.conversation_messages;
+CREATE POLICY "Conversation messages visible to participants" ON public.conversation_messages
+  FOR SELECT TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.conversation_members cm
+      WHERE cm.conversation_id = conversation_messages.conversation_id
+        AND cm.user_id = (select auth.uid())
+    )
+  );
+
+DROP POLICY IF EXISTS "Participants insert conversation messages" ON public.conversation_messages;
+CREATE POLICY "Participants insert conversation messages" ON public.conversation_messages
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    sender_id = (select auth.uid())
+    AND EXISTS (
+      SELECT 1 FROM public.conversation_members cm
+      WHERE cm.conversation_id = conversation_messages.conversation_id
+        AND cm.user_id = (select auth.uid())
+    )
+  );
+
+CREATE OR REPLACE FUNCTION public.get_or_create_conversation(p_recipient_id uuid)
+RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  RETURN public.get_or_create_direct_conversation(p_recipient_id);
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.get_or_create_conversation(uuid) TO authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.create_conversation(p_recipient_id uuid)
+RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  RETURN public.get_or_create_direct_conversation(p_recipient_id);
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.create_conversation(uuid) TO authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.send_message(
+  p_conversation_id uuid,
+  p_content text,
+  p_media_url text DEFAULT NULL,
+  p_media_type text DEFAULT NULL
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  RETURN public.send_private_message(p_conversation_id, p_content, p_media_url, p_media_type);
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.send_message(uuid, text, text, text) TO authenticated, service_role;
