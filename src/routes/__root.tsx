@@ -21,7 +21,7 @@ import { BottomNav } from "@/components/layout/BottomNav";
 import { GestureLayer } from "@/components/layout/GestureLayer";
 import { Toaster } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
-import { SITE_NAME, siteJsonLd } from "@/lib/site";
+import { SITE_NAME, siteJsonLd, siteUrl } from "@/lib/site";
 
 function NotFoundComponent() {
   return (
@@ -69,6 +69,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:description", content: "Share progress, ideas and milestones as Pings with public links." },
       { property: "og:type", content: "website" },
       { property: "og:site_name", content: SITE_NAME },
+      { property: "og:image", content: siteUrl("/brand/ping-logo.svg") },
+      { name: "twitter:image", content: siteUrl("/brand/ping-logo.svg") },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "theme-color", content: "#173C32" },
     ],
@@ -80,8 +82,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         href: "https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap",
       },
       { rel: "stylesheet", href: appCss },
-      // PENDING OFFICIAL LOGO: swap to the official favicon/app icons once installed.
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", href: "/brand/ping-icon.svg", type: "image/svg+xml" },
+      { rel: "apple-touch-icon", href: "/brand/ping-icon.svg" },
     ],
     scripts: [{ type: "application/ld+json", children: JSON.stringify(siteJsonLd()) }],
   }),
