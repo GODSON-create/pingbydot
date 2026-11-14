@@ -22,7 +22,10 @@ interface RePingModalProps {
 
 export function RePingModal({ moment, open, onOpenChange, onSuccess }: RePingModalProps) {
   const [caption, setCaption] = useState("");
-  const [audience, setAudience] = useState<"public" | "followers">("public");
+  const isFollowersOnly = moment?.audience === "followers";
+  const [audience, setAudience] = useState<"public" | "followers">(
+    isFollowersOnly ? "followers" : "public",
+  );
   const repingMutation = useRePingMoment();
 
   if (!moment) return null;
@@ -43,11 +46,12 @@ export function RePingModal({ moment, open, onOpenChange, onSuccess }: RePingMod
       return;
     }
 
+    const finalAudience = isFollowersOnly ? "followers" : audience;
     try {
       await repingMutation.mutateAsync({
         momentId: moment.id,
         ...(caption.trim() ? { caption: caption.trim() } : {}),
-        audience,
+        audience: finalAudience,
       });
 
       toast.success("Moment re-pinged to your network!");
@@ -135,12 +139,20 @@ export function RePingModal({ moment, open, onOpenChange, onSuccess }: RePingMod
               <div className="mt-1.5 grid grid-cols-2 gap-2">
                 <button
                   type="button"
+                  disabled={isFollowersOnly}
                   onClick={() => setAudience("public")}
                   className={`rounded-xl border p-2 text-xs font-semibold transition-all ${
-                    audience === "public"
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border text-muted-foreground hover:bg-muted/50"
+                    isFollowersOnly
+                      ? "border-border/40 opacity-40 cursor-not-allowed text-muted-foreground"
+                      : audience === "public"
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border text-muted-foreground hover:bg-muted/50"
                   }`}
+                  title={
+                    isFollowersOnly
+                      ? "Original moment is Followers-only; cannot expand to Public"
+                      : undefined
+                  }
                 >
                   🌍 Public Network
                 </button>
@@ -156,6 +168,12 @@ export function RePingModal({ moment, open, onOpenChange, onSuccess }: RePingMod
                   👥 Followers Only
                 </button>
               </div>
+              {isFollowersOnly && (
+                <p className="mt-1.5 text-[11px] text-amber-500 font-medium flex items-center gap-1">
+                  <Lock className="size-3 shrink-0" /> Original moment is Followers Only. Audience
+                  cannot be expanded to Public.
+                </p>
+              )}
             </div>
 
             <div className="pt-2 flex justify-end gap-2">

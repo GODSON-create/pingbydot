@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useDeferredValue } from "react";
 import { z } from "zod";
@@ -64,6 +64,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { HubShareModal } from "@/components/hubs/HubShareModal";
 import { HubChat } from "@/components/hubs/HubChat";
 import { cn } from "@/lib/utils";
@@ -368,12 +379,32 @@ function EditHubDialog({
   hub,
   open,
   onOpenChange,
+  isOwner,
 }: {
   hub: Hub;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  isOwner?: boolean;
 }) {
   const qc = useQueryClient();
+  const navigate = useNavigate();
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.rpc("delete_hub", { _hub: hub.id });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hubs"] });
+      qc.invalidateQueries({ queryKey: ["my-hubs"] });
+      toast.success("Hub deleted successfully.");
+      onOpenChange(false);
+      navigate({ to: "/hubs" });
+    },
+    onError: (e: any) => {
+      toast.error(hubError(e, "Could not delete hub."));
+    },
+  });
   const [name, setName] = useState(hub.name);
   const [tagline, setTagline] = useState(hub.tagline || "");
   const [description, setDescription] = useState(hub.description || "");
@@ -572,6 +603,55 @@ function EditHubDialog({
               )}
             </div>
           </div>
+
+          {isOwner && (
+            <div className="pt-4 border-t border-destructive/20">
+              <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-4">
+                <h4 className="text-xs font-bold text-destructive flex items-center gap-1.5">
+                  <Trash2 className="size-3.5" /> Danger Zone: Delete Hub
+                </h4>
+                <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+                  Permanently remove this Hub, all member rosters, and community rooms. This cannot
+                  be undone.
+                </p>
+                <div className="mt-3">
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        className="rounded-xl h-8 px-3 text-xs font-semibold"
+                      >
+                        Delete this Hub
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="rounded-3xl max-w-sm">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle className="font-display font-bold text-destructive">
+                          Delete {hub.name}?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className="text-xs text-muted-foreground">
+                          Are you sure you want to permanently delete this Hub? All member
+                          conversations, pinned updates, and invitations will be erased.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter className="mt-3">
+                        <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => deleteMutation.mutate()}
+                          disabled={deleteMutation.isPending}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-xl font-bold"
+                        >
+                          {deleteMutation.isPending ? "Deleting…" : "Yes, Delete Hub"}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="pt-2 flex justify-end gap-2">
             <Button
@@ -1241,7 +1321,9 @@ function HubDetail() {
       />
 
       {/* Edit Hub Settings Dialog */}
-      {canEdit && <EditHubDialog hub={hub} open={editOpen} onOpenChange={setEditOpen} />}
+      {canEdit && (
+        <EditHubDialog hub={hub} open={editOpen} onOpenChange={setEditOpen} isOwner={isOwner} />
+      )}
     </div>
   );
 }

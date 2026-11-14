@@ -655,3 +655,49 @@ export function useDeleteHighlight() {
     },
   });
 }
+
+export function useUpdateHighlight() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: {
+      highlightId: string;
+      title: string;
+      cover_url?: string;
+      is_private?: boolean;
+    }) => {
+      const { error } = await supabase.rpc("update_highlight", {
+        _highlight_id: payload.highlightId,
+        _title: payload.title.trim(),
+        ...(payload.cover_url !== undefined
+          ? { _cover_url: payload.cover_url.trim() || null }
+          : {}),
+        ...(payload.is_private !== undefined ? { _is_private: payload.is_private } : {}),
+      });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["user-highlights"] });
+    },
+  });
+}
+
+export function useRemoveMomentFromHighlight() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ highlightId, momentId }: { highlightId: string; momentId: string }) => {
+      const { error } = await supabase.rpc("remove_moment_from_highlight", {
+        _highlight_id: highlightId,
+        _moment_id: momentId,
+      });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["user-highlights"] });
+      qc.invalidateQueries({ queryKey: ["highlight-moments"] });
+    },
+  });
+}

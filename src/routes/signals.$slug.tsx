@@ -21,6 +21,8 @@ import {
   ShieldCheck,
   Clock,
   Shield,
+  Settings,
+  Pencil,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -35,6 +37,7 @@ import {
   useMarkSignalRead,
   useManageSignalPublisher,
   useRequestSignalVerification,
+  useUpdateSignal,
   signalAnalyticsQuery,
   type SignalPost,
   type SignalPublisherMember,
@@ -572,12 +575,159 @@ function RequestVerificationDialog({
   );
 }
 
+function EditSignalDialog({
+  signal,
+  open,
+  onOpenChange,
+}: {
+  signal: any;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const updateMutation = useUpdateSignal(signal.id);
+  const [name, setName] = useState(signal.name || "");
+  const [tagline, setTagline] = useState(signal.tagline || "");
+  const [description, setDescription] = useState(signal.description || "");
+  const [websiteUrl, setWebsiteUrl] = useState(signal.website_url || "");
+  const [avatarUrl, setAvatarUrl] = useState(signal.avatar_url || "");
+  const [category, setCategory] = useState(signal.institution_type || "community");
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+
+    updateMutation.mutate(
+      {
+        name: name.trim(),
+        tagline: tagline.trim(),
+        description: description.trim(),
+        website_url: websiteUrl.trim(),
+        avatar_url: avatarUrl.trim(),
+        institution_type: category,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Signal channel information updated!");
+          onOpenChange(false);
+        },
+        onError: (err: any) => {
+          toast.error(err.message || "Failed to update Signal channel.");
+        },
+      },
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg rounded-3xl p-6 sm:p-8 max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="font-display text-xl flex items-center gap-2">
+            <Settings className="size-5 text-primary" /> Edit Signal Channel
+          </DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground">
+            Update institutional identity, branding, description, and official web links.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+          <div>
+            <Label className="text-xs font-semibold">Institution / Channel Name</Label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="mt-1 rounded-xl"
+              required
+            />
+          </div>
+
+          <div>
+            <Label className="text-xs font-semibold">Tagline / Motto</Label>
+            <Input
+              value={tagline}
+              onChange={(e) => setTagline(e.target.value)}
+              placeholder="e.g. Official campus updates & emergency bulletins"
+              className="mt-1 rounded-xl"
+            />
+          </div>
+
+          <div>
+            <Label className="text-xs font-semibold">Category / Type</Label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="mt-1 flex h-10 w-full rounded-xl border border-border bg-card px-3 py-2 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            >
+              <option value="university">🎓 University / School</option>
+              <option value="company">🏢 Enterprise / Company</option>
+              <option value="incubator">🚀 Incubator / Accelerator</option>
+              <option value="government">🏛️ Government / Civic</option>
+              <option value="community">🤝 Community / Association</option>
+              <option value="other">🌐 Other Institution</option>
+            </select>
+          </div>
+
+          <div>
+            <Label className="text-xs font-semibold">Description</Label>
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={4}
+              className="mt-1 rounded-xl resize-none text-xs"
+              placeholder="Describe what official broadcasts and notices subscribers can expect…"
+            />
+          </div>
+
+          <div>
+            <Label className="text-xs font-semibold">Official Website URL</Label>
+            <Input
+              value={websiteUrl}
+              onChange={(e) => setWebsiteUrl(e.target.value)}
+              placeholder="https://example.edu"
+              className="mt-1 rounded-xl"
+            />
+          </div>
+
+          <div>
+            <Label className="text-xs font-semibold">Avatar / Seal Logo URL</Label>
+            <Input
+              value={avatarUrl}
+              onChange={(e) => setAvatarUrl(e.target.value)}
+              placeholder="https://…/logo.png"
+              className="mt-1 rounded-xl"
+            />
+          </div>
+
+          <div className="pt-2 flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              className="rounded-xl"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="hero"
+              disabled={updateMutation.isPending}
+              className="rounded-xl font-bold"
+            >
+              {updateMutation.isPending ? "Saving…" : "Save Changes"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function SignalDetailPage() {
   const { slug } = Route.useParams();
   const { user } = useAuth();
   const qc = useQueryClient();
   const [broadcastDialogOpen, setBroadcastDialogOpen] = useState(false);
   const [publishersDialogOpen, setPublishersDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [verifyDialogOpen, setVerifyDialogOpen] = useState(false);
 
   const { data: signal, isLoading: signalLoading } = useQuery(signalBySlugQuery(slug));
@@ -796,15 +946,26 @@ function SignalDetailPage() {
             </div>
             <div className="flex items-center gap-2">
               {isSignalAdmin && (
-                <Button
-                  onClick={() => setPublishersDialogOpen(true)}
-                  variant="outline"
-                  size="sm"
-                  className="rounded-xl gap-1.5"
-                >
-                  <Users className="size-4" />
-                  Publishers
-                </Button>
+                <>
+                  <Button
+                    onClick={() => setEditDialogOpen(true)}
+                    variant="outline"
+                    size="sm"
+                    className="rounded-xl gap-1.5"
+                  >
+                    <Settings className="size-4" />
+                    Edit Channel
+                  </Button>
+                  <Button
+                    onClick={() => setPublishersDialogOpen(true)}
+                    variant="outline"
+                    size="sm"
+                    className="rounded-xl gap-1.5"
+                  >
+                    <Users className="size-4" />
+                    Publishers
+                  </Button>
+                </>
               )}
               <Button
                 onClick={() => setBroadcastDialogOpen(true)}

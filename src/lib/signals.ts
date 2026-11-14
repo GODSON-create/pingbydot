@@ -237,6 +237,44 @@ export function useSignalFollow(signalId: string, userId?: string) {
   });
 }
 
+export function useUpdateSignal(signalId: string) {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: {
+      name: string;
+      tagline?: string;
+      description?: string;
+      website_url?: string;
+      avatar_url?: string;
+      institution_type?: string;
+    }) => {
+      const { data, error } = await supabase.rpc("update_signal", {
+        _signal: signalId,
+        _name: payload.name.trim(),
+        ...(payload.tagline !== undefined ? { _tagline: payload.tagline.trim() } : {}),
+        ...(payload.description !== undefined ? { _description: payload.description.trim() } : {}),
+        ...(payload.website_url !== undefined
+          ? { _website_url: payload.website_url.trim() || null }
+          : {}),
+        ...(payload.avatar_url !== undefined
+          ? { _avatar_url: payload.avatar_url.trim() || null }
+          : {}),
+        ...(payload.institution_type !== undefined
+          ? { _institution_type: payload.institution_type }
+          : {}),
+      });
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["signal", signalId] });
+      qc.invalidateQueries({ queryKey: ["signals"] });
+    },
+  });
+}
+
 export function useCreateSignalPost(signalId: string) {
   const qc = useQueryClient();
 

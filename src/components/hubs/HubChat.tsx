@@ -138,6 +138,21 @@ export function HubChat({ hubId, isMember, isPrivate }: HubChatProps) {
   }, [messages.length]);
 
   // Send mutation
+  const reactionMutation = useMutation({
+    mutationFn: async ({ messageId, emoji }: { messageId: string; emoji: string }) => {
+      const { error } = await supabase.rpc("toggle_hub_message_reaction", {
+        _message_id: messageId,
+        _reaction: emoji,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hub-messages", hubId] });
+    },
+  });
+
+  const QUICK_REACTIONS = ["👍", "❤️", "🔥", "🚀", "👀"];
+
   const sendMutation = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error("Must be signed in to post.");
@@ -278,7 +293,29 @@ export function HubChat({ hubId, isMember, isPrivate }: HubChatProps) {
                     {msg.content}
                   </div>
 
-                  {/* Footer: timestamp + read receipts dot */}
+                  {/* Reaction Pills */}
+                  {msg.reactions && Object.keys(msg.reactions).length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {Object.entries(msg.reactions).map(([emoji, count]) =>
+                        Number(count) > 0 ? (
+                          <button
+                            key={emoji}
+                            type="button"
+                            onClick={() => reactionMutation.mutate({ messageId: msg.id, emoji })}
+                            className="inline-flex items-center gap-1 rounded-full bg-secondary/80 hover:bg-secondary border border-border/60 px-2 py-0.5 text-[11px] font-medium transition-colors"
+                            title={`React with ${emoji}`}
+                          >
+                            <span>{emoji}</span>
+                            <span className="text-[10px] text-muted-foreground font-bold">
+                              {count}
+                            </span>
+                          </button>
+                        ) : null,
+                      )}
+                    </div>
+                  )}
+
+                  {/* Footer: timestamp + read receipts dot + reaction bar */}
                   <div className="mt-1 flex items-center gap-2 px-1 text-[11px] text-muted-foreground">
                     <time dateTime={msg.created_at}>
                       {formatDistanceToNowStrict(new Date(msg.created_at))} ago
@@ -296,6 +333,21 @@ export function HubChat({ hubId, isMember, isPrivate }: HubChatProps) {
                     >
                       <Reply className="size-3" />
                     </button>
+
+                    {/* Quick Reactions bar on hover */}
+                    <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity">
+                      {QUICK_REACTIONS.map((em) => (
+                        <button
+                          key={em}
+                          type="button"
+                          onClick={() => reactionMutation.mutate({ messageId: msg.id, emoji: em })}
+                          className="hover:scale-125 transition-transform text-xs p-0.5"
+                          title={`React ${em}`}
+                        >
+                          {em}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>

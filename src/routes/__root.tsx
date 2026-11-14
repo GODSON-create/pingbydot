@@ -23,6 +23,9 @@ import { SiteFooter } from "@/components/layout/SiteFooter";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { GestureLayer } from "@/components/layout/GestureLayer";
 import { Toaster } from "@/components/ui/sonner";
+import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Keyboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SITE_NAME, siteJsonLd } from "@/lib/site";
 
@@ -145,6 +148,7 @@ function RootComponent() {
   }, [navigate]);
   const { queryClient } = Route.useRouteContext();
   const { pathname } = useLocation();
+  const { helpOpen, setHelpOpen } = useKeyboardShortcuts();
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
@@ -169,6 +173,65 @@ function RootComponent() {
           </div>
           <BottomNav />
           <GestureLayer />
+
+          {/* Keyboard Shortcuts Overlay */}
+          <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
+            <DialogContent className="max-w-sm rounded-3xl p-6 bg-card text-card-foreground">
+              <DialogHeader>
+                <div className="flex items-center gap-2 text-primary font-bold text-sm">
+                  <Keyboard className="size-4" />
+                  <span>Keyboard Navigation</span>
+                </div>
+                <DialogTitle className="font-display text-lg">Shortcuts</DialogTitle>
+              </DialogHeader>
+
+              <div className="mt-4 space-y-2.5 text-xs">
+                <div className="flex items-center justify-between py-1 border-b border-border/40">
+                  <span className="text-muted-foreground">Post a new Ping</span>
+                  <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
+                    C
+                  </kbd>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-border/40">
+                  <span className="text-muted-foreground">Explore directory</span>
+                  <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
+                    /
+                  </kbd>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-border/40">
+                  <span className="text-muted-foreground">Go to Home</span>
+                  <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
+                    G H
+                  </kbd>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-border/40">
+                  <span className="text-muted-foreground">Go to Messages</span>
+                  <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
+                    G M
+                  </kbd>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-border/40">
+                  <span className="text-muted-foreground">Go to Hubs</span>
+                  <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
+                    G B
+                  </kbd>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-border/40">
+                  <span className="text-muted-foreground">Go to Signals</span>
+                  <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
+                    G S
+                  </kbd>
+                </div>
+                <div className="flex items-center justify-between py-1">
+                  <span className="text-muted-foreground">Toggle this help</span>
+                  <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
+                    ?
+                  </kbd>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
           <Toaster position="bottom-center" />
         </AuthProvider>
       </ThemeProvider>

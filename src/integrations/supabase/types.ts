@@ -1826,6 +1826,45 @@ export type Database = {
         };
         Returns: Database["public"]["Tables"]["hubs"]["Row"];
       };
+      delete_hub: {
+        Args: { _hub: string };
+        Returns: undefined;
+      };
+      update_signal: {
+        Args: {
+          _signal: string;
+          _name: string;
+          _tagline?: string;
+          _description?: string;
+          _website_url?: string | null;
+          _avatar_url?: string | null;
+          _institution_type?: string;
+        };
+        Returns: Json;
+      };
+      toggle_hub_message_reaction: {
+        Args: {
+          _message_id: string;
+          _reaction?: string;
+        };
+        Returns: Json;
+      };
+      update_highlight: {
+        Args: {
+          _highlight_id: string;
+          _title: string;
+          _cover_url?: string | null;
+          _is_private?: boolean;
+        };
+        Returns: undefined;
+      };
+      remove_moment_from_highlight: {
+        Args: {
+          _highlight_id: string;
+          _moment_id: string;
+        };
+        Returns: undefined;
+      };
     };
     Enums: {
       [_ in never]: never;

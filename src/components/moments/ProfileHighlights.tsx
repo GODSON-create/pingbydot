@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Sparkles, FolderPlus, Trash2 } from "lucide-react";
+import { Plus, Sparkles, FolderPlus, Trash2, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -7,6 +7,7 @@ import {
   highlightMomentsQuery,
   useCreateHighlight,
   useDeleteHighlight,
+  useUpdateHighlight,
   type Highlight,
   type CreatorMomentsSequence,
 } from "@/lib/moments";
@@ -31,6 +32,10 @@ export function ProfileHighlights({ profile, isMe }: ProfileHighlightsProps) {
 
   const createMutation = useCreateHighlight();
   const deleteMutation = useDeleteHighlight();
+  const updateMutation = useUpdateHighlight();
+  const [editingHighlight, setEditingHighlight] = useState<Highlight | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editCover, setEditCover] = useState("");
 
   // When a highlight is tapped, fetch its moments
   const { data: activeMoments = [] } = useQuery(highlightMomentsQuery(activeHighlightId || ""));
@@ -66,6 +71,30 @@ export function ProfileHighlights({ profile, isMe }: ProfileHighlightsProps) {
       setCreateDialogOpen(false);
     } catch {
       toast.error("Failed to create Highlight.");
+    }
+  };
+
+  const handleOpenEdit = (e: React.MouseEvent, h: Highlight) => {
+    e.stopPropagation();
+    setEditingHighlight(h);
+    setEditTitle(h.title);
+    setEditCover(h.cover_url || "");
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingHighlight || !editTitle.trim()) return;
+
+    try {
+      await updateMutation.mutateAsync({
+        highlightId: editingHighlight.id,
+        title: editTitle.trim(),
+        cover_url: editCover.trim(),
+      });
+      toast.success("Highlight updated!");
+      setEditingHighlight(null);
+    } catch {
+      toast.error("Failed to update highlight.");
     }
   };
 
@@ -141,16 +170,26 @@ export function ProfileHighlights({ profile, isMe }: ProfileHighlightsProps) {
               {h.title}
             </span>
 
-            {/* Delete button if isMe */}
+            {/* Manage buttons if isMe */}
             {isMe && (
-              <button
-                type="button"
-                onClick={(e) => handleDeleteHighlight(e, h.id)}
-                className="absolute -top-1 -right-1 hidden group-hover:flex size-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-sm hover:scale-110 transition-transform"
-                title="Delete Highlight"
-              >
-                <Trash2 className="size-3" />
-              </button>
+              <div className="absolute -top-1 -right-1 hidden group-hover:flex items-center gap-1 z-10">
+                <button
+                  type="button"
+                  onClick={(e) => handleOpenEdit(e, h)}
+                  className="size-5 flex items-center justify-center rounded-full bg-card border border-border text-foreground shadow-sm hover:scale-110 transition-transform"
+                  title="Edit Highlight"
+                >
+                  <Pencil className="size-2.5 text-primary" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => handleDeleteHighlight(e, h.id)}
+                  className="size-5 flex items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-sm hover:scale-110 transition-transform"
+                  title="Delete Highlight"
+                >
+                  <Trash2 className="size-2.5" />
+                </button>
+              </div>
             )}
           </div>
         ))}
@@ -212,6 +251,58 @@ export function ProfileHighlights({ profile, isMe }: ProfileHighlightsProps) {
               </Button>
               <Button type="submit" variant="hero" className="rounded-xl">
                 Create Highlight
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Highlight Dialog */}
+      <Dialog
+        open={Boolean(editingHighlight)}
+        onOpenChange={(open) => !open && setEditingHighlight(null)}
+      >
+        <DialogContent className="sm:max-w-md rounded-3xl p-6">
+          <DialogHeader>
+            <div className="flex items-center gap-2 text-primary font-bold text-sm">
+              <Pencil className="size-4" />
+              <span>Edit Highlight Collection</span>
+            </div>
+            <DialogTitle className="font-display text-xl">Collection Settings</DialogTitle>
+          </DialogHeader>
+
+          <form onSubmit={handleEditSubmit} className="mt-4 space-y-4">
+            <div>
+              <Label className="text-xs font-semibold">Highlight Title</Label>
+              <Input
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                className="mt-1 rounded-xl"
+                required
+              />
+            </div>
+
+            <div>
+              <Label className="text-xs font-semibold">Cover Image URL</Label>
+              <Input
+                value={editCover}
+                onChange={(e) => setEditCover(e.target.value)}
+                placeholder="https://…/cover.png"
+                className="mt-1 rounded-xl"
+              />
+            </div>
+
+            <div className="pt-2 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditingHighlight(null)}
+                className="rounded-xl"
+              >
+                Cancel
+              </Button>
+              <Button type="submit" variant="hero" className="rounded-xl">
+                Save Changes
               </Button>
             </div>
           </form>
