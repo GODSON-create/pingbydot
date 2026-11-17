@@ -176,8 +176,10 @@ const REQUIRED_TABLES_0011_0020 = [
   "saved_pings",
   "hub_forums",
   "hub_forum_members",
+  "hub_forum_posts",
   "hub_broadcasts",
   "hub_broadcast_reads",
+  "signal_messages",
 ];
 
 async function runSchemaVerification(sql, releaseEntries) {
@@ -246,8 +248,17 @@ async function runSchemaVerification(sql, releaseEntries) {
     );
   }
 
+  const [{ media_bucket_present: mediaBucketPresent }] = await sql`
+    SELECT EXISTS (
+      SELECT 1 FROM storage.buckets WHERE id = 'media'
+    ) AS media_bucket_present
+  `;
+  if (!mediaBucketPresent) {
+    throw new Error("Schema Verification FAILED — missing storage.buckets row 'media' (migration 0021)");
+  }
+
   console.log(
-    `[SCHEMA VERIFIED] Ledger ${minTag}–${maxTag}: ${releaseEntries.length}/${releaseEntries.length} recorded (total rows=${ledgerRows.length}); ${REQUIRED_TABLES_0011_0020.length}/${REQUIRED_TABLES_0011_0020.length} tables with RLS; hardened indexes & privileges intact.`,
+    `[SCHEMA VERIFIED] Ledger ${minTag}–${maxTag}: ${releaseEntries.length}/${releaseEntries.length} recorded (total rows=${ledgerRows.length}); ${REQUIRED_TABLES_0011_0020.length}/${REQUIRED_TABLES_0011_0020.length} tables with RLS; storage 'media' bucket, hardened indexes & privileges intact.`,
   );
 }
 
@@ -348,10 +359,18 @@ async function runFeatureAuthTests(sql) {
       await actAs(userB);
       const [{ cnt: bMsgs }] = await tx`SELECT count(*)::int AS cnt FROM public.private_messages WHERE conversation_id = ${convId}::uuid`;
       const [{ cnt: bMems }] = await tx`SELECT count(*)::int AS cnt FROM public.conversation_members WHERE conversation_id = ${convId}::uuid`;
+      const [{ summary: bInbox }] = await tx`SELECT public.get_my_conversations_summary(20, 0) AS summary`;
+      const bConvUnread = Array.isArray(bInbox)
+        ? (bInbox.find((c) => c.id === convId)?.unread_count ?? -1)
+        : -1;
 
       await actAs(userC);
       const [{ cnt: cMsgs }] = await tx`SELECT count(*)::int AS cnt FROM public.private_messages WHERE conversation_id = ${convId}::uuid`;
       const [{ cnt: cMems }] = await tx`SELECT count(*)::int AS cnt FROM public.conversation_members WHERE conversation_id = ${convId}::uuid`;
+      const [{ summary: cInbox }] = await tx`SELECT public.get_my_conversations_summary(20, 0) AS summary`;
+      const cConvCount = Array.isArray(cInbox)
+        ? cInbox.filter((c) => c.id === convId).length
+        : -1;
       await assertExpectThrow(tx, "outsider sending to private DM", async () => {
         await tx`SELECT public.send_private_message(${convId}::uuid, 'Blocked')`;
       });
@@ -359,17 +378,29 @@ async function runFeatureAuthTests(sql) {
         await tx`SELECT public.is_conversation_member(${convId}::uuid, ${userB}::uuid)`;
       });
 
-      if (aMsgs !== 1 || aMems !== 2 || bMsgs !== 1 || bMems !== 2 || cMsgs !== 0 || cMems !== 0) {
-        throw new Error(`DM isolation mismatch: A=${aMsgs}/${aMems}, B=${bMsgs}/${bMems}, C=${cMsgs}/${cMems}`);
+      if (aMsgs !== 1 || aMems !== 2 || bMsgs !== 1 || bMems !== 2 || bConvUnread !== 1 || cMsgs !== 0 || cMems !== 0 || cConvCount !== 0) {
+        throw new Error(`DM isolation mismatch: A=${aMsgs}/${aMems}, B=${bMsgs}/${bMems} unread=${bConvUnread}, C=${cMsgs}/${cMems} inbox=${cConvCount}`);
       }
-      results.push("Direct Messages two-account isolation: PASS (A=1/2, B=1/2, outsider C=0/0, spoofed member probe blocked)");
+      results.push("Direct Messages two-account isolation & inbox RPC: PASS (A=1/2, B=1/2 unread=1, outsider C=0/0, spoofed probe blocked)");
 
-      // 3 & 4. HUB FORUMS & INSTITUTIONAL BROADCAST PERMISSIONS TEST
+      // 3 & 4. HUB FORUMS, THREADS/REPLIES, INSTITUTIONAL BROADCASTS & SIGNALS TEST
       await actAs(userA);
       const [{ hub_json: hubJson }] = await tx`
-        SELECT public.create_hub('Verify Coord Hub', 'verify-coord-hub-0020', 'Tag', 'Desc', '', 'community', 'public', '[]'::jsonb) AS hub_json
+        SELECT public.create_hub('Verify Coord Hub', 'verify-coord-hub-0020', 'Tag', 'Desc', '', 'university', 'public', '[]'::jsonb) AS hub_json
       `;
       const hubId = hubJson.id;
+      await tx`SELECT public.update_hub(${hubId}::uuid, 'Verify Coord Hub', 'Updated tag', 'Desc', '', 'company', 'public', '[]'::jsonb)`;
+      const [{ cnt: seededForumCnt }] = await tx`SELECT count(*)::int AS cnt FROM public.hub_forums WHERE hub_id = ${hubId}::uuid`;
+      const [generalForum] = await tx`
+        SELECT id FROM public.hub_forums WHERE hub_id = ${hubId}::uuid AND slug = 'general' LIMIT 1
+      `;
+      const [annForum] = await tx`
+        SELECT id FROM public.hub_forums WHERE hub_id = ${hubId}::uuid AND slug = 'announcements' LIMIT 1
+      `;
+      if (seededForumCnt < 3 || !generalForum || !annForum) {
+        throw new Error(`Hub default forums missing: count=${seededForumCnt}`);
+      }
+
       const [memberForum] = await tx`
         INSERT INTO public.hub_forums (hub_id, slug, name, description, forum_type, access_level, created_by)
         VALUES (${hubId}::uuid, 'members-room', 'Members Room', 'Desc', 'general', 'members', ${userA}::uuid)
@@ -391,7 +422,13 @@ async function runFeatureAuthTests(sql) {
         RETURNING id
       `;
 
-      // Non-member User C cannot view member/staff broadcasts or join staff_only forum
+      // Create Signal & post official broadcast
+      const [{ sig_json: sigJson }] = await tx`
+        SELECT public.create_signal('Verify Signal', 'verify-signal-0022', 'Tag', 'Desc', 'university', 'https://pingbydot.example') AS sig_json
+      `;
+      const sigId = sigJson.id;
+
+      // Non-member User C cannot view member/staff broadcasts, join staff_only forum, or post in Signal chat before following
       await actAs(userC);
       const [{ cnt: cBcCnt }] = await tx`SELECT count(*)::int AS cnt FROM public.hub_broadcasts WHERE hub_id = ${hubId}::uuid`;
       await assertExpectThrow(tx, "non-member joining staff_only forum", async () => {
@@ -403,10 +440,28 @@ async function runFeatureAuthTests(sql) {
       await assertExpectThrow(tx, "non-staff publishing hub broadcast", async () => {
         await tx`INSERT INTO public.hub_broadcasts (hub_id, author_id, title, content, broadcast_type, target_audience) VALUES (${hubId}::uuid, ${userC}::uuid, 'Rogue', 'Body', 'alert', 'public')`;
       });
+      await assertExpectThrow(tx, "non-follower posting in signal chat", async () => {
+        await tx`INSERT INTO public.signal_messages (signal_id, sender_id, content) VALUES (${sigId}::uuid, ${userC}::uuid, 'Unfollowed spam')`;
+      });
 
-      // Active regular member User B joins Hub: sees all_members broadcast, NOT staff broadcast
+      // Active regular member User B joins Hub & follows Signal: can post/reply in General Forum & Signal chat, NOT announcement forum or staff broadcast
       await actAs(userB);
       await tx`SELECT public.join_hub(${hubId}::uuid, NULL)`;
+      const [forumThread] = await tx`
+        INSERT INTO public.hub_forum_posts (hub_id, forum_id, author_id, title, content)
+        VALUES (${hubId}::uuid, ${generalForum.id}::uuid, ${userB}::uuid, 'Hello Forum', 'First real thread')
+        RETURNING id
+      `;
+      await tx`
+        INSERT INTO public.hub_forum_posts (hub_id, forum_id, author_id, parent_id, content)
+        VALUES (${hubId}::uuid, ${generalForum.id}::uuid, ${userB}::uuid, ${forumThread.id}::uuid, 'Thread reply')
+      `;
+      await assertExpectThrow(tx, "regular member posting to announcement-only forum", async () => {
+        await tx`INSERT INTO public.hub_forum_posts (hub_id, forum_id, author_id, content) VALUES (${hubId}::uuid, ${annForum.id}::uuid, ${userB}::uuid, 'Unauthorized post')`;
+      });
+      await tx`SELECT public.toggle_follow_signal(${sigId}::uuid)`;
+      await tx`INSERT INTO public.signal_messages (signal_id, sender_id, content) VALUES (${sigId}::uuid, ${userB}::uuid, 'Follower question in Signal chat')`;
+
       const [{ cnt: bMemBcCnt }] = await tx`SELECT count(*)::int AS cnt FROM public.hub_broadcasts WHERE id = ${bcMembers.id}::uuid`;
       const [{ cnt: bStaffBcCnt }] = await tx`SELECT count(*)::int AS cnt FROM public.hub_broadcasts WHERE id = ${bcStaff.id}::uuid`;
       await tx`SELECT public.mark_hub_broadcast_read(${bcMembers.id}::uuid)`;
@@ -417,7 +472,7 @@ async function runFeatureAuthTests(sql) {
       if (cBcCnt !== 0 || bMemBcCnt !== 1 || bStaffBcCnt !== 0) {
         throw new Error(`Hub broadcast permissions mismatch: cBc=${cBcCnt}, bMemBc=${bMemBcCnt}, bStaffBc=${bStaffBcCnt}`);
       }
-      results.push("Hub Forums & Institutional Broadcast permissions: PASS (outsider=0, member sees all_members=1 & staff=0, staff escalation blocked)");
+      results.push("Hub Forums, Thread Replies, Institutional Broadcasts & Signal Chat permissions: PASS (real seeded forums=3+, thread+reply ok, announcement post blocked, signal follower chat ok)");
 
       // 5. DOT WALLET AUTHORIZATION TEST
       await actAs(userA);

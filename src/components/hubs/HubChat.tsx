@@ -19,6 +19,7 @@ import { useAuth } from "@/lib/auth";
 import { useHubPresence } from "@/lib/presence";
 import { useMarkMessagesRead } from "@/lib/read-receipts";
 import { ReadReceiptDot } from "@/components/ping/ReadReceiptDot";
+import { QueryErrorCard } from "@/components/QueryErrorCard";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -70,7 +71,13 @@ export function HubChat({ hubId, isMember, isPrivate, isStaff = false }: HubChat
   const { activeCount, isUserActivelyReading } = useHubPresence(hubId);
   const { mutate: markMessagesRead } = useMarkMessagesRead(hubId);
 
-  const { data: messages = [], isLoading } = useQuery({
+  const {
+    data: messages = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["hub-messages", hubId],
     enabled: Boolean(hubId),
     queryFn: async (): Promise<HubMessage[]> => {
@@ -88,8 +95,7 @@ export function HubChat({ hubId, isMember, isPrivate, isStaff = false }: HubChat
         .limit(100);
 
       if (error) {
-        console.warn("Failed to load hub messages:", error);
-        return [];
+        throw error;
       }
 
       return (data || []) as unknown as HubMessage[];
@@ -135,7 +141,7 @@ export function HubChat({ hubId, isMember, isPrivate, isStaff = false }: HubChat
       .subscribe();
 
     return () => {
-      channel.unsubscribe();
+      void supabase.removeChannel(channel);
     };
   }, [hubId, user, qc, markMessagesRead]);
 
@@ -322,6 +328,16 @@ export function HubChat({ hubId, isMember, isPrivate, isStaff = false }: HubChat
         {isLoading ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             Loading messages…
+          </div>
+        ) : isError ? (
+          <div className="p-2">
+            <QueryErrorCard
+              compact
+              title="Couldn't load Hub chat"
+              description="Unable to load messages for this Hub right now."
+              error={error}
+              onRetry={() => void refetch()}
+            />
           </div>
         ) : messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center p-6 text-muted-foreground">

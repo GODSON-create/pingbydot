@@ -17,11 +17,13 @@ import { sanitizeErrorMessage } from "../lib/error-diagnostics";
 import { initializeNativeApp } from "@/lib/native";
 import { useNavigate } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth";
+import { NavOverlayProvider, useNavOverlay } from "@/lib/nav-overlay";
 import { ThemeProvider } from "@/lib/theme";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { DesktopSidebar } from "@/components/layout/DesktopSidebar";
 import { SiteFooter } from "@/components/layout/SiteFooter";
 import { BottomNav } from "@/components/layout/BottomNav";
+import { CreateStackModal } from "@/components/layout/CreateStackModal";
 import { BootSplashScreen } from "@/components/layout/BootSplashScreen";
 import { GestureLayer } from "@/components/layout/GestureLayer";
 import { PingMark } from "@/components/BrandLogo";
@@ -159,105 +161,124 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+function RootShellContent() {
+  const { pathname } = useLocation();
+  const { helpOpen, setHelpOpen } = useKeyboardShortcuts();
+  const { isOpen, onOpenChangeFor, closeOverlays } = useNavOverlay();
+
+  useEffect(() => {
+    if (helpOpen) closeOverlays();
+  }, [helpOpen, closeOverlays]);
+
+  const hideFooter = pathname.startsWith("/messages") || pathname === "/signals";
+
+  return (
+    <>
+      <BootSplashScreen />
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-full focus:bg-lime focus:px-4 focus:py-2"
+      >
+        Skip to content
+      </a>
+      <SiteHeader />
+      <div className="mx-auto w-full max-w-7xl flex flex-col lg:flex-row items-start min-h-screen overflow-x-clip">
+        <DesktopSidebar />
+        <div className="flex-1 min-w-0 w-full flex flex-col min-h-screen">
+          <main
+            id="main"
+            key={pathname}
+            className="animate-page-in flex-1 w-full min-w-0 overflow-x-clip"
+          >
+            <Outlet />
+          </main>
+          {!hideFooter && (
+            <div className="pb-24 lg:pb-0">
+              <SiteFooter />
+            </div>
+          )}
+        </div>
+      </div>
+      <BottomNav />
+      <CreateStackModal open={isOpen("create")} onOpenChange={onOpenChangeFor("create")} />
+      <GestureLayer />
+
+      {/* Keyboard Shortcuts Overlay */}
+      <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
+        <DialogContent className="max-w-sm rounded-3xl p-6 bg-card text-card-foreground">
+          <DialogHeader>
+            <div className="flex items-center gap-2 text-primary font-bold text-sm">
+              <Keyboard className="size-4" />
+              <span>Keyboard Navigation</span>
+            </div>
+            <DialogTitle className="font-display text-lg">Shortcuts</DialogTitle>
+          </DialogHeader>
+
+          <div className="mt-4 space-y-2.5 text-xs">
+            <div className="flex items-center justify-between py-1 border-b border-border/40">
+              <span className="text-muted-foreground">Post a new Ping</span>
+              <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
+                C
+              </kbd>
+            </div>
+            <div className="flex items-center justify-between py-1 border-b border-border/40">
+              <span className="text-muted-foreground">Explore directory</span>
+              <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
+                /
+              </kbd>
+            </div>
+            <div className="flex items-center justify-between py-1 border-b border-border/40">
+              <span className="text-muted-foreground">Go to Home</span>
+              <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
+                G H
+              </kbd>
+            </div>
+            <div className="flex items-center justify-between py-1 border-b border-border/40">
+              <span className="text-muted-foreground">Go to Messages</span>
+              <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
+                G M
+              </kbd>
+            </div>
+            <div className="flex items-center justify-between py-1 border-b border-border/40">
+              <span className="text-muted-foreground">Go to Hubs</span>
+              <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
+                G B
+              </kbd>
+            </div>
+            <div className="flex items-center justify-between py-1 border-b border-border/40">
+              <span className="text-muted-foreground">Go to Signals</span>
+              <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
+                G S
+              </kbd>
+            </div>
+            <div className="flex items-center justify-between py-1">
+              <span className="text-muted-foreground">Toggle this help</span>
+              <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
+                ?
+              </kbd>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Toaster position="bottom-center" />
+    </>
+  );
+}
+
 function RootComponent() {
   const navigate = useNavigate();
   useEffect(() => {
     initializeNativeApp((path) => navigate({ to: path as any }));
   }, [navigate]);
   const { queryClient } = Route.useRouteContext();
-  const { pathname } = useLocation();
-  const { helpOpen, setHelpOpen } = useKeyboardShortcuts();
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <AuthProvider>
-          <BootSplashScreen />
-          <a
-            href="#main"
-            className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-full focus:bg-lime focus:px-4 focus:py-2"
-          >
-            Skip to content
-          </a>
-          <SiteHeader />
-          <div className="mx-auto w-full max-w-7xl flex flex-col lg:flex-row items-start min-h-screen">
-            <DesktopSidebar />
-            <div className="flex-1 min-w-0 w-full flex flex-col min-h-screen">
-              <main
-                id="main"
-                key={pathname}
-                className="animate-page-in flex-1 w-full min-w-0 overflow-x-clip"
-              >
-                <Outlet />
-              </main>
-              {!pathname.startsWith("/messages") && (
-                <div className="pb-24 lg:pb-0">
-                  <SiteFooter />
-                </div>
-              )}
-            </div>
-          </div>
-          <BottomNav />
-          <GestureLayer />
-
-          {/* Keyboard Shortcuts Overlay */}
-          <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
-            <DialogContent className="max-w-sm rounded-3xl p-6 bg-card text-card-foreground">
-              <DialogHeader>
-                <div className="flex items-center gap-2 text-primary font-bold text-sm">
-                  <Keyboard className="size-4" />
-                  <span>Keyboard Navigation</span>
-                </div>
-                <DialogTitle className="font-display text-lg">Shortcuts</DialogTitle>
-              </DialogHeader>
-
-              <div className="mt-4 space-y-2.5 text-xs">
-                <div className="flex items-center justify-between py-1 border-b border-border/40">
-                  <span className="text-muted-foreground">Post a new Ping</span>
-                  <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
-                    C
-                  </kbd>
-                </div>
-                <div className="flex items-center justify-between py-1 border-b border-border/40">
-                  <span className="text-muted-foreground">Explore directory</span>
-                  <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
-                    /
-                  </kbd>
-                </div>
-                <div className="flex items-center justify-between py-1 border-b border-border/40">
-                  <span className="text-muted-foreground">Go to Home</span>
-                  <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
-                    G H
-                  </kbd>
-                </div>
-                <div className="flex items-center justify-between py-1 border-b border-border/40">
-                  <span className="text-muted-foreground">Go to Messages</span>
-                  <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
-                    G M
-                  </kbd>
-                </div>
-                <div className="flex items-center justify-between py-1 border-b border-border/40">
-                  <span className="text-muted-foreground">Go to Hubs</span>
-                  <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
-                    G B
-                  </kbd>
-                </div>
-                <div className="flex items-center justify-between py-1 border-b border-border/40">
-                  <span className="text-muted-foreground">Go to Signals</span>
-                  <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
-                    G S
-                  </kbd>
-                </div>
-                <div className="flex items-center justify-between py-1">
-                  <span className="text-muted-foreground">Toggle this help</span>
-                  <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
-                    ?
-                  </kbd>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-
-          <Toaster position="bottom-center" />
+          <NavOverlayProvider>
+            <RootShellContent />
+          </NavOverlayProvider>
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>

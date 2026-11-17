@@ -207,6 +207,10 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
       toast.error("Please add at least one photo or video.");
       return;
     }
+    if (drafts.some((d) => d.audience === "hub" && !d.hubId)) {
+      toast.error("Select a Hub before publishing a Hub Moment.");
+      return;
+    }
 
     const rateCheck = checkShieldRateLimit("create_moment", user.id);
     if (!rateCheck.allowed) {
@@ -254,7 +258,7 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
         const cleanOverlay = sanitizeUserText(d.overlayText);
         const cleanLocation = sanitizeUserText(d.location);
 
-        const { error: insertErr } = await supabase.from("moments").insert({
+        const momentPayload = {
           author_id: user.id,
           media_url: uploadedUrl,
           media_type: d.mediaType,
@@ -271,7 +275,17 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
           allow_sharing: d.allowSharing,
           allow_repings:
             d.audience === "public" || d.audience === "followers" ? d.allowRepings : false,
-        });
+        };
+
+        let { error: insertErr } = await supabase.from("moments").insert(momentPayload);
+
+        if (insertErr && insertErr.code === "23503") {
+          const { error: profileErr } = await supabase.rpc("ensure_my_profile");
+          if (!profileErr) {
+            const retry = await supabase.from("moments").insert(momentPayload);
+            insertErr = retry.error;
+          }
+        }
 
         if (insertErr) throw insertErr;
       }
@@ -295,7 +309,8 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
       onPublished?.();
     } catch (err: unknown) {
       console.error("Publish moment error:", err);
-      toast.error(err instanceof Error ? err.message : "Failed to publish Moment.");
+      const { formatStorageUploadError } = await import("@/lib/storage");
+      toast.error(formatStorageUploadError(err, "Failed to publish Moment."));
     } finally {
       setIsUploading(false);
       setUploadProgress(0);

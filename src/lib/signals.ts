@@ -466,3 +466,97 @@ export const myFollowedSignalsQuery = (userId: string | undefined) => ({
     return new Set(data.map((r) => r.signal_id));
   },
 });
+
+export interface SignalMessage {
+  id: string;
+  signal_id: string;
+  sender_id: string;
+  parent_id: string | null;
+  content: string;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+  sender?: {
+    id: string;
+    username: string;
+    display_name: string;
+    avatar_url: string | null;
+  } | null;
+}
+
+export function signalMessagesQuery(signalId: string) {
+  return {
+    queryKey: ["signal-messages", signalId],
+    enabled: Boolean(signalId),
+    queryFn: async (): Promise<SignalMessage[]> => {
+      const { data, error } = await supabase
+        .from("signal_messages")
+        .select(
+          `
+          id, signal_id, sender_id, parent_id, content, deleted_at, created_at, updated_at,
+          sender:profiles!signal_messages_sender_id_fkey(id, username, display_name, avatar_url)
+        `,
+        )
+        .eq("signal_id", signalId)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: true })
+        .limit(150);
+
+      if (error) {
+        throw error;
+      }
+      return (data ?? []) as unknown as SignalMessage[];
+    },
+  };
+}
+
+export function useSendSignalMessage(signalId: string) {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: { content: string; parentId?: string | null }) => {
+      const { data: u } = await supabase.auth.getSession();
+      const userId = u.session?.user?.id;
+      if (!userId) throw new Error("Please sign in to post in Signal channel chat.");
+      const cleaned = payload.content.trim();
+      if (!cleaned) throw new Error("Message cannot be empty.");
+
+      const insertPayload = {
+        signal_id: signalId,
+        sender_id: userId,
+        parent_id: payload.parentId ?? null,
+        content: cleaned,
+      };
+
+      let { error } = await supabase.from("signal_messages").insert(insertPayload);
+      if (error && error.code === "23503") {
+        const { error: profileErr } = await supabase.rpc("ensure_my_profile");
+        if (!profileErr) {
+          const retry = await supabase.from("signal_messages").insert(insertPayload);
+          error = retry.error;
+        }
+      }
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["signal-messages", signalId] });
+    },
+  });
+}
+
+export function useDeleteSignalMessage(signalId: string) {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (messageId: string) => {
+      const { error } = await supabase
+        .from("signal_messages")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", messageId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["signal-messages", signalId] });
+    },
+  });
+}

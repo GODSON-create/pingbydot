@@ -67,6 +67,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
 import { useSignOut } from "@/components/layout/SiteHeader";
+import { useNavOverlay } from "@/lib/nav-overlay";
 import { PingMark } from "@/components/BrandLogo";
 import { PublicConnections } from "@/components/connections/PublicConnections";
 import { ProfileHighlights } from "@/components/moments/ProfileHighlights";
@@ -459,7 +460,7 @@ function ProfileContent({
   const blockUser = useBlockUser();
   const unblockUser = useUnblockUser();
 
-  const [menuDrawerOpen, setMenuDrawerOpen] = useState(false);
+  const { isOpen, openOverlay, onOpenChangeFor, closeOverlays } = useNavOverlay();
   const [momentModalOpen, setMomentModalOpen] = useState(false);
   const [closeCircleOpen, setCloseCircleOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -556,7 +557,7 @@ function ProfileContent({
                 type="button"
                 variant="outline"
                 size="icon"
-                onClick={() => setMenuDrawerOpen(true)}
+                onClick={() => openOverlay("profile-drawer")}
                 aria-label="Profile options menu"
                 title="Open account & profile menu"
                 className="size-10 rounded-full bg-card/90 shadow-sm hover:bg-secondary"
@@ -845,7 +846,7 @@ function ProfileContent({
       </section>
 
       {/* THREE-LINE MENU SIDE DRAWER (Full-Height Account & Profile Menu) */}
-      <Sheet open={menuDrawerOpen} onOpenChange={setMenuDrawerOpen}>
+      <Sheet open={isOpen("profile-drawer")} onOpenChange={onOpenChangeFor("profile-drawer")}>
         <SheetContent
           side="right"
           className="w-full sm:max-w-sm overflow-y-auto rounded-l-3xl p-6 flex flex-col justify-between"
@@ -885,11 +886,7 @@ function ProfileContent({
                 </div>
 
                 {/* 2. DOT Wallet */}
-                <Link
-                  to="/balance"
-                  onClick={() => setMenuDrawerOpen(false)}
-                  className={drawerLinkClass}
-                >
+                <Link to="/balance" onClick={() => closeOverlays()} className={drawerLinkClass}>
                   <span className="flex items-center gap-3">
                     <Wallet className="size-4 text-primary" /> DOT Wallet
                   </span>
@@ -899,11 +896,7 @@ function ProfileContent({
                 </Link>
 
                 {/* 3. Verification */}
-                <Link
-                  to="/upgrades"
-                  onClick={() => setMenuDrawerOpen(false)}
-                  className={drawerLinkClass}
-                >
+                <Link to="/upgrades" onClick={() => closeOverlays()} className={drawerLinkClass}>
                   <span className="flex items-center gap-3">
                     <ShieldCheck className="size-4 text-gold" /> Verification & Upgrades
                   </span>
@@ -911,11 +904,7 @@ function ProfileContent({
                 </Link>
 
                 {/* 4. Settings */}
-                <Link
-                  to="/settings"
-                  onClick={() => setMenuDrawerOpen(false)}
-                  className={drawerLinkClass}
-                >
+                <Link to="/settings" onClick={() => closeOverlays()} className={drawerLinkClass}>
                   <span className="flex items-center gap-3">
                     <Settings className="size-4" /> Settings
                   </span>
@@ -925,7 +914,7 @@ function ProfileContent({
                 <button
                   type="button"
                   onClick={() => {
-                    setMenuDrawerOpen(false);
+                    closeOverlays();
                     setCloseCircleOpen(true);
                   }}
                   className={drawerLinkClass}
@@ -937,33 +926,21 @@ function ProfileContent({
                 </button>
 
                 {/* 6. Notifications */}
-                <Link
-                  to="/settings"
-                  onClick={() => setMenuDrawerOpen(false)}
-                  className={drawerLinkClass}
-                >
+                <Link to="/settings" onClick={() => closeOverlays()} className={drawerLinkClass}>
                   <span className="flex items-center gap-3">
                     <Bell className="size-4" /> Notifications
                   </span>
                 </Link>
 
                 {/* 7. Help and Support */}
-                <Link
-                  to="/terms"
-                  onClick={() => setMenuDrawerOpen(false)}
-                  className={drawerLinkClass}
-                >
+                <Link to="/terms" onClick={() => closeOverlays()} className={drawerLinkClass}>
                   <span className="flex items-center gap-3">
                     <HelpCircle className="size-4" /> Help and Support
                   </span>
                 </Link>
 
                 {/* 8. Account Management & Analytics */}
-                <Link
-                  to="/analytics"
-                  onClick={() => setMenuDrawerOpen(false)}
-                  className={drawerLinkClass}
-                >
+                <Link to="/analytics" onClick={() => closeOverlays()} className={drawerLinkClass}>
                   <span className="flex items-center gap-3">
                     <BarChart3 className="size-4 text-primary" /> Account Management & Analytics
                   </span>
@@ -988,7 +965,7 @@ function ProfileContent({
                     <button
                       type="button"
                       onClick={() => {
-                        setMenuDrawerOpen(false);
+                        closeOverlays();
                         if (inCloseCircle) {
                           removeCloseCircle.mutate(profile.id, {
                             onSuccess: () =>
@@ -1012,7 +989,7 @@ function ProfileContent({
                     <button
                       type="button"
                       onClick={() => {
-                        setMenuDrawerOpen(false);
+                        closeOverlays();
                         if (isBlocked) {
                           unblockUser.mutate(profile.id, {
                             onSuccess: () => toast.success(`Unblocked @${profile.username}`),
@@ -1034,7 +1011,7 @@ function ProfileContent({
                     <button
                       type="button"
                       onClick={() => {
-                        setMenuDrawerOpen(false);
+                        closeOverlays();
                         setReportOpen(true);
                       }}
                       className={cn(drawerLinkClass, "text-destructive")}
@@ -1053,11 +1030,7 @@ function ProfileContent({
                     <Link2 className="size-4" /> Share Profile Link
                   </span>
                 </button>
-                <Link
-                  to="/terms"
-                  onClick={() => setMenuDrawerOpen(false)}
-                  className={drawerLinkClass}
-                >
+                <Link to="/terms" onClick={() => closeOverlays()} className={drawerLinkClass}>
                   <span className="flex items-center gap-3">
                     <HelpCircle className="size-4" /> Help and Support
                   </span>
@@ -1075,7 +1048,7 @@ function ProfileContent({
               <button
                 type="button"
                 onClick={() => {
-                  setMenuDrawerOpen(false);
+                  closeOverlays();
                   signOut();
                 }}
                 className={cn(drawerLinkClass, "text-destructive hover:bg-destructive/10")}

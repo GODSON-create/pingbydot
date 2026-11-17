@@ -33,6 +33,7 @@ import { Route as HubsSlugRouteImport } from './routes/hubs.$slug'
 import { Route as HubsCreateRouteImport } from './routes/hubs.create'
 import { Route as PIdRouteImport } from './routes/p.$id'
 import { Route as SignalsSlugRouteImport } from './routes/signals.$slug'
+import { Route as SignalsChannelsRouteImport } from './routes/signals.channels'
 import { Route as SignalsCreateRouteImport } from './routes/signals.create'
 import { Route as AuthenticatedEditIdRouteImport } from './routes/_authenticated/edit.$id'
 import { Route as ApiPublicPingCardIdRouteImport } from './routes/api/public/ping-card/$id'
@@ -157,6 +158,11 @@ const SignalsSlugRoute = SignalsSlugRouteImport.update({
   path: '/$slug',
   getParentRoute: () => SignalsRoute,
 } as any)
+const SignalsChannelsRoute = SignalsChannelsRouteImport.update({
+  id: '/channels',
+  path: '/channels',
+  getParentRoute: () => SignalsRoute,
+} as any)
 const SignalsCreateRoute = SignalsCreateRouteImport.update({
   id: '/create',
   path: '/create',
@@ -197,6 +203,7 @@ export interface FileRoutesByFullPath {
   '/hubs/create': typeof HubsCreateRoute
   '/p/$id': typeof PIdRoute
   '/signals/$slug': typeof SignalsSlugRoute
+  '/signals/channels': typeof SignalsChannelsRoute
   '/signals/create': typeof SignalsCreateRoute
   '/edit/$id': typeof AuthenticatedEditIdRoute
   '/api/public/ping-card/$id': typeof ApiPublicPingCardIdRoute
@@ -225,6 +232,7 @@ export interface FileRoutesByTo {
   '/hubs/create': typeof HubsCreateRoute
   '/p/$id': typeof PIdRoute
   '/signals/$slug': typeof SignalsSlugRoute
+  '/signals/channels': typeof SignalsChannelsRoute
   '/signals/create': typeof SignalsCreateRoute
   '/edit/$id': typeof AuthenticatedEditIdRoute
   '/api/public/ping-card/$id': typeof ApiPublicPingCardIdRoute
@@ -255,6 +263,7 @@ export interface FileRoutesById {
   '/hubs/create': typeof HubsCreateRoute
   '/p/$id': typeof PIdRoute
   '/signals/$slug': typeof SignalsSlugRoute
+  '/signals/channels': typeof SignalsChannelsRoute
   '/signals/create': typeof SignalsCreateRoute
   '/_authenticated/edit/$id': typeof AuthenticatedEditIdRoute
   '/api/public/ping-card/$id': typeof ApiPublicPingCardIdRoute
@@ -285,6 +294,7 @@ export interface FileRouteTypes {
     | '/hubs/create'
     | '/p/$id'
     | '/signals/$slug'
+    | '/signals/channels'
     | '/signals/create'
     | '/edit/$id'
     | '/api/public/ping-card/$id'
@@ -313,6 +323,7 @@ export interface FileRouteTypes {
     | '/hubs/create'
     | '/p/$id'
     | '/signals/$slug'
+    | '/signals/channels'
     | '/signals/create'
     | '/edit/$id'
     | '/api/public/ping-card/$id'
@@ -342,6 +353,7 @@ export interface FileRouteTypes {
     | '/hubs/create'
     | '/p/$id'
     | '/signals/$slug'
+    | '/signals/channels'
     | '/signals/create'
     | '/_authenticated/edit/$id'
     | '/api/public/ping-card/$id'
@@ -537,6 +549,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SignalsSlugRouteImport
       parentRoute: typeof SignalsRoute
     }
+    '/signals/channels': {
+      id: '/signals/channels'
+      path: '/channels'
+      fullPath: '/signals/channels'
+      preLoaderRoute: typeof SignalsChannelsRouteImport
+      parentRoute: typeof SignalsRoute
+    }
     '/signals/create': {
       id: '/signals/create'
       path: '/create'
@@ -596,11 +615,13 @@ const HubsRouteWithChildren = HubsRoute._addFileChildren(HubsRouteChildren)
 
 interface SignalsRouteChildren {
   SignalsSlugRoute: typeof SignalsSlugRoute
+  SignalsChannelsRoute: typeof SignalsChannelsRoute
   SignalsCreateRoute: typeof SignalsCreateRoute
 }
 
 const SignalsRouteChildren: SignalsRouteChildren = {
   SignalsSlugRoute: SignalsSlugRoute,
+  SignalsChannelsRoute: SignalsChannelsRoute,
   SignalsCreateRoute: SignalsCreateRoute,
 }
 

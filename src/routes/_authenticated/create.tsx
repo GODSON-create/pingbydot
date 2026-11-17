@@ -3,8 +3,24 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth";
 import { PingComposer, type PingDraft } from "@/components/ping/PingComposer";
 import { pingSchema } from "@/lib/validation";
+import { sanitizeErrorMessage } from "@/lib/error-diagnostics";
+
+function describePublishError(error: unknown): string {
+  const raw =
+    error instanceof Error
+      ? error.message
+      : error && typeof error === "object" && "message" in error
+        ? String((error as { message: unknown }).message)
+        : error;
+  const message = sanitizeErrorMessage(raw);
+  if (/failed to fetch|networkerror|load failed/i.test(message)) {
+    return "Network request failed while reaching PING servers. Check your connection or ad-blocker and try again.";
+  }
+  return message || "Couldn't publish your Ping. Try again.";
+}
 
 export const Route = createFileRoute("/_authenticated/create")({
   staticData: { sitemap: false },
@@ -29,29 +45,59 @@ export const Route = createFileRoute("/_authenticated/create")({
 });
 
 function Create() {
+  const { user } = useAuth();
   const { hub: initialHubId } = Route.useSearch();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const m = useMutation({
     mutationFn: async (d: PingDraft) => {
-      const { data: u } = await supabase.auth.getUser();
-      const author = u.user;
-      if (!author) throw new Error("Please log in again before publishing.");
+      let authorId = user?.id;
+      if (!authorId) {
+        const { data: sessionRes } = await supabase.auth.getSession();
+        authorId = sessionRes.session?.user?.id;
+      }
+      if (!authorId) {
+        throw new Error("Your session expired. Please sign in again before publishing.");
+      }
+
       const draft = pingSchema.parse(d);
-      const { data, error } = await supabase
+      const imageUrl = d.image_url?.trim() || null;
+      const insertPayload = {
+        user_id: authorId,
+        category: draft.category,
+        content: draft.content,
+        headline: d.headline?.trim() || null,
+        needs: d.needs && d.needs.length > 0 ? d.needs : null,
+        offers: d.offers && d.offers.length > 0 ? d.offers : null,
+        desired_outcome: d.desired_outcome?.trim() || null,
+        image_url: imageUrl,
+        media_urls: imageUrl ? [imageUrl] : null,
+        visibility: (d.hub_id ? "hub" : "public") as "public" | "hub",
+        cta_url: draft.cta_url || null,
+        cta_label: draft.cta_label || null,
+      };
+
+      let { data, error } = await supabase
         .from("pings")
-        .insert({
-          user_id: author.id,
-          category: draft.category,
-          content: draft.content,
-          image_url: d.image_url || null,
-          cta_url: draft.cta_url || null,
-          cta_label: draft.cta_label || null,
-        })
+        .insert(insertPayload)
         .select("id")
         .single();
-      if (error) throw error;
 
+      // Recover automatically if OAuth/signup triggered before public.profiles row finished syncing
+      if (error && error.code === "23503") {
+        const { error: profileErr } = await supabase.rpc("ensure_my_profile");
+        if (!profileErr) {
+          const retry = await supabase.from("pings").insert(insertPayload).select("id").single();
+          data = retry.data;
+          error = retry.error;
+        }
+      }
+
+      if (error || !data) {
+        throw error ?? new Error("Database did not return the published Ping ID.");
+      }
+
+      let hubShareError: string | null = null;
       if (d.hub_id) {
         const { error: hubError } = await supabase.rpc("share_ping_to_hub", {
           _hub: d.hub_id,
@@ -59,18 +105,22 @@ function Create() {
           ...(d.hub_intent ? { _intent: d.hub_intent } : {}),
         });
         if (hubError) {
-          console.warn("Failed to attach to hub:", hubError);
+          hubShareError = hubError.message;
         }
       }
 
-      return data.id;
+      return { id: data.id, hubShareError };
     },
-    onSuccess: (id) => {
+    onSuccess: ({ id, hubShareError }) => {
       qc.invalidateQueries();
-      toast.success("Your Ping is live");
+      if (hubShareError) {
+        toast.warning(`Ping published, but sharing to the Hub failed: ${hubShareError}`);
+      } else {
+        toast.success("Your Ping is live");
+      }
       navigate({ to: "/p/$id", params: { id } });
     },
-    onError: () => toast.error("Couldn't publish your Ping. Try again."),
+    onError: (err) => toast.error(describePublishError(err)),
   });
   return (
     <div className="mx-auto max-w-2xl px-5 py-10 pb-24">

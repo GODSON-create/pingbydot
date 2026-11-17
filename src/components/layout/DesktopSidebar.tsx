@@ -1,5 +1,4 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
 import {
   Home,
   Compass,
@@ -26,6 +25,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { checkAdminAccess } from "@/lib/admin.functions";
 import { useAuth } from "@/lib/auth";
+import { useNavOverlay } from "@/lib/nav-overlay";
 import { useTheme } from "@/lib/theme";
 import { userConversationsQuery } from "@/lib/messages";
 import { dotSummaryQuery } from "@/lib/economy";
@@ -41,21 +41,25 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useSignOut } from "./SiteHeader";
 import { isCommunityPath } from "./BottomNav";
-import { CreateStackModal } from "./CreateStackModal";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 export function DesktopSidebar() {
   const { user, profile, ready } = useAuth();
   const { theme, resolvedTheme, setTheme } = useTheme();
+  const { openOverlay, closeOverlays, isOpen, onOpenChangeFor } = useNavOverlay();
   const location = useLocation();
   const navigate = useNavigate();
   const signOut = useSignOut();
-  const [createOpen, setCreateOpen] = useState(false);
 
   const { pathname, searchStr } = location;
   const inCommunity = isCommunityPath(pathname);
   const isCommunityMoments = pathname === "/hubs" && searchStr.includes("view=moments");
+  const isSignalChannels =
+    pathname.startsWith("/signals/channels") ||
+    pathname.startsWith("/signals/create") ||
+    (pathname.startsWith("/signals/") && pathname !== "/signals");
+  const isSignalChats = pathname === "/signals";
 
   const verifyAdmin = useServerFn(checkAdminAccess);
   const admin = useQuery({
@@ -146,6 +150,10 @@ export function DesktopSidebar() {
               <Link
                 to="/hubs"
                 search={{}}
+                onClick={closeOverlays}
+                aria-current={
+                  pathname.startsWith("/hubs") && !isCommunityMoments ? "page" : undefined
+                }
                 className={cn(
                   "relative flex items-center justify-center xl:justify-start gap-3.5 h-11 rounded-2xl px-3.5 transition-all text-sm font-semibold",
                   pathname.startsWith("/hubs") && !isCommunityMoments
@@ -160,9 +168,11 @@ export function DesktopSidebar() {
 
               <Link
                 to="/signals"
+                onClick={closeOverlays}
+                aria-current={isSignalChats ? "page" : undefined}
                 className={cn(
                   "relative flex items-center justify-center xl:justify-between gap-3 h-11 rounded-2xl px-3.5 transition-all text-sm font-semibold",
-                  pathname.startsWith("/signals")
+                  isSignalChats
                     ? "bg-primary/15 text-primary border border-primary/25 shadow-soft"
                     : "text-muted-foreground hover:bg-secondary/80 hover:text-foreground",
                 )}
@@ -180,8 +190,26 @@ export function DesktopSidebar() {
               </Link>
 
               <Link
+                to="/signals/channels"
+                onClick={closeOverlays}
+                aria-current={isSignalChannels ? "page" : undefined}
+                className={cn(
+                  "relative flex items-center justify-center xl:justify-start gap-3.5 h-11 rounded-2xl px-3.5 transition-all text-sm font-semibold",
+                  isSignalChannels
+                    ? "bg-primary/15 text-primary border border-primary/25 shadow-soft"
+                    : "text-muted-foreground hover:bg-secondary/80 hover:text-foreground",
+                )}
+                title="Institutional Signal Channels"
+              >
+                <Radio className="size-5 shrink-0" />
+                <span className="hidden xl:inline-block truncate">Channels</span>
+              </Link>
+
+              <Link
                 to="/hubs"
                 search={{ view: "moments" }}
+                onClick={closeOverlays}
+                aria-current={isCommunityMoments ? "page" : undefined}
                 className={cn(
                   "relative flex items-center justify-center xl:justify-start gap-3.5 h-11 rounded-2xl px-3.5 transition-all text-sm font-semibold",
                   isCommunityMoments
@@ -210,6 +238,8 @@ export function DesktopSidebar() {
                     key={item.label}
                     to={item.to as any}
                     params={item.params as any}
+                    onClick={closeOverlays}
+                    aria-current={isActive ? "page" : undefined}
                     className={cn(
                       "relative flex items-center justify-center xl:justify-between gap-3 h-11 rounded-2xl px-3.5 transition-all text-sm font-semibold group",
                       isActive
@@ -245,7 +275,7 @@ export function DesktopSidebar() {
             <Button
               type="button"
               variant="hero"
-              onClick={() => setCreateOpen(true)}
+              onClick={() => openOverlay("create")}
               className="w-full h-11 rounded-2xl text-sm font-bold shadow-lift flex items-center justify-center gap-2 px-0 xl:px-4"
               title="Create"
             >
@@ -270,7 +300,10 @@ export function DesktopSidebar() {
           </button>
 
           {ready && user ? (
-            <DropdownMenu>
+            <DropdownMenu
+              open={isOpen("sidebar-account")}
+              onOpenChange={onOpenChangeFor("sidebar-account")}
+            >
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
@@ -301,6 +334,7 @@ export function DesktopSidebar() {
                     <Link
                       to="/@{$username}"
                       params={{ username: profile.username }}
+                      onClick={closeOverlays}
                       className="flex items-center gap-2"
                     >
                       <User className="size-4" /> View profile
@@ -308,7 +342,11 @@ export function DesktopSidebar() {
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem asChild className="rounded-xl">
-                  <Link to="/balance" className="flex items-center justify-between">
+                  <Link
+                    to="/balance"
+                    onClick={closeOverlays}
+                    className="flex items-center justify-between"
+                  >
                     <span className="flex items-center gap-2">
                       <Coins className="size-4 text-gold" /> DOT Balance
                     </span>
@@ -320,30 +358,33 @@ export function DesktopSidebar() {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild className="rounded-xl">
-                  <Link to="/analytics" className="flex items-center gap-2">
+                  <Link to="/analytics" onClick={closeOverlays} className="flex items-center gap-2">
                     <BarChart3 className="size-4 text-primary" /> Analytics
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild className="rounded-xl">
-                  <Link to="/upgrades" className="flex items-center gap-2">
+                  <Link to="/upgrades" onClick={closeOverlays} className="flex items-center gap-2">
                     <Crown className="size-4 text-gold" /> Account Upgrades
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild className="rounded-xl">
-                  <Link to="/settings" className="flex items-center gap-2">
+                  <Link to="/settings" onClick={closeOverlays} className="flex items-center gap-2">
                     <Settings className="size-4" /> Settings
                   </Link>
                 </DropdownMenuItem>
                 {admin.data?.isAdmin && (
                   <DropdownMenuItem asChild className="rounded-xl">
-                    <Link to="/admin" className="flex items-center gap-2">
+                    <Link to="/admin" onClick={closeOverlays} className="flex items-center gap-2">
                       <ShieldCheck className="size-4" /> Admin Console
                     </Link>
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onSelect={signOut}
+                  onSelect={() => {
+                    closeOverlays();
+                    signOut();
+                  }}
                   className="rounded-xl text-destructive flex items-center gap-2"
                 >
                   <LogOut className="size-4" /> Log out
@@ -353,17 +394,19 @@ export function DesktopSidebar() {
           ) : (
             <div className="hidden xl:flex flex-col gap-2">
               <Button asChild variant="outline" size="sm" className="w-full rounded-xl text-xs h-9">
-                <Link to="/login">Log in</Link>
+                <Link to="/login" onClick={closeOverlays}>
+                  Log in
+                </Link>
               </Button>
               <Button asChild variant="hero" size="sm" className="w-full rounded-xl text-xs h-9">
-                <Link to="/signup">Join PING</Link>
+                <Link to="/signup" onClick={closeOverlays}>
+                  Join PING
+                </Link>
               </Button>
             </div>
           )}
         </div>
       </aside>
-
-      <CreateStackModal open={createOpen} onOpenChange={setCreateOpen} />
     </>
   );
 }

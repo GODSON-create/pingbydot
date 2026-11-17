@@ -155,6 +155,13 @@
       "when": 1795400000000,
       "tag": "0021_provision_media_storage_bucket",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1795500000000,
+      "tag": "0022_stabilization_forums_signals_scale",
+      "breakpoints": true
     }
   ]
 }

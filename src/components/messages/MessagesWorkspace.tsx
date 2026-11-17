@@ -28,6 +28,7 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import {
+  conversationByIdQuery,
   conversationMessagesQuery,
   useGetOrCreateDirectConversation,
   userConversationsQuery,
@@ -175,6 +176,7 @@ export function MessagesWorkspace({
 
   const { mutateAsync: getOrCreateConversation } = useGetOrCreateDirectConversation();
 
+  const clearedByUserRef = useRef(false);
   const [activeConversationId, setActiveConversationId] = useState<string | undefined>(
     conversationId,
   );
@@ -188,11 +190,12 @@ export function MessagesWorkspace({
       handledUserParamRef.current !== userIdParam
     ) {
       handledUserParamRef.current = userIdParam;
+      clearedByUserRef.current = false;
       getOrCreateConversation(userIdParam)
         .then((convId) => {
           if (convId) {
             setActiveConversationId(convId);
-            navigate({ to: basePath, search: { conversationId: convId } as any });
+            navigate({ to: basePath, search: { conversationId: convId } as any, replace: true });
           }
         })
         .catch((err) => {
@@ -208,10 +211,15 @@ export function MessagesWorkspace({
     }
   }, [redirectUnauthenticated, ready, user, navigate, basePath]);
 
-  // Sync search param with state
+  // Sync URL search param with active state cleanly
   useEffect(() => {
-    setActiveConversationId(conversationId);
-  }, [conversationId]);
+    if (conversationId) {
+      clearedByUserRef.current = false;
+      setActiveConversationId(conversationId);
+    } else if (!userIdParam) {
+      setActiveConversationId(undefined);
+    }
+  }, [conversationId, userIdParam]);
 
   const {
     data: conversations = [],
@@ -223,6 +231,9 @@ export function MessagesWorkspace({
   // If user opens page with no selected conversation on desktop, default to the first one
   useEffect(() => {
     if (
+      !clearedByUserRef.current &&
+      !userIdParam &&
+      !conversationId &&
       !activeConversationId &&
       conversations.length > 0 &&
       conversations[0] &&
@@ -231,9 +242,13 @@ export function MessagesWorkspace({
     ) {
       setActiveConversationId(conversations[0].id);
     }
-  }, [activeConversationId, conversations]);
+  }, [activeConversationId, conversationId, userIdParam, conversations]);
 
-  const activeConversation = conversations.find((c) => c.id === activeConversationId);
+  const listedConversation = conversations.find((c) => c.id === activeConversationId);
+  const { data: fetchedConversation, isLoading: isSingleConvLoading } = useQuery(
+    conversationByIdQuery(listedConversation ? undefined : activeConversationId, user?.id),
+  );
+  const activeConversation = listedConversation ?? fetchedConversation ?? undefined;
 
   const {
     data: messages = [],
@@ -287,6 +302,13 @@ export function MessagesWorkspace({
         <span className="inline-flex items-center gap-1 rounded-full bg-gold/15 text-gold border border-gold/30 px-2.5 py-0.5 text-[11px] font-bold">
           1-on-1 Chats
         </span>
+        <Link
+          to="/signals/channels"
+          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold text-foreground hover:bg-secondary transition-colors"
+        >
+          <Radio className="size-3.5 text-primary" />
+          Institutional Channels
+        </Link>
       </div>
     </div>
   ) : null;
@@ -326,8 +348,8 @@ export function MessagesWorkspace({
       className={cn(
         "w-full max-w-7xl mx-auto flex flex-col",
         showCommunityHeader
-          ? "px-3 sm:px-4 lg:px-6 py-4 h-[calc(100dvh-6.5rem)] md:h-[calc(100dvh-4.5rem)]"
-          : "px-2 sm:px-4 lg:px-6 py-3 sm:py-4 h-[calc(100dvh-9.5rem)] md:h-[calc(100dvh-5.5rem)] lg:h-[calc(100dvh-1.5rem)]",
+          ? "px-3 sm:px-4 lg:px-6 pt-3 pb-2 h-[calc(100dvh-9.25rem)] md:h-[calc(100dvh-4.75rem)] lg:h-[calc(100dvh-0.75rem)]"
+          : "px-2 sm:px-4 lg:px-6 pt-2 pb-2 h-[calc(100dvh-9.25rem)] md:h-[calc(100dvh-4.75rem)] lg:h-[calc(100dvh-0.75rem)]",
       )}
     >
       {communitySwitcher}
@@ -388,11 +410,16 @@ export function MessagesWorkspace({
                 conversation={activeConversation}
                 messages={messages}
                 onBack={() => {
+                  clearedByUserRef.current = true;
                   setActiveConversationId(undefined);
                   navigate({ to: basePath, search: {} as any });
                 }}
               />
             )
+          ) : activeConversationId && isSingleConvLoading ? (
+            <div className="flex-1 bg-card/40 rounded-3xl border border-border/70 flex flex-col items-center justify-center p-8 text-xs text-muted-foreground">
+              Opening conversation…
+            </div>
           ) : (
             <div className="flex-1 bg-card/40 rounded-3xl border border-border/70 flex flex-col items-center justify-center text-center p-8 text-muted-foreground">
               <div className="size-16 rounded-3xl bg-primary/10 flex items-center justify-center mb-4 text-primary">

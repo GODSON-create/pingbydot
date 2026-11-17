@@ -1,7 +1,7 @@
 import { useDeferredValue, useState } from "react";
 import { pageHead } from "@/lib/site";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { QueryErrorCard } from "@/components/QueryErrorCard";
 import {
   ArrowRight,
@@ -64,9 +64,9 @@ export const Route = createFileRoute("/explore")({
       .enum(["all", "pings", "people", "moments", "communities", "opportunities"])
       .optional(),
     q: z.string().trim().max(120).optional(),
-    page: z.coerce.number().int().min(0).max(10000).catch(0).default(0),
+    page: z.coerce.number().int().min(0).max(10000).optional(),
   }),
-  loaderDeps: ({ search: { c, page } }) => ({ cat: c ?? null, page }),
+  loaderDeps: ({ search: { c, page } }) => ({ cat: c ?? null, page: page ?? 0 }),
   loader: ({ context, deps }) =>
     context.queryClient.ensureQueryData(feedQuery(deps.cat, deps.page)),
   head: () =>
@@ -184,8 +184,14 @@ function PeopleDiscoveryCard({
 function Explore() {
   const { user } = useAuth();
   const { c, filter: filterParam, q, page } = Route.useSearch();
+  const initialExplorePings = Route.useLoaderData();
   const cat = c ?? null;
-  const { data } = useSuspenseQuery(feedQuery(cat, page));
+  const pageNum = page ?? 0;
+  const { data = [] } = useQuery({
+    ...feedQuery(cat, pageNum),
+    initialData: initialExplorePings,
+    initialDataUpdatedAt: 0,
+  });
 
   const [activeFilter, setActiveFilter] = useState<DiscoveryFilter>(
     filterParam ?? (cat === "opportunity" ? "opportunities" : "all"),
@@ -620,16 +626,16 @@ function Explore() {
       )}
 
       <nav aria-label="Feed pages" className="mt-8 flex justify-center gap-3">
-        {page > 0 && (
+        {pageNum > 0 && (
           <Button asChild variant="outline">
-            <Link to="/explore" search={{ c, page: page - 1 }}>
+            <Link to="/explore" search={{ c, page: pageNum - 1 }}>
               Newer Pings
             </Link>
           </Button>
         )}
         {allPings.length === 60 && (
           <Button asChild variant="outline">
-            <Link to="/explore" search={{ c, page: page + 1 }}>
+            <Link to="/explore" search={{ c, page: pageNum + 1 }}>
               Older Pings
             </Link>
           </Button>

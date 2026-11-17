@@ -1,12 +1,16 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Building2,
   ChevronDown,
   ChevronUp,
   Image as ImageIcon,
   Link2,
+  Loader2,
   Sparkles,
+  Upload,
+  X,
 } from "lucide-react";
+import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +27,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { myHubsQuery } from "@/lib/hub-queries";
 import { HUB_INTENTS, type HubIntent } from "@/lib/hubs";
+import { validateMediaUpload } from "@/lib/shield";
 
 export type PingDraft = {
   category: Category;
@@ -30,6 +35,10 @@ export type PingDraft = {
   cta_url: string;
   cta_label: string;
   image_url?: string | null;
+  headline?: string | null;
+  needs?: string[];
+  offers?: string[];
+  desired_outcome?: string | null;
   hub_id?: string | null;
   hub_intent?: HubIntent | null;
 };
@@ -58,12 +67,54 @@ export function PingComposer({
   });
 
   // Structured intent coordination fields (progressive disclosure)
-  const [headline, setHeadline] = useState("");
-  const [needsInput, setNeedsInput] = useState("");
-  const [offersInput, setOffersInput] = useState("");
-  const [desiredOutcome, setDesiredOutcome] = useState("");
+  const [headline, setHeadline] = useState(initial?.headline ?? "");
+  const [needsInput, setNeedsInput] = useState((initial?.needs ?? []).join(", "));
+  const [offersInput, setOffersInput] = useState((initial?.offers ?? []).join(", "));
+  const [desiredOutcome, setDesiredOutcome] = useState(initial?.desired_outcome ?? "");
   const [mediaUrl, setMediaUrl] = useState(initial?.image_url ?? "");
-  const [showCoordinationDetails, setShowCoordinationDetails] = useState(false);
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+  const mediaFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [showCoordinationDetails, setShowCoordinationDetails] = useState(
+    Boolean(
+      (initial?.needs && initial.needs.length > 0) ||
+      (initial?.offers && initial.offers.length > 0) ||
+      initial?.desired_outcome ||
+      initial?.image_url,
+    ),
+  );
+
+  const handleMediaFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!user) {
+      toast.error("Sign in before uploading media.");
+      e.target.value = "";
+      return;
+    }
+    const mediaKind = file.type.startsWith("video/") ? "video" : "image";
+    const validation = validateMediaUpload(file, mediaKind);
+    if (!validation.valid) {
+      toast.error(validation.error || "Unsupported media file");
+      e.target.value = "";
+      return;
+    }
+    try {
+      setIsUploadingMedia(true);
+      const { uploadUserMedia } = await import("@/lib/storage");
+      const ext = file.name.split(".").pop()?.toLowerCase() || "png";
+      const path = `${user.id}/pings/${Date.now()}.${ext}`;
+      const publicUrl = await uploadUserMedia(path, file, { cacheControl: "3600", upsert: false });
+      setMediaUrl(publicUrl);
+      setShowCoordinationDetails(true);
+      toast.success("Media uploaded");
+    } catch (err) {
+      const { formatStorageUploadError } = await import("@/lib/storage");
+      toast.error(formatStorageUploadError(err, "Media upload failed"));
+    } finally {
+      setIsUploadingMedia(false);
+      e.target.value = "";
+    }
+  };
 
   const [errors, setErrors] = useState<Partial<Record<keyof PingDraft, string>>>({});
   const [showCta, setShowCta] = useState(!!initial?.cta_url);
@@ -131,6 +182,10 @@ export function PingComposer({
     setErrors({});
     onSubmit({
       ...(r.data as PingDraft),
+      headline: headline.trim() || null,
+      needs: needsList,
+      offers: offersList,
+      desired_outcome: desiredOutcome.trim() || null,
       image_url: mediaUrl.trim() || null,
       hub_id: d.hub_id || null,
       hub_intent: d.hub_id ? d.hub_intent || null : null,
@@ -267,18 +322,56 @@ export function PingComposer({
               />
             </div>
 
-            <div>
+            <div className="sm:col-span-2">
               <Label htmlFor="ping-media" className="text-xs font-semibold flex items-center gap-1">
-                <ImageIcon className="size-3.5 text-primary" /> Optional media URL (image/video)
+                <ImageIcon className="size-3.5 text-primary" /> Media URL or upload (image/video)
               </Label>
-              <Input
-                id="ping-media"
-                type="url"
-                value={mediaUrl}
-                onChange={(e) => setMediaUrl(e.target.value)}
-                placeholder="https://…/preview.png"
-                className="mt-1 rounded-xl bg-card text-xs"
-              />
+              <div className="mt-1 flex flex-col sm:flex-row gap-2">
+                <Input
+                  id="ping-media"
+                  type="url"
+                  value={mediaUrl}
+                  onChange={(e) => setMediaUrl(e.target.value)}
+                  placeholder="https://…/preview.png or upload from device"
+                  className="rounded-xl bg-card text-xs flex-1"
+                />
+                <input
+                  ref={mediaFileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
+                  className="hidden"
+                  onChange={handleMediaFileUpload}
+                />
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isUploadingMedia || !user}
+                    onClick={() => mediaFileInputRef.current?.click()}
+                    className="rounded-xl text-xs gap-1.5 shrink-0"
+                  >
+                    {isUploadingMedia ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Upload className="size-3.5" />
+                    )}
+                    {isUploadingMedia ? "Uploading…" : "Upload media"}
+                  </Button>
+                  {mediaUrl && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Clear media attachment"
+                      onClick={() => setMediaUrl("")}
+                      className="size-8 rounded-xl"
+                    >
+                      <X className="size-3.5" />
+                    </Button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         )}

@@ -242,11 +242,18 @@ function HubsDirectory() {
             <Camera className="size-4" /> Share Community Moment
           </Button>
         ) : (
-          <Button asChild variant="hero" size="sm" className="rounded-full gap-1.5">
-            <Link to="/hubs/create">
-              <Plus className="size-4" /> Create a Hub
-            </Link>
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild variant="outline" size="sm" className="rounded-full gap-1.5">
+              <Link to="/signals/channels">
+                <Radio className="size-3.5 text-gold" /> Signal Channels
+              </Link>
+            </Button>
+            <Button asChild variant="hero" size="sm" className="rounded-full gap-1.5">
+              <Link to="/hubs/create">
+                <Plus className="size-4" /> Create a Hub
+              </Link>
+            </Button>
+          </div>
         )}
       </div>
 

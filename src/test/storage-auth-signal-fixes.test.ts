@@ -72,6 +72,7 @@ describe("Media storage, auth redirect safety, hub error mapping, and Signal 1-o
     expect(workspaceSrc).toContain("DirectMessageChat");
     expect(workspaceSrc).toContain("Community Destination · Signal");
     expect(workspaceSrc).toContain("1-on-1 Chats");
+    expect(workspaceSrc).toContain("Institutional Channels");
   });
 
   it("preflights OAuth providers and preserves SSR hydration parity on root shell & home feed", () => {

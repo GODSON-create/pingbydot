@@ -5,15 +5,15 @@ import {
   Building2,
   Compass,
   Home,
+  MessageSquare,
   Plus,
-  Radio,
   Sparkles,
   User,
   Users,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { useNavOverlay } from "@/lib/nav-overlay";
 import { FounderAvatar } from "@/components/ping/Avatar";
-import { CreateStackModal } from "./CreateStackModal";
 import { cn } from "@/lib/utils";
 
 const item =
@@ -39,9 +39,9 @@ export function isCommunityPath(pathname: string): boolean {
  */
 export function BottomNav() {
   const { user, profile } = useAuth();
+  const { openOverlay, closeOverlays } = useNavOverlay();
   const location = useLocation();
   const navigate = useNavigate();
-  const [createOpen, setCreateOpen] = useState(false);
   const [prevMainRoute, setPrevMainRoute] = useState<string>("/");
 
   const { pathname, searchStr } = location;
@@ -90,7 +90,10 @@ export function BottomNav() {
           <div className="glass mx-auto flex max-w-md items-center gap-1 rounded-3xl p-1.5 shadow-lift">
             <button
               type="button"
-              onClick={handleExitCommunity}
+              onClick={() => {
+                closeOverlays();
+                handleExitCommunity();
+              }}
               aria-label="Back to main navigation"
               className={cn(item, "hover:bg-secondary hover:text-foreground")}
             >
@@ -101,6 +104,10 @@ export function BottomNav() {
             <Link
               to="/hubs"
               search={{}}
+              onClick={closeOverlays}
+              aria-current={
+                pathname.startsWith("/hubs") && !isCommunityMomentsView ? "page" : undefined
+              }
               className={cn(
                 item,
                 pathname.startsWith("/hubs") && !isCommunityMomentsView && activeClass,
@@ -112,16 +119,20 @@ export function BottomNav() {
 
             <Link
               to="/signals"
+              onClick={closeOverlays}
               aria-label="Signal — 1-on-1 Chats"
+              aria-current={pathname === "/signals" ? "page" : undefined}
               className={cn(item, pathname.startsWith("/signals") && activeClass)}
             >
-              <Radio className="size-5" />
+              <MessageSquare className="size-5" />
               <span>Signal</span>
             </Link>
 
             <Link
               to="/hubs"
               search={{ view: "moments" }}
+              onClick={closeOverlays}
+              aria-current={isCommunityMomentsView ? "page" : undefined}
               className={cn(item, isCommunityMomentsView && activeClass)}
             >
               <Sparkles className="size-5" />
@@ -139,6 +150,8 @@ export function BottomNav() {
           <div className="glass mx-auto flex max-w-md items-center gap-1 rounded-3xl p-1.5 shadow-lift">
             <Link
               to="/"
+              onClick={closeOverlays}
+              aria-current={pathname === "/" ? "page" : undefined}
               className={cn(item, pathname === "/" && activeClass)}
               activeOptions={{ exact: true, includeHash: false }}
             >
@@ -148,6 +161,8 @@ export function BottomNav() {
 
             <Link
               to="/explore"
+              onClick={closeOverlays}
+              aria-current={pathname.startsWith("/explore") ? "page" : undefined}
               className={cn(item, pathname.startsWith("/explore") && activeClass)}
             >
               <Compass className="size-5" />
@@ -156,7 +171,7 @@ export function BottomNav() {
 
             <button
               type="button"
-              onClick={() => setCreateOpen(true)}
+              onClick={() => openOverlay("create")}
               aria-label="Create a Ping, Moment, or Live session"
               className="flex min-h-14 min-w-12 flex-1 flex-col items-center justify-center gap-0.5"
             >
@@ -166,7 +181,13 @@ export function BottomNav() {
               <span className="text-[10px] font-semibold text-muted-foreground">Create</span>
             </button>
 
-            <Link to="/hubs" search={{}} className={cn(item, inCommunity && activeClass)}>
+            <Link
+              to="/hubs"
+              search={{}}
+              onClick={closeOverlays}
+              aria-current={inCommunity ? "page" : undefined}
+              className={cn(item, inCommunity && activeClass)}
+            >
               <Users className="size-5" />
               <span>Community</span>
             </Link>
@@ -175,6 +196,8 @@ export function BottomNav() {
               <Link
                 to="/@{$username}"
                 params={{ username: profile.username }}
+                onClick={closeOverlays}
+                aria-current={isProfileActive ? "page" : undefined}
                 className={cn(item, isProfileActive && activeClass)}
               >
                 <FounderAvatar
@@ -186,7 +209,12 @@ export function BottomNav() {
                 <span>Profile</span>
               </Link>
             ) : (
-              <Link to="/login" className={cn(item, isProfileActive && activeClass)}>
+              <Link
+                to="/login"
+                onClick={closeOverlays}
+                aria-current={isProfileActive ? "page" : undefined}
+                className={cn(item, isProfileActive && activeClass)}
+              >
                 <User className="size-5" />
                 <span>Profile</span>
               </Link>
@@ -194,8 +222,6 @@ export function BottomNav() {
           </div>
         </nav>
       )}
-
-      <CreateStackModal open={createOpen} onOpenChange={setCreateOpen} />
     </>
   );
 }

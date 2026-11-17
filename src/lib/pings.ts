@@ -70,8 +70,7 @@ export const followingFeedQuery = (userId: string | undefined, page = 0) =>
         .range(page * 30, page * 30 + 29);
 
       if (error) {
-        console.warn("Error loading following feed:", error);
-        return [];
+        throw error;
       }
       return (data ?? []) as unknown as Ping[];
     },

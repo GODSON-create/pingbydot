@@ -23,6 +23,8 @@ import {
   Shield,
   Settings,
   Pencil,
+  MessageSquare,
+  Send,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -32,6 +34,9 @@ import {
   signalFollowingQuery,
   signalPublisherQuery,
   signalPublishersListQuery,
+  signalMessagesQuery,
+  useSendSignalMessage,
+  useDeleteSignalMessage,
   useSignalFollow,
   useCreateSignalPost,
   useDeleteSignalPost,
@@ -794,12 +799,24 @@ function SignalDetailPage() {
   const followMutation = useSignalFollow(signal?.id ?? "", user?.id);
   const deletePostMutation = useDeleteSignalPost(signal?.id ?? "");
 
-  // Real-time subscription for broadcasts
+  const [channelTab, setChannelTab] = useState<"broadcasts" | "chat">("broadcasts");
+  const [chatDraft, setChatDraft] = useState("");
+  const {
+    data: channelMessages = [],
+    isLoading: chatLoading,
+    isError: isChatError,
+    error: chatError,
+    refetch: refetchChat,
+  } = useQuery(signalMessagesQuery(signal?.id ?? ""));
+  const sendChannelMessage = useSendSignalMessage(signal?.id ?? "");
+  const deleteChannelMessage = useDeleteSignalMessage(signal?.id ?? "");
+
+  // Real-time subscription for channel broadcasts & subscriber discussion chat
   useEffect(() => {
     if (!signal?.id) return;
 
     const channel = supabase
-      .channel(`signal-broadcasts:${signal.id}`)
+      .channel(`signal-live:${signal.id}`)
       .on(
         "postgres_changes",
         {
@@ -821,10 +838,22 @@ function SignalDetailPage() {
           }
         },
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "signal_messages",
+          filter: `signal_id=eq.${signal.id}`,
+        },
+        () => {
+          qc.invalidateQueries({ queryKey: ["signal-messages", signal.id] });
+        },
+      )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      void supabase.removeChannel(channel);
     };
   }, [signal?.id, slug, qc]);
 
@@ -874,7 +903,7 @@ function SignalDetailPage() {
           The signal channel @{slug} does not exist or may have been unlisted.
         </p>
         <Button asChild variant="hero" className="mt-6 rounded-2xl">
-          <Link to="/signals">Explore All Signals</Link>
+          <Link to="/signals/channels">Explore Signal Channels</Link>
         </Button>
       </div>
     );
@@ -882,13 +911,22 @@ function SignalDetailPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
-      <Link
-        to="/signals"
-        className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <ArrowLeft className="size-3.5" />
-        Back to Signals
-      </Link>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Link
+          to="/signals/channels"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="size-3.5" />
+          Back to Signal Channels
+        </Link>
+        <Link
+          to="/signals"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+        >
+          <MessageSquare className="size-3.5" />
+          Open 1-on-1 Chats
+        </Link>
+      </div>
 
       {/* Signal Channel Identity Header */}
       <header className="surface-card mt-4 rounded-3xl p-6 sm:p-8 border border-border/60">
@@ -1052,115 +1090,279 @@ function SignalDetailPage() {
         )}
       </header>
 
-      {/* Broadcast Feed */}
-      <section className="mt-8">
-        {(() => {
-          const postCategories = [
-            { value: "all", label: "All" },
-            { value: "announcement", label: "Announcement" },
-            { value: "alert", label: "Alert" },
-            { value: "update", label: "Update" },
-            { value: "opportunity", label: "Opportunity" },
-            { value: "event", label: "Event" },
-          ] as const;
-          const filteredPosts =
-            selectedPostCategory === "all"
-              ? posts
-              : posts.filter((p) => (p.category || "announcement") === selectedPostCategory);
+      {/* Channel Surface Tabs: Official Broadcasts vs Live Subscriber Chat */}
+      <div className="mt-6 flex items-center gap-2 border-b border-border/60 pb-3">
+        <button
+          type="button"
+          onClick={() => setChannelTab("broadcasts")}
+          className={cn(
+            "inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold transition-colors",
+            channelTab === "broadcasts"
+              ? "bg-foreground text-background shadow-sm"
+              : "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+          )}
+        >
+          <Radio className="size-3.5" />
+          Official Broadcasts ({posts.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setChannelTab("chat")}
+          className={cn(
+            "inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold transition-colors",
+            channelTab === "chat"
+              ? "bg-foreground text-background shadow-sm"
+              : "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+          )}
+        >
+          <MessageSquare className="size-3.5" />
+          Channel Discussion ({channelMessages.length})
+        </button>
+      </div>
 
-          return (
-            <>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <h2 className="font-display text-xl font-bold flex items-center gap-2">
-                  <Radio className="size-5 text-primary" />
-                  Official Broadcasts
-                </h2>
-                <span className="text-xs text-muted-foreground">
-                  {filteredPosts.length} {filteredPosts.length === 1 ? "bulletin" : "bulletins"}
-                </span>
-              </div>
+      {channelTab === "chat" ? (
+        <section className="mt-6 space-y-4" aria-label="Signal Channel Subscriber Discussion">
+          {!user ? (
+            <div className="surface-card rounded-3xl p-6 text-center border border-border/70">
+              <p className="text-sm font-semibold text-foreground">
+                Sign in and subscribe to join live Signal channel discussions
+              </p>
+              <Button asChild variant="hero" size="sm" className="mt-3 rounded-full">
+                <Link to="/login" search={{ next: `/signals/${signal.slug}` }}>
+                  Sign in to participate
+                </Link>
+              </Button>
+            </div>
+          ) : !isFollowing && !isPublisher && !isSignalAdmin ? (
+            <div className="surface-card rounded-3xl p-6 text-center border border-border/70">
+              <p className="text-sm font-semibold text-foreground">
+                Subscribe to {signal.name} to post in Channel Discussion
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Channel subscribers and publishers can coordinate live below.
+              </p>
+              <Button
+                type="button"
+                variant="hero"
+                size="sm"
+                onClick={handleFollowToggle}
+                disabled={followMutation.isPending}
+                className="mt-3 rounded-full gap-1.5"
+              >
+                <Bell className="size-3.5" />
+                Subscribe to Join Chat
+              </Button>
+            </div>
+          ) : (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                sendChannelMessage.mutate(
+                  { content: chatDraft },
+                  {
+                    onSuccess: () => setChatDraft(""),
+                    onError: (err: any) =>
+                      toast.error(err?.message || "Failed to send channel message."),
+                  },
+                );
+              }}
+              className="surface-card rounded-3xl p-4 border border-border/80 flex flex-col sm:flex-row gap-2"
+            >
+              <Input
+                value={chatDraft}
+                onChange={(e) => setChatDraft(e.target.value)}
+                placeholder={`Message ${signal.name} channel…`}
+                maxLength={2000}
+                className="rounded-2xl bg-card text-sm flex-1"
+              />
+              <Button
+                type="submit"
+                variant="hero"
+                disabled={sendChannelMessage.isPending || !chatDraft.trim()}
+                className="rounded-2xl gap-1.5"
+              >
+                <Send className="size-4" />
+                {sendChannelMessage.isPending ? "Sending…" : "Send"}
+              </Button>
+            </form>
+          )}
 
-              {/* Category Filter Pills */}
-              <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-                {postCategories.map((c) => (
-                  <button
-                    key={c.value}
-                    type="button"
-                    onClick={() => setSelectedPostCategory(c.value)}
-                    className={cn(
-                      "shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors",
-                      selectedPostCategory === c.value
-                        ? "bg-foreground text-background"
-                        : "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-                    )}
+          {chatLoading ? (
+            <div className="h-32 rounded-3xl bg-muted/40 animate-pulse" />
+          ) : isChatError ? (
+            <QueryErrorCard
+              compact
+              title="Couldn't load channel discussion"
+              error={chatError}
+              onRetry={() => void refetchChat()}
+            />
+          ) : channelMessages.length === 0 ? (
+            <div className="surface-card rounded-3xl p-8 text-center border border-border/60">
+              <MessageSquare className="mx-auto size-9 text-muted-foreground/40" />
+              <p className="mt-3 font-display text-base font-bold text-foreground">
+                No channel discussion messages yet
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Subscribers and publishers can start the conversation here.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {channelMessages.map((msg) => {
+                const senderName = msg.sender?.display_name || msg.sender?.username || "Subscriber";
+                const canDeleteMsg =
+                  isSignalAdmin || (Boolean(user?.id) && msg.sender_id === user?.id);
+                return (
+                  <article
+                    key={msg.id}
+                    className="surface-card rounded-2xl p-4 border border-border/70 space-y-1.5"
                   >
-                    {c.label}
-                  </button>
-                ))}
-              </div>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="font-bold text-foreground">
+                        {senderName}{" "}
+                        {msg.sender?.username && (
+                          <span className="font-normal text-muted-foreground">
+                            @{msg.sender.username}
+                          </span>
+                        )}
+                      </span>
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <span>{new Date(msg.created_at).toLocaleString()}</span>
+                        {canDeleteMsg && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              deleteChannelMessage.mutate(msg.id, {
+                                onError: (err: any) =>
+                                  toast.error(err?.message || "Could not delete message."),
+                              })
+                            }
+                            aria-label="Delete message"
+                            className="rounded p-1 hover:text-destructive"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <p className="whitespace-pre-wrap text-sm text-foreground/90">{msg.content}</p>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      ) : (
+        /* Broadcast Feed */
+        <section className="mt-6">
+          {(() => {
+            const postCategories = [
+              { value: "all", label: "All" },
+              { value: "announcement", label: "Announcement" },
+              { value: "alert", label: "Alert" },
+              { value: "update", label: "Update" },
+              { value: "opportunity", label: "Opportunity" },
+              { value: "event", label: "Event" },
+            ] as const;
+            const filteredPosts =
+              selectedPostCategory === "all"
+                ? posts
+                : posts.filter((p) => (p.category || "announcement") === selectedPostCategory);
 
-              <div className="mt-4 space-y-4">
-                {postsLoading ? (
-                  <div className="space-y-3">
-                    {[1, 2, 3].map((i) => (
-                      <div key={i} className="h-40 rounded-3xl bg-muted/40 animate-pulse" />
-                    ))}
-                  </div>
-                ) : isPostsError ? (
-                  <QueryErrorCard
-                    title="Couldn't load broadcasts"
-                    description="A connection issue prevented loading broadcasts for this channel."
-                    error={postsError}
-                    onRetry={() => void refetchPosts()}
-                  />
-                ) : filteredPosts.length === 0 ? (
-                  <div className="surface-card rounded-3xl p-10 text-center border border-border/60">
-                    <Radio className="mx-auto size-10 text-muted-foreground/40" />
-                    <p className="mt-3 font-display font-semibold text-foreground">
-                      {selectedPostCategory === "all"
-                        ? "No broadcasts published yet"
-                        : `No ${selectedPostCategory} broadcasts yet`}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Stay tuned for official updates and announcements from {signal.name}.
-                    </p>
-                    {isPublisher && selectedPostCategory === "all" && (
-                      <Button
-                        onClick={() => setBroadcastDialogOpen(true)}
-                        variant="hero"
-                        size="sm"
-                        className="mt-4 rounded-xl"
-                      >
-                        Publish first broadcast
-                      </Button>
-                    )}
-                  </div>
-                ) : (
-                  filteredPosts.map((post) => (
-                    <SignalPostCard
-                      key={post.id}
-                      post={post}
-                      isPublisher={isPublisher}
-                      currentUserId={user?.id}
-                      canDelete={
-                        isSignalAdmin || (Boolean(user?.id) && post.author_id === user?.id)
-                      }
-                      deleting={deletePostMutation.isPending}
-                      onDelete={() => {
-                        deletePostMutation.mutate(post.id, {
-                          onSuccess: () => toast.success("Broadcast deleted."),
-                          onError: (err: any) =>
-                            toast.error(err?.message || "Could not delete broadcast."),
-                        });
-                      }}
+            return (
+              <>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <h2 className="font-display text-xl font-bold flex items-center gap-2">
+                    <Radio className="size-5 text-primary" />
+                    Official Broadcasts
+                  </h2>
+                  <span className="text-xs text-muted-foreground">
+                    {filteredPosts.length} {filteredPosts.length === 1 ? "bulletin" : "bulletins"}
+                  </span>
+                </div>
+
+                {/* Category Filter Pills */}
+                <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+                  {postCategories.map((c) => (
+                    <button
+                      key={c.value}
+                      type="button"
+                      onClick={() => setSelectedPostCategory(c.value)}
+                      className={cn(
+                        "shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors",
+                        selectedPostCategory === c.value
+                          ? "bg-foreground text-background"
+                          : "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+                      )}
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="mt-4 space-y-4">
+                  {postsLoading ? (
+                    <div className="space-y-3">
+                      {[1, 2, 3].map((i) => (
+                        <div key={i} className="h-40 rounded-3xl bg-muted/40 animate-pulse" />
+                      ))}
+                    </div>
+                  ) : isPostsError ? (
+                    <QueryErrorCard
+                      title="Couldn't load broadcasts"
+                      description="A connection issue prevented loading broadcasts for this channel."
+                      error={postsError}
+                      onRetry={() => void refetchPosts()}
                     />
-                  ))
-                )}
-              </div>
-            </>
-          );
-        })()}
-      </section>
+                  ) : filteredPosts.length === 0 ? (
+                    <div className="surface-card rounded-3xl p-10 text-center border border-border/60">
+                      <Radio className="mx-auto size-10 text-muted-foreground/40" />
+                      <p className="mt-3 font-display font-semibold text-foreground">
+                        {selectedPostCategory === "all"
+                          ? "No broadcasts published yet"
+                          : `No ${selectedPostCategory} broadcasts yet`}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Stay tuned for official updates and announcements from {signal.name}.
+                      </p>
+                      {isPublisher && selectedPostCategory === "all" && (
+                        <Button
+                          onClick={() => setBroadcastDialogOpen(true)}
+                          variant="hero"
+                          size="sm"
+                          className="mt-4 rounded-xl"
+                        >
+                          Publish first broadcast
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    filteredPosts.map((post) => (
+                      <SignalPostCard
+                        key={post.id}
+                        post={post}
+                        isPublisher={isPublisher}
+                        currentUserId={user?.id}
+                        canDelete={
+                          isSignalAdmin || (Boolean(user?.id) && post.author_id === user?.id)
+                        }
+                        deleting={deletePostMutation.isPending}
+                        onDelete={() => {
+                          deletePostMutation.mutate(post.id, {
+                            onSuccess: () => toast.success("Broadcast deleted."),
+                            onError: (err: any) =>
+                              toast.error(err?.message || "Could not delete broadcast."),
+                          });
+                        }}
+                      />
+                    ))
+                  )}
+                </div>
+              </>
+            );
+          })()}
+        </section>
+      )}
 
       {/* Composer Dialog */}
       {isPublisher && (

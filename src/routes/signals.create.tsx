@@ -85,21 +85,46 @@ function CreateSignalPage() {
     try {
       let createdSlug: string | undefined;
 
-      const { data, error } = await supabase.rpc("create_signal", {
+      const rpcPayload = {
         _name: name.trim(),
         _slug: slug.trim(),
         _institution_type: category,
         ...(description.trim() ? { _description: description.trim() } : {}),
         ...(websiteUrl.trim() ? { _website_url: websiteUrl.trim() } : {}),
-      });
+      };
+
+      const { data, error } = await supabase.rpc("create_signal", rpcPayload);
 
       if (!error && data) {
         createdSlug = slug.trim();
-      } else {
-        // Fallback direct insert
-        const { data: directSignal, error: directErr } = await supabase
-          .from("signals")
-          .insert({
+      } else if (error) {
+        const isMissingRpc =
+          error.code === "PGRST202" ||
+          error.code === "42883" ||
+          error.message?.toLowerCase().includes("does not exist");
+
+        if (!isMissingRpc) {
+          if (error.code === "23505" || error.message?.toLowerCase().includes("unique")) {
+            setErrors({ slug: "This channel slug is already claimed. Please choose another." });
+            return;
+          }
+          if (error.code === "23503") {
+            const { error: profileErr } = await supabase.rpc("ensure_my_profile");
+            if (!profileErr) {
+              const retry = await supabase.rpc("create_signal", rpcPayload);
+              if (!retry.error && retry.data) {
+                createdSlug = slug.trim();
+              } else if (retry.error) {
+                throw retry.error;
+              }
+            }
+          } else {
+            throw error;
+          }
+        }
+
+        if (!createdSlug) {
+          const directInsert = {
             name: name.trim(),
             slug: slug.trim(),
             institution_type: category,
@@ -109,30 +134,46 @@ function CreateSignalPage() {
             created_by: user.id,
             verified: false,
             verification_status: "unverified",
-          })
-          .select("id, slug")
-          .single();
+          };
 
-        if (directErr) {
-          if (directErr.message.includes("unique") || directErr.code === "23505") {
-            setErrors({ slug: "This channel slug is already claimed. Please choose another." });
-            return;
+          let { data: directSignal, error: directErr } = await supabase
+            .from("signals")
+            .insert(directInsert)
+            .select("id, slug")
+            .single();
+
+          if (directErr && directErr.code === "23503") {
+            await supabase.rpc("ensure_my_profile");
+            const retry = await supabase
+              .from("signals")
+              .insert(directInsert)
+              .select("id, slug")
+              .single();
+            directSignal = retry.data;
+            directErr = retry.error;
           }
-          throw directErr;
+
+          if (directErr || !directSignal) {
+            if (directErr?.message?.includes("unique") || directErr?.code === "23505") {
+              setErrors({ slug: "This channel slug is already claimed. Please choose another." });
+              return;
+            }
+            throw directErr ?? new Error("Failed to register Signal channel.");
+          }
+
+          const { error: pubErr } = await supabase.from("signal_publishers").upsert(
+            {
+              signal_id: directSignal.id,
+              user_id: user.id,
+              role: "admin",
+              assigned_by: user.id,
+            },
+            { onConflict: "signal_id,user_id" },
+          );
+          if (pubErr) throw pubErr;
+
+          createdSlug = directSignal.slug;
         }
-
-        // Ensure creator is registered as admin publisher
-        await supabase.from("signal_publishers").upsert(
-          {
-            signal_id: directSignal.id,
-            user_id: user.id,
-            role: "admin",
-            assigned_by: user.id,
-          },
-          { onConflict: "signal_id,user_id" },
-        );
-
-        createdSlug = directSignal.slug;
       }
 
       toast.success("Signal channel successfully registered!");

@@ -153,7 +153,17 @@ export function dotSummaryQuery(userId?: string) {
         };
       }
 
-      // Graceful read-only fallback computed from verified account Pings when migration 0016 is pending
+      if (error) {
+        const isMissingRpc =
+          error.code === "PGRST202" ||
+          error.code === "42883" ||
+          error.message?.toLowerCase().includes("does not exist");
+        if (!isMissingRpc) {
+          throw error;
+        }
+      }
+
+      // Graceful read-only fallback only when migration 0016 RPC is not yet deployed
       const { count: pingCount } = await supabase
         .from("pings")
         .select("id", { count: "exact", head: true })

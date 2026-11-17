@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "@tanstack/react-router";
 import { ArrowUpRight } from "lucide-react";
 import {
   Dialog,
@@ -21,8 +21,15 @@ interface CreateStackModalProps {
 export function CreateStackModal({ open, onOpenChange }: CreateStackModalProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [momentOpen, setMomentOpen] = useState(false);
   const [liveOpen, setLiveOpen] = useState(false);
+
+  // Close secondary modals immediately whenever the user navigates.
+  useEffect(() => {
+    setMomentOpen(false);
+    setLiveOpen(false);
+  }, [location.pathname, location.searchStr]);
 
   const requireAuthOrRun = (nextPath: string, action: () => void) => {
     if (!user) {

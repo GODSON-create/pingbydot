@@ -1,5 +1,4 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
 import {
   Bell,
   Plus,
@@ -25,6 +24,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { checkAdminAccess } from "@/lib/admin.functions";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
+import { useNavOverlay } from "@/lib/nav-overlay";
 import { useTheme } from "@/lib/theme";
 import { userConversationsQuery } from "@/lib/messages";
 import { dotSummaryQuery } from "@/lib/economy";
@@ -45,7 +45,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { CreateStackModal } from "./CreateStackModal";
 
 export function Wordmark() {
   return (
@@ -149,9 +148,8 @@ const navLink =
 export function SiteHeader() {
   const { user, profile, ready } = useAuth();
   const { theme, resolvedTheme, setTheme } = useTheme();
+  const { openOverlay, closeOverlays, isOpen, onOpenChangeFor } = useNavOverlay();
   const signOut = useSignOut();
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
 
   const verifyAdmin = useServerFn(checkAdminAccess);
   const admin = useQuery({
@@ -222,7 +220,7 @@ export function SiteHeader() {
             {/* Notification Access */}
             <button
               type="button"
-              onClick={() => setNotificationsOpen(true)}
+              onClick={() => openOverlay("notifications")}
               className="relative flex size-9 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground transition-all"
               aria-label="Notifications"
               title="Notifications"
@@ -266,11 +264,14 @@ export function SiteHeader() {
                     type="button"
                     size="sm"
                     variant="hero"
-                    onClick={() => setCreateOpen(true)}
+                    onClick={() => openOverlay("create")}
                   >
                     <Plus /> Create
                   </Button>
-                  <DropdownMenu>
+                  <DropdownMenu
+                    open={isOpen("header-account")}
+                    onOpenChange={onOpenChangeFor("header-account")}
+                  >
                     <DropdownMenuTrigger
                       className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       aria-label="Account menu"
@@ -284,13 +285,21 @@ export function SiteHeader() {
                     <DropdownMenuContent align="end" className="w-56 rounded-2xl p-1.5">
                       {profile && (
                         <DropdownMenuItem asChild className="rounded-xl">
-                          <Link to="/@{$username}" params={{ username: profile.username }}>
+                          <Link
+                            to="/@{$username}"
+                            params={{ username: profile.username }}
+                            onClick={closeOverlays}
+                          >
                             <User /> My profile
                           </Link>
                         </DropdownMenuItem>
                       )}
                       <DropdownMenuItem asChild className="rounded-xl">
-                        <Link to="/balance" className="flex items-center justify-between">
+                        <Link
+                          to="/balance"
+                          onClick={closeOverlays}
+                          className="flex items-center justify-between"
+                        >
                           <span className="flex items-center gap-2">
                             <Coins className="size-4 text-gold" /> DOT Balance
                           </span>
@@ -302,45 +311,56 @@ export function SiteHeader() {
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild className="rounded-xl">
-                        <Link to="/analytics">
+                        <Link to="/analytics" onClick={closeOverlays}>
                           <BarChart3 className="text-primary" /> Analytics
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild className="rounded-xl">
-                        <Link to="/upgrades">
+                        <Link to="/upgrades" onClick={closeOverlays}>
                           <Crown className="text-gold" /> Account Upgrades
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem asChild className="rounded-xl">
-                        <Link to="/hubs">
+                        <Link to="/hubs" onClick={closeOverlays}>
                           <Building2 /> Community Hubs
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild className="rounded-xl">
-                        <Link to="/signals">
-                          <Radio /> Signal (1-on-1 Chats)
+                        <Link to="/signals" onClick={closeOverlays}>
+                          <MessageSquare /> Signal (1-on-1 Chats)
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild className="rounded-xl">
-                        <Link to="/messages">
+                        <Link to="/signals/channels" onClick={closeOverlays}>
+                          <Radio /> Signal Channels
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild className="rounded-xl">
+                        <Link to="/messages" onClick={closeOverlays}>
                           <MessageSquare /> Direct Messages
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild className="rounded-xl">
-                        <Link to="/settings">
+                        <Link to="/settings" onClick={closeOverlays}>
                           <Settings /> Settings
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       {admin.data?.isAdmin && (
                         <DropdownMenuItem asChild className="rounded-xl">
-                          <Link to="/admin">
+                          <Link to="/admin" onClick={closeOverlays}>
                             <Settings /> Administration
                           </Link>
                         </DropdownMenuItem>
                       )}
-                      <DropdownMenuItem onSelect={signOut} className="rounded-xl text-destructive">
+                      <DropdownMenuItem
+                        onSelect={() => {
+                          closeOverlays();
+                          signOut();
+                        }}
+                        className="rounded-xl text-destructive"
+                      >
                         <LogOut /> Log out
                       </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -362,8 +382,8 @@ export function SiteHeader() {
       </header>
 
       {/* Notifications Sheet */}
-      <Sheet open={notificationsOpen} onOpenChange={setNotificationsOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-md rounded-l-3xl p-6">
+      <Sheet open={isOpen("notifications")} onOpenChange={onOpenChangeFor("notifications")}>
+        <SheetContent side="right" className="w-full sm:max-w-md rounded-l-3xl p-6 overflow-y-auto">
           <SheetHeader className="text-left">
             <SheetTitle className="font-display text-xl font-bold flex items-center gap-2">
               <Bell className="size-5 text-primary" /> Notifications
@@ -385,7 +405,7 @@ export function SiteHeader() {
                   variant="hero"
                   size="sm"
                   className="mt-4 rounded-full"
-                  onClick={() => setNotificationsOpen(false)}
+                  onClick={closeOverlays}
                 >
                   <Link to="/login">Sign in</Link>
                 </Button>
@@ -403,7 +423,7 @@ export function SiteHeader() {
                 <Link
                   key={n.id}
                   to={n.href as any}
-                  onClick={() => setNotificationsOpen(false)}
+                  onClick={closeOverlays}
                   className="flex items-start gap-3 rounded-2xl border border-border/60 bg-card/60 p-3.5 transition-colors hover:bg-secondary/70"
                 >
                   <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
@@ -427,8 +447,6 @@ export function SiteHeader() {
           </div>
         </SheetContent>
       </Sheet>
-
-      <CreateStackModal open={createOpen} onOpenChange={setCreateOpen} />
     </>
   );
 }

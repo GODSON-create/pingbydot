@@ -705,13 +705,20 @@ export type Database = {
           created_at: string;
           cta_label: string | null;
           cta_url: string | null;
+          desired_outcome: string | null;
+          headline: string | null;
           hidden_at: string | null;
           id: string;
           image_url: string | null;
+          media_urls: string[] | null;
+          needs: string[] | null;
+          offers: string[] | null;
+          skills: string[] | null;
           source_comment_id: string | null;
           source_ping_id: string | null;
           updated_at: string;
           user_id: string;
+          visibility: string;
         };
         Insert: {
           category?: string;
@@ -719,13 +726,20 @@ export type Database = {
           created_at?: string;
           cta_label?: string | null;
           cta_url?: string | null;
+          desired_outcome?: string | null;
+          headline?: string | null;
           hidden_at?: string | null;
           id?: string;
           image_url?: string | null;
+          media_urls?: string[] | null;
+          needs?: string[] | null;
+          offers?: string[] | null;
+          skills?: string[] | null;
           source_comment_id?: string | null;
           source_ping_id?: string | null;
           updated_at?: string;
           user_id: string;
+          visibility?: string;
         };
         Update: {
           category?: string;
@@ -733,13 +747,20 @@ export type Database = {
           created_at?: string;
           cta_label?: string | null;
           cta_url?: string | null;
+          desired_outcome?: string | null;
+          headline?: string | null;
           hidden_at?: string | null;
           id?: string;
           image_url?: string | null;
+          media_urls?: string[] | null;
+          needs?: string[] | null;
+          offers?: string[] | null;
+          skills?: string[] | null;
           source_comment_id?: string | null;
           source_ping_id?: string | null;
           updated_at?: string;
           user_id?: string;
+          visibility?: string;
         };
         Relationships: [
           {
@@ -1885,6 +1906,81 @@ export type Database = {
         };
         Relationships: [];
       };
+      hub_forum_posts: {
+        Row: {
+          id: string;
+          hub_id: string;
+          forum_id: string;
+          author_id: string;
+          parent_id: string | null;
+          title: string | null;
+          content: string;
+          is_pinned: boolean;
+          deleted_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          hub_id: string;
+          forum_id: string;
+          author_id: string;
+          parent_id?: string | null;
+          title?: string | null;
+          content: string;
+          is_pinned?: boolean;
+          deleted_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          hub_id?: string;
+          forum_id?: string;
+          author_id?: string;
+          parent_id?: string | null;
+          title?: string | null;
+          content?: string;
+          is_pinned?: boolean;
+          deleted_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      signal_messages: {
+        Row: {
+          id: string;
+          signal_id: string;
+          sender_id: string;
+          parent_id: string | null;
+          content: string;
+          deleted_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          signal_id: string;
+          sender_id: string;
+          parent_id?: string | null;
+          content: string;
+          deleted_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          signal_id?: string;
+          sender_id?: string;
+          parent_id?: string | null;
+          content?: string;
+          deleted_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       hub_broadcasts: {
         Row: {
           id: string;
@@ -2227,6 +2323,17 @@ export type Database = {
           _broadcast_id: string;
         };
         Returns: undefined;
+      };
+      ensure_my_profile: {
+        Args: Record<PropertyKey, never>;
+        Returns: Database["public"]["Tables"]["profiles"]["Row"];
+      };
+      get_my_conversations_summary: {
+        Args: {
+          _limit?: number;
+          _offset?: number;
+        };
+        Returns: Json;
       };
     };
     Enums: {

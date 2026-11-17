@@ -175,9 +175,9 @@ function BalancePage() {
               {claimDaily.isPending
                 ? "Claiming…"
                 : !summary?.migrated
-                  ? "Daily +5 DOT (Migration Pending)"
+                  ? "Daily +10 DOT (Migration Pending)"
                   : canClaim
-                    ? "Claim Daily +5 DOT"
+                    ? "Claim Daily +10 DOT (+Streak)"
                     : "Checked In Today"}
             </Button>
           </div>
@@ -192,7 +192,7 @@ function BalancePage() {
             <li className="flex items-center justify-between gap-2">
               <span className="text-muted-foreground">Daily check-in reward</span>
               <span className="rounded-full bg-lime/20 dark:bg-lime/15 px-2.5 py-0.5 text-xs font-bold text-lime-foreground dark:text-lime">
-                +5 DOT / day
+                +10–25 DOT / day
               </span>
             </li>
             <li className="flex items-center justify-between gap-2">

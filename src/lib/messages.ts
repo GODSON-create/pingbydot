@@ -46,17 +46,40 @@ export interface Conversation {
   unread_count: number;
 }
 
+function isMissingRpcError(err: { code?: string; message?: string } | null | undefined): boolean {
+  if (!err) return false;
+  return (
+    err.code === "PGRST202" ||
+    err.code === "42883" ||
+    Boolean(err.message?.toLowerCase().includes("does not exist"))
+  );
+}
+
 /**
- * Fetch all active conversations for the current user.
+ * Fetch all active conversations for the current user (single-query RPC with batched fallback).
  */
-export function userConversationsQuery(currentUserId?: string) {
+export function userConversationsQuery(currentUserId?: string, limit = 50, offset = 0) {
   return {
-    queryKey: ["user-conversations", currentUserId],
+    queryKey: ["user-conversations", currentUserId, limit, offset],
     enabled: Boolean(currentUserId),
     queryFn: async (): Promise<Conversation[]> => {
       if (!currentUserId) return [];
 
-      // Fetch user's conversation memberships
+      // Fast path: single indexed Postgres RPC (eliminates N+1 unread queries at scale)
+      const { data: rpcData, error: rpcError } = await supabase.rpc(
+        "get_my_conversations_summary",
+        { _limit: limit, _offset: offset },
+      );
+
+      if (!rpcError && Array.isArray(rpcData)) {
+        return rpcData as unknown as Conversation[];
+      }
+
+      if (rpcError && !isMissingRpcError(rpcError)) {
+        throw rpcError;
+      }
+
+      // Batched fallback when migration 0022 RPC is not yet deployed
       const { data: myMemberships, error: memError } = await supabase
         .from("conversation_members")
         .select(
@@ -68,7 +91,9 @@ export function userConversationsQuery(currentUserId?: string) {
         `,
         )
         .eq("user_id", currentUserId)
-        .is("hidden_at", null);
+        .is("hidden_at", null)
+        .order("joined_at", { ascending: false })
+        .range(offset, offset + limit - 1);
 
       if (memError) {
         throw memError;
@@ -78,7 +103,6 @@ export function userConversationsQuery(currentUserId?: string) {
 
       const conversationIds = myMemberships.map((m) => m.conversation_id);
 
-      // Fetch other members for these direct conversations
       const { data: allMembers, error: membersError } = await supabase
         .from("conversation_members")
         .select(
@@ -93,23 +117,34 @@ export function userConversationsQuery(currentUserId?: string) {
         throw membersError;
       }
 
-      // Compute unread counts per conversation
+      // Compute unread counts with 1 bounded query instead of N per-conversation queries
       const unreadMap = new Map<string, number>();
-      await Promise.all(
-        myMemberships.map(async (m) => {
-          const { count } = await supabase
-            .from("private_messages")
-            .select("id", { count: "exact", head: true })
-            .eq("conversation_id", m.conversation_id)
-            .neq("sender_id", currentUserId)
-            .gt("created_at", m.last_read_at)
-            .is("deleted_at", null);
-
-          unreadMap.set(m.conversation_id, count ?? 0);
-        }),
+      const minLastReadAt = myMemberships.reduce(
+        (min, m) => {
+          if (!min) return m.last_read_at;
+          return new Date(m.last_read_at) < new Date(min) ? m.last_read_at : min;
+        },
+        myMemberships[0]?.last_read_at ?? new Date(0).toISOString(),
       );
 
-      // Map to full Conversation objects
+      const { data: recentIncoming } = await supabase
+        .from("private_messages")
+        .select("conversation_id, created_at")
+        .in("conversation_id", conversationIds)
+        .neq("sender_id", currentUserId)
+        .gt("created_at", minLastReadAt)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false })
+        .limit(1000);
+
+      const lastReadByConv = new Map(myMemberships.map((m) => [m.conversation_id, m.last_read_at]));
+      for (const msg of recentIncoming ?? []) {
+        const threshold = lastReadByConv.get(msg.conversation_id);
+        if (threshold && new Date(msg.created_at) > new Date(threshold)) {
+          unreadMap.set(msg.conversation_id, (unreadMap.get(msg.conversation_id) ?? 0) + 1);
+        }
+      }
+
       const conversations: Conversation[] = [];
 
       for (const m of myMemberships) {
@@ -142,7 +177,6 @@ export function userConversationsQuery(currentUserId?: string) {
         });
       }
 
-      // Sort by newest activity first
       conversations.sort(
         (a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime(),
       );
@@ -153,11 +187,83 @@ export function userConversationsQuery(currentUserId?: string) {
 }
 
 /**
- * Fetch messages in an active conversation.
+ * Fetch a single conversation by ID so deep-links (?conversationId= or ?userId=) never flash empty
+ * while paginated lists are loading or when the conversation is older than the first 50 rows.
  */
-export function conversationMessagesQuery(conversationId?: string, currentUserId?: string) {
+export function conversationByIdQuery(conversationId?: string, currentUserId?: string) {
   return {
-    queryKey: ["conversation-messages", conversationId, currentUserId],
+    queryKey: ["conversation-by-id", conversationId, currentUserId],
+    enabled: Boolean(conversationId && currentUserId),
+    queryFn: async (): Promise<Conversation | null> => {
+      if (!conversationId || !currentUserId) return null;
+
+      const { data: myMember, error: memError } = await supabase
+        .from("conversation_members")
+        .select(
+          `
+          conversation_id, user_id, role, joined_at, last_read_at, is_muted, is_archived, hidden_at,
+          conversation:conversations!conversation_members_conversation_id_fkey(
+            id, type, created_by, last_message_at, last_message_preview, created_at, updated_at
+          )
+        `,
+        )
+        .eq("conversation_id", conversationId)
+        .eq("user_id", currentUserId)
+        .maybeSingle();
+
+      if (memError) throw memError;
+      if (!myMember || !myMember.conversation) return null;
+
+      const { data: members, error: otherErr } = await supabase
+        .from("conversation_members")
+        .select(
+          `
+          conversation_id, user_id, role,
+          profile:profiles!conversation_members_user_id_fkey(id, username, display_name, avatar_url, bio, created_at)
+        `,
+        )
+        .eq("conversation_id", conversationId)
+        .neq("user_id", currentUserId);
+
+      if (otherErr) throw otherErr;
+
+      const conv = myMember.conversation as unknown as {
+        id: string;
+        type: "direct" | "group";
+        created_by: string | null;
+        last_message_at: string;
+        last_message_preview: string | null;
+        created_at: string;
+        updated_at: string;
+      };
+      const otherMemberRow = members?.[0];
+
+      return {
+        id: conv.id,
+        type: conv.type,
+        created_by: conv.created_by,
+        last_message_at: conv.last_message_at,
+        last_message_preview: conv.last_message_preview,
+        created_at: conv.created_at,
+        updated_at: conv.updated_at,
+        my_membership: myMember as unknown as ConversationMember,
+        other_member: otherMemberRow?.profile as unknown as Profile | undefined,
+        unread_count: 0,
+      };
+    },
+  };
+}
+
+/**
+ * Fetch recent messages in an active conversation (bounded DESC query reversed chronologically).
+ */
+export function conversationMessagesQuery(
+  conversationId?: string,
+  currentUserId?: string,
+  limit = 80,
+) {
+  return {
+    queryKey: ["conversation-messages", conversationId, currentUserId, limit],
     enabled: Boolean(conversationId && currentUserId),
     queryFn: async (): Promise<PrivateMessage[]> => {
       if (!conversationId || !currentUserId) return [];
@@ -172,18 +278,21 @@ export function conversationMessagesQuery(conversationId?: string, currentUserId
         )
         .eq("conversation_id", conversationId)
         .is("deleted_at", null)
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: false })
+        .limit(limit);
 
       if (error) {
         throw error;
       }
 
-      return (data || []).map((msg) => ({
-        ...msg,
-        media_type: msg.media_type as MessageMediaType | null,
-        status: msg.status as MessageStatus,
-        sender: msg.sender as unknown as Profile,
-      }));
+      return (data || [])
+        .map((msg) => ({
+          ...msg,
+          media_type: msg.media_type as MessageMediaType | null,
+          status: msg.status as MessageStatus,
+          sender: msg.sender as unknown as Profile,
+        }))
+        .reverse();
     },
   };
 }
@@ -359,7 +468,8 @@ export function blockedUsersQuery(currentUserId?: string) {
         .eq("blocker_id", currentUserId)
         .order("created_at", { ascending: false });
 
-      if (error || !data) return [];
+      if (error) throw error;
+      if (!data) return [];
       return data as unknown as Array<{
         blocked_id: string;
         created_at: string;

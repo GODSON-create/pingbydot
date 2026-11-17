@@ -73,9 +73,14 @@ export function DirectMessageChat({ conversation, messages, onBack }: DirectMess
     otherUser?.id,
   );
 
-  // Auto-scroll to bottom on new message
+  // Auto-scroll to bottom on new message (respects reduced motion)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const prefersReducedMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    messagesEndRef.current?.scrollIntoView({
+      behavior: prefersReducedMotion ? "auto" : "smooth",
+    });
   }, [messages.length, otherTyping]);
 
   // Mark as read cleanly without infinite re-trigger
@@ -164,8 +169,10 @@ export function DirectMessageChat({ conversation, messages, onBack }: DirectMess
       });
       if (error) throw error;
       toast.success(`Reported @${otherUser.username} to moderation.`);
-    } catch {
-      toast.success(`Flagged @${otherUser.username} for moderation review.`);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : `Couldn't submit report for @${otherUser.username}.`,
+      );
     }
   };
 
