@@ -89,8 +89,7 @@ export function signalsQuery(filters?: { search?: string; category?: string }) {
 
       const { data, error } = await q;
       if (error) {
-        console.warn("Failed to load signals:", error);
-        return [];
+        throw error;
       }
       return (data || []) as unknown as Signal[];
     },
@@ -111,8 +110,7 @@ export function signalBySlugQuery(slug: string) {
         .maybeSingle();
 
       if (error) {
-        console.warn("Failed to load signal:", error);
-        return null;
+        throw error;
       }
       return (data as unknown as Signal) || null;
     },
@@ -133,8 +131,7 @@ export function signalPostsQuery(signalId: string, currentUserId?: string) {
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.warn("Failed to load signal posts:", error);
-        return [];
+        throw error;
       }
       if (!rawPosts || rawPosts.length === 0) return [];
 
@@ -226,8 +223,7 @@ export function signalPublishersListQuery(signalId: string) {
         .order("created_at", { ascending: true });
 
       if (error) {
-        console.warn("Failed to load signal publishers:", error);
-        return [];
+        throw error;
       }
       return (data ?? []) as unknown as SignalPublisherMember[];
     },

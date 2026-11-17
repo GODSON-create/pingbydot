@@ -71,8 +71,7 @@ export function userConversationsQuery(currentUserId?: string) {
         .is("hidden_at", null);
 
       if (memError) {
-        console.warn("Failed to fetch conversation memberships:", memError);
-        return [];
+        throw memError;
       }
 
       if (!myMemberships || myMemberships.length === 0) return [];
@@ -91,7 +90,7 @@ export function userConversationsQuery(currentUserId?: string) {
         .in("conversation_id", conversationIds);
 
       if (membersError) {
-        console.warn("Failed to fetch other conversation members:", membersError);
+        throw membersError;
       }
 
       // Compute unread counts per conversation
@@ -176,8 +175,7 @@ export function conversationMessagesQuery(conversationId?: string, currentUserId
         .order("created_at", { ascending: true });
 
       if (error) {
-        console.warn("Failed to load conversation messages:", error);
-        return [];
+        throw error;
       }
 
       return (data || []).map((msg) => ({

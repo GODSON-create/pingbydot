@@ -2,6 +2,7 @@ import { useDeferredValue, useState } from "react";
 import { pageHead } from "@/lib/site";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { QueryErrorCard } from "@/components/QueryErrorCard";
 import {
   ArrowRight,
   Building2,
@@ -193,7 +194,12 @@ function Explore() {
   const deferredQuery = useDeferredValue(searchQuery.trim().toLowerCase());
 
   // Fetch real People & Communities for network discovery
-  const { data: people = [] } = useQuery({
+  const {
+    data: people = [],
+    isError: isPeopleError,
+    error: peopleError,
+    refetch: refetchPeople,
+  } = useQuery({
     queryKey: ["explore-people", deferredQuery, user?.id],
     queryFn: async (): Promise<Profile[]> => {
       let query = supabase
@@ -213,12 +219,17 @@ function Explore() {
         }
       }
       const { data: rows, error } = await query;
-      if (error || !rows) return [];
-      return rows as Profile[];
+      if (error) throw error;
+      return (rows ?? []) as Profile[];
     },
   });
 
-  const { data: communities = [] } = useQuery(hubsQuery(deferredQuery, null, 0));
+  const {
+    data: communities = [],
+    isError: isCommunitiesError,
+    error: communitiesError,
+    refetch: refetchCommunities,
+  } = useQuery(hubsQuery(deferredQuery, null, 0));
 
   const allPings: Ping[] = data ?? [];
   const filteredPings = deferredQuery
@@ -355,38 +366,48 @@ function Explore() {
       )}
 
       {/* D1. People You Should Know */}
-      {(activeFilter === "all" || activeFilter === "people") && people.length > 0 && (
-        <section className="mt-8" aria-labelledby="explore-people-heading">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2
-                id="explore-people-heading"
-                className="font-display text-xl font-bold tracking-tight flex items-center gap-2"
-              >
-                <Users className="size-5 text-primary" />
-                People you should know
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                Builders, operators, and collaborators active on PING.
-              </p>
+      {(activeFilter === "all" || activeFilter === "people") &&
+        (isPeopleError || people.length > 0) && (
+          <section className="mt-8" aria-labelledby="explore-people-heading">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2
+                  id="explore-people-heading"
+                  className="font-display text-xl font-bold tracking-tight flex items-center gap-2"
+                >
+                  <Users className="size-5 text-primary" />
+                  People you should know
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Builders, operators, and collaborators active on PING.
+                </p>
+              </div>
+              {activeFilter === "all" && people.length > 4 && (
+                <button
+                  type="button"
+                  onClick={() => setActiveFilter("people")}
+                  className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
+                >
+                  See all <ArrowRight className="size-3.5" />
+                </button>
+              )}
             </div>
-            {activeFilter === "all" && people.length > 4 && (
-              <button
-                type="button"
-                onClick={() => setActiveFilter("people")}
-                className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
-              >
-                See all <ArrowRight className="size-3.5" />
-              </button>
+            {isPeopleError ? (
+              <QueryErrorCard
+                compact
+                title="Couldn't load people directory"
+                error={peopleError}
+                onRetry={() => void refetchPeople()}
+              />
+            ) : (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {(activeFilter === "people" ? people : people.slice(0, 4)).map((person) => (
+                  <PeopleDiscoveryCard key={person.id} person={person} currentUserId={user?.id} />
+                ))}
+              </div>
             )}
-          </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {(activeFilter === "people" ? people : people.slice(0, 4)).map((person) => (
-              <PeopleDiscoveryCard key={person.id} person={person} currentUserId={user?.id} />
-            ))}
-          </div>
-        </section>
-      )}
+          </section>
+        )}
 
       {/* D2. Open Opportunities & Intentions Matching Yours */}
       {(activeFilter === "all" || activeFilter === "opportunities") && (
@@ -466,7 +487,14 @@ function Explore() {
             </Link>
           </div>
 
-          {communities.length === 0 ? (
+          {isCommunitiesError ? (
+            <QueryErrorCard
+              compact
+              title="Couldn't load Community Hubs"
+              error={communitiesError}
+              onRetry={() => void refetchCommunities()}
+            />
+          ) : communities.length === 0 ? (
             <div className="surface-card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-3xl p-6">
               <div>
                 <p className="font-display text-base font-bold">Launch the first Community Hub</p>

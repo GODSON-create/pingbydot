@@ -33,6 +33,7 @@ import { MomentsTray } from "@/components/moments/MomentsTray";
 import { AriseCallout } from "@/components/AriseCallout";
 import { useAuth } from "@/lib/auth";
 import { feedQuery, followingFeedQuery, type Ping } from "@/lib/pings";
+import { QueryErrorCard } from "@/components/QueryErrorCard";
 import { hubsQuery, myHubsQuery, myPendingHubsQuery, hubError } from "@/lib/hub-queries";
 import { HUB_CATEGORIES, type Hub, type HubCategory } from "@/lib/hubs";
 import {
@@ -351,17 +352,37 @@ function HomePage() {
   const page = search.page || 0;
 
   // Real Queries
-  const { data: forYouPings = [], isLoading: pingsLoading } = useQuery(
-    feedQuery(categoryFilter, page),
-  );
-  const { data: followingPings = [], isLoading: followingLoading } = useQuery(
-    followingFeedQuery(user?.id, page),
-  );
-  const { data: hubs = [], isLoading: hubsLoading } = useQuery(hubsQuery("", null, 0));
+  const {
+    data: forYouPings = [],
+    isLoading: pingsLoading,
+    isError: isForYouError,
+    error: forYouError,
+    refetch: refetchForYou,
+  } = useQuery(feedQuery(categoryFilter, page));
+  const {
+    data: followingPings = [],
+    isLoading: followingLoading,
+    isError: isFollowingError,
+    error: followingError,
+    refetch: refetchFollowing,
+  } = useQuery(followingFeedQuery(user?.id, page));
+  const {
+    data: hubs = [],
+    isLoading: hubsLoading,
+    isError: isHubsError,
+    error: hubsError,
+    refetch: refetchHubs,
+  } = useQuery(hubsQuery("", null, 0));
   const { data: myHubs = [] } = useQuery(myHubsQuery(user?.id));
   const { data: myPendingHubs = new Set<string>() } = useQuery(myPendingHubsQuery(user?.id));
 
-  const { data: signals = [], isLoading: signalsLoading } = useQuery(signalsQuery());
+  const {
+    data: signals = [],
+    isLoading: signalsLoading,
+    isError: isSignalsError,
+    error: signalsError,
+    refetch: refetchSignals,
+  } = useQuery(signalsQuery());
   const { data: followedSignals = new Set<string>() } = useQuery(myFollowedSignalsQuery(user?.id));
   const { data: recentBroadcasts = {} } = useQuery(recentSignalBroadcastsQuery());
 
@@ -373,6 +394,9 @@ function HomePage() {
       })
     : rawPings;
   const isPingsLoading = activeTab === "following" ? followingLoading : pingsLoading;
+  const isPingsError = activeTab === "following" ? isFollowingError : isForYouError;
+  const activeFeedError = activeTab === "following" ? followingError : forYouError;
+  const refetchActiveFeed = activeTab === "following" ? refetchFollowing : refetchForYou;
 
   // Set of joined hub IDs
   const myHubIds = new Set(myHubs.map((h) => h.hub.id));
@@ -546,6 +570,13 @@ function HomePage() {
                   </Link>
                 </Button>
               </div>
+            ) : isPingsError ? (
+              <QueryErrorCard
+                title="Couldn't load Pings"
+                description="A connection issue prevented loading the feed. Your Pings are safe — try refreshing below."
+                error={activeFeedError}
+                onRetry={() => void refetchActiveFeed()}
+              />
             ) : displayedPings.length === 0 ? (
               <div className="surface-card rounded-3xl p-10 text-center border border-border/60">
                 <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-lime/20 dark:bg-lime/15 text-lime-foreground dark:text-lime font-bold">
@@ -651,6 +682,13 @@ function HomePage() {
                     <div key={i} className="h-36 rounded-3xl bg-muted/40 animate-pulse" />
                   ))}
                 </div>
+              ) : isHubsError ? (
+                <QueryErrorCard
+                  compact
+                  title="Couldn't load Hubs"
+                  error={hubsError}
+                  onRetry={() => void refetchHubs()}
+                />
               ) : hubs.length === 0 ? (
                 <div className="surface-card rounded-2xl p-6 text-center text-xs text-muted-foreground border border-border/60">
                   <Building2 className="mx-auto size-8 text-muted-foreground/40 mb-2" />
@@ -709,6 +747,13 @@ function HomePage() {
                     <div key={i} className="h-36 rounded-3xl bg-muted/40 animate-pulse" />
                   ))}
                 </div>
+              ) : isSignalsError ? (
+                <QueryErrorCard
+                  compact
+                  title="Couldn't load Signals"
+                  error={signalsError}
+                  onRetry={() => void refetchSignals()}
+                />
               ) : signals.length === 0 ? (
                 <div className="surface-card rounded-2xl p-6 text-center text-xs text-muted-foreground border border-border/60">
                   <Radio className="mx-auto size-8 text-muted-foreground/40 mb-2" />

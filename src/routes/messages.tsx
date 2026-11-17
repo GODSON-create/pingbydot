@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Profile } from "@/lib/pings";
 import { ConversationList } from "@/components/messages/ConversationList";
 import { DirectMessageChat } from "@/components/messages/DirectMessageChat";
+import { QueryErrorCard } from "@/components/QueryErrorCard";
 import { FounderAvatar } from "@/components/ping/Avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -203,7 +204,12 @@ function MessagesPage() {
     }
   }, [search.conversationId]);
 
-  const { data: conversations = [] } = useQuery(userConversationsQuery(user?.id));
+  const {
+    data: conversations = [],
+    isError: isConversationsError,
+    error: conversationsError,
+    refetch: refetchConversations,
+  } = useQuery(userConversationsQuery(user?.id));
 
   // If user opens page with no selected conversation on desktop, default to the first one
   useEffect(() => {
@@ -220,9 +226,12 @@ function MessagesPage() {
 
   const activeConversation = conversations.find((c) => c.id === activeConversationId);
 
-  const { data: messages = [] } = useQuery(
-    conversationMessagesQuery(activeConversationId, user?.id),
-  );
+  const {
+    data: messages = [],
+    isError: isMessagesError,
+    error: messagesError,
+    refetch: refetchMessages,
+  } = useQuery(conversationMessagesQuery(activeConversationId, user?.id));
 
   const otherUser = activeConversation?.other_member;
 
@@ -246,18 +255,30 @@ function MessagesPage() {
             activeConversationId ? "hidden lg:block" : "block",
           )}
         >
-          <ConversationList
-            conversations={conversations}
-            selectedId={activeConversationId}
-            onNewChat={() => setNewChatOpen(true)}
-            onSelect={(c) => {
-              setActiveConversationId(c.id);
-              navigate({
-                to: "/messages",
-                search: { conversationId: c.id },
-              });
-            }}
-          />
+          {isConversationsError ? (
+            <div className="p-2">
+              <QueryErrorCard
+                compact
+                title="Couldn't load conversations"
+                description="Unable to reach your inbox right now."
+                error={conversationsError}
+                onRetry={() => void refetchConversations()}
+              />
+            </div>
+          ) : (
+            <ConversationList
+              conversations={conversations}
+              selectedId={activeConversationId}
+              onNewChat={() => setNewChatOpen(true)}
+              onSelect={(c) => {
+                setActiveConversationId(c.id);
+                navigate({
+                  to: "/messages",
+                  search: { conversationId: c.id },
+                });
+              }}
+            />
+          )}
         </div>
 
         {/* 2. CENTRE CHAT PANEL (Hidden on mobile if no chat is active) */}
@@ -268,14 +289,25 @@ function MessagesPage() {
           )}
         >
           {activeConversation ? (
-            <DirectMessageChat
-              conversation={activeConversation}
-              messages={messages}
-              onBack={() => {
-                setActiveConversationId(undefined);
-                navigate({ to: "/messages", search: {} });
-              }}
-            />
+            isMessagesError ? (
+              <div className="p-4">
+                <QueryErrorCard
+                  title="Couldn't load messages"
+                  description="We couldn't fetch messages for this conversation."
+                  error={messagesError}
+                  onRetry={() => void refetchMessages()}
+                />
+              </div>
+            ) : (
+              <DirectMessageChat
+                conversation={activeConversation}
+                messages={messages}
+                onBack={() => {
+                  setActiveConversationId(undefined);
+                  navigate({ to: "/messages", search: {} });
+                }}
+              />
+            )
           ) : (
             <div className="flex-1 bg-card/40 rounded-3xl border border-border/70 flex flex-col items-center justify-center text-center p-8 text-muted-foreground">
               <div className="size-16 rounded-3xl bg-primary/10 flex items-center justify-center mb-4 text-primary">

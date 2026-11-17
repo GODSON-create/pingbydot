@@ -1,26 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
-import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import type { Database } from "@/integrations/supabase/types";
 import { HUB_PAGE_SIZE, HUB_SELECT } from "@/lib/hubs";
 import { PUBLIC_PING_SELECT } from "@/lib/public-pings.functions";
 
-function publicClient() {
-  const url = process.env["SUPABASE_URL"];
-  const key = process.env["SUPABASE_PUBLISHABLE_KEY"];
-  if (!url || !key) throw new Error("Hubs are temporarily unavailable.");
-  return createClient<Database>(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-    global: {
-      fetch: (input, init) => {
-        const headers = new Headers(init?.headers);
-        if (key.startsWith("sb_") && headers.get("Authorization") === `Bearer ${key}`)
-          headers.delete("Authorization");
-        headers.set("apikey", key);
-        return fetch(input, { ...init, headers });
-      },
-    },
-  });
+async function publicClient() {
+  const { createPublicSupabaseClient } = await import("./supabase-public-config");
+  return createPublicSupabaseClient();
 }
 
 export const readPublicHubs = createServerFn({ method: "GET" })
@@ -32,7 +17,7 @@ export const readPublicHubs = createServerFn({ method: "GET" })
     }),
   )
   .handler(async ({ data }) => {
-    const client = publicClient();
+    const client = await publicClient();
     let query = client
       .from("hubs")
       .select(HUB_SELECT)
@@ -52,7 +37,7 @@ export const readPublicHubs = createServerFn({ method: "GET" })
 export const readPublicHub = createServerFn({ method: "GET" })
   .inputValidator(z.object({ slug: z.string().max(40), intent: z.string().max(20).nullable() }))
   .handler(async ({ data }) => {
-    const client = publicClient();
+    const client = await publicClient();
     const { data: hub, error } = await client
       .from("hubs")
       .select(HUB_SELECT)

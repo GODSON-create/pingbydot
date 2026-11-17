@@ -13,6 +13,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { sanitizeErrorMessage } from "../lib/error-diagnostics";
 import { initializeNativeApp } from "@/lib/native";
 import { useNavigate } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth";
@@ -52,10 +53,14 @@ function NotFoundComponent() {
 }
 
 export function ErrorComponent({ error, reset }: ErrorComponentProps) {
-  console.error(error);
+  const sanitizedDetail = sanitizeErrorMessage(error);
+  console.error("[RouteError]", sanitizedDetail);
   const router = useRouter();
   useEffect(() => {
-    reportLovableError(error, { boundary: "tanstack_root_error_component" });
+    reportLovableError(error, {
+      boundary: "tanstack_root_error_component",
+      pathname: typeof window !== "undefined" ? window.location.pathname : undefined,
+    });
   }, [error]);
   return (
     <div className="flex min-h-[60vh] items-center justify-center px-4">
@@ -64,6 +69,14 @@ export function ErrorComponent({ error, reset }: ErrorComponentProps) {
         <p className="mt-2 text-sm text-muted-foreground">
           Something went wrong on our end. Try again or head back home.
         </p>
+        {import.meta.env.DEV && sanitizedDetail && (
+          <p
+            data-testid="dev-error-detail"
+            className="mt-3 rounded-xl border border-destructive/20 bg-secondary/70 px-3 py-2 font-mono text-xs text-destructive break-words text-left"
+          >
+            {sanitizedDetail}
+          </p>
+        )}
         <div className="mt-6 flex justify-center gap-2">
           <Button
             onClick={() => {

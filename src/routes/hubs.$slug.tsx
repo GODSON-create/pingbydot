@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { QueryErrorCard } from "@/components/QueryErrorCard";
 import { useState, useDeferredValue } from "react";
 import { z } from "zod";
 import {
@@ -792,6 +793,7 @@ function HubDetail() {
     data: hubData,
     isLoading: hubLoading,
     error: hubErrorData,
+    refetch: refetchHub,
   } = useQuery(hubQuery(slug, activeIntent));
   const hub = hubData?.hub;
 
@@ -805,9 +807,12 @@ function HubDetail() {
 
   // Private hub feed query (viewer-scoped)
   const isPrivate = hub?.access === "private";
-  const { data: privateFeed, isLoading: privateFeedLoading } = useQuery(
-    memberFeedQuery(hub?.id ?? "", activeIntent, isPrivate && isMember),
-  );
+  const {
+    data: privateFeed,
+    isLoading: privateFeedLoading,
+    error: privateFeedError,
+    refetch: refetchPrivateFeed,
+  } = useQuery(memberFeedQuery(hub?.id ?? "", activeIntent, isPrivate && isMember));
 
   // Members list query
   const { data: members, refetch: refetchMembers } = useQuery(
@@ -870,7 +875,20 @@ function HubDetail() {
     );
   }
 
-  if (!hub || hubErrorData) {
+  if (hubErrorData) {
+    return (
+      <div className="mx-auto max-w-md px-5 py-20">
+        <QueryErrorCard
+          title="Couldn't load Hub"
+          description="A connection issue prevented loading this Hub. Try again in a moment."
+          error={hubErrorData}
+          onRetry={() => void refetchHub()}
+        />
+      </div>
+    );
+  }
+
+  if (!hub) {
     return (
       <div className="mx-auto max-w-md px-5 py-20 text-center">
         <ShieldAlert className="mx-auto size-14 text-muted-foreground" />
@@ -1279,7 +1297,13 @@ function HubDetail() {
                   </div>
                 )}
 
-                {feedItems.length === 0 && (
+                {privateFeedError && !feedItems.length ? (
+                  <QueryErrorCard
+                    title="Couldn't load Hub updates"
+                    error={privateFeedError}
+                    onRetry={() => void refetchPrivateFeed()}
+                  />
+                ) : feedItems.length === 0 ? (
                   <div className="surface-card rounded-3xl p-10 text-center">
                     <p className="font-semibold text-lg">No updates here yet</p>
                     <p className="mt-1 text-sm text-muted-foreground">
@@ -1295,7 +1319,7 @@ function HubDetail() {
                       </Button>
                     )}
                   </div>
-                )}
+                ) : null}
               </>
             )}
           </TabsContent>

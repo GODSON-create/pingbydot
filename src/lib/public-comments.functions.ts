@@ -1,7 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import type { Database } from "@/integrations/supabase/types";
 import { COMMENT_PAGE_SIZE } from "./comments";
 
 const COMMENT_SELECT =
@@ -12,21 +10,8 @@ export const readPublicComments = createServerFn({ method: "GET" })
     z.object({ pingId: z.string().uuid(), page: z.number().int().min(0).max(10000).default(0) }),
   )
   .handler(async ({ data }) => {
-    const url = process.env["SUPABASE_URL"];
-    const key = process.env["SUPABASE_PUBLISHABLE_KEY"];
-    if (!url || !key) throw new Error("Replies are temporarily unavailable.");
-    const client = createClient<Database>(url, key, {
-      auth: { persistSession: false, autoRefreshToken: false },
-      global: {
-        fetch: (input, init) => {
-          const headers = new Headers(init?.headers);
-          if (key.startsWith("sb_") && headers.get("Authorization") === `Bearer ${key}`)
-            headers.delete("Authorization");
-          headers.set("apikey", key);
-          return fetch(input, { ...init, headers });
-        },
-      },
-    });
+    const { createPublicSupabaseClient } = await import("./supabase-public-config");
+    const client = createPublicSupabaseClient();
     const start = data.page * COMMENT_PAGE_SIZE;
     const roots = await client
       .from("comments")

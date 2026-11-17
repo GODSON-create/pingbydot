@@ -48,7 +48,8 @@ export const followingFeedQuery = (userId: string | undefined, page = 0) =>
         .select("following_id")
         .eq("follower_id", userId);
 
-      if (followError || !followRows || followRows.length === 0) return [];
+      if (followError) throw followError;
+      if (!followRows || followRows.length === 0) return [];
       const followingIds = followRows.map((r) => r.following_id);
 
       const { data, error } = await supabase

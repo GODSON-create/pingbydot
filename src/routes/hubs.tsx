@@ -1,4 +1,10 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  Outlet,
+  useChildMatches,
+  useNavigate,
+} from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useDeferredValue } from "react";
 import { z } from "zod";
@@ -40,8 +46,14 @@ export const Route = createFileRoute("/hubs")({
         "Explore universities, companies, government institutions, NGOs, professional associations, and community Hubs with Forums and institutional broadcasts.",
       path: "/hubs",
     }),
-  component: HubsDirectory,
+  component: HubsLayout,
 });
+
+function HubsLayout() {
+  const childMatches = useChildMatches();
+  if (childMatches.length > 0) return <Outlet />;
+  return <HubsDirectory />;
+}
 
 function HubCard({
   hub,

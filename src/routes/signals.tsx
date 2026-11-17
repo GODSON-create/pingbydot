@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useChildMatches } from "@tanstack/react-router";
 import { Building2, CheckCircle, MessageSquare, Radio, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { pageHead } from "@/lib/site";
@@ -12,8 +12,14 @@ export const Route = createFileRoute("/signals")({
         "Signal is a dedicated Community destination on PING, distinct from Hubs, Forums, and private messaging.",
       path: "/signals",
     }),
-  component: SignalCommunityDestination,
+  component: SignalsLayout,
 });
+
+function SignalsLayout() {
+  const childMatches = useChildMatches();
+  if (childMatches.length > 0) return <Outlet />;
+  return <SignalCommunityDestination />;
+}
 
 function SignalCommunityDestination() {
   return (

@@ -105,8 +105,7 @@ export function activeMomentsTrayQuery(currentUserId?: string) {
         .order("created_at", { ascending: true });
 
       if (error) {
-        console.warn("Failed to fetch moments for tray:", error);
-        return [];
+        throw error;
       }
 
       if (!rawMoments || rawMoments.length === 0) return [];
@@ -299,8 +298,7 @@ export function userHighlightsQuery(userId: string) {
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.warn("Failed to fetch highlights:", error);
-        return [];
+        throw error;
       }
 
       if (!highlights || highlights.length === 0) return [];
@@ -400,8 +398,7 @@ export function discoverableMomentsQuery(currentUserId?: string) {
         .limit(30);
 
       if (error) {
-        console.warn("Failed to load discoverable moments:", error);
-        return [];
+        throw error;
       }
 
       if (!data) return [];

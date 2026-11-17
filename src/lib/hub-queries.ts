@@ -56,7 +56,7 @@ export const memberFeedQuery = (hubId: string, intent: string | null, enabled: b
 export const myMembershipQuery = (hubId: string, userId: string | undefined) =>
   queryOptions({
     queryKey: ["hub-membership", hubId, userId],
-    enabled: !!userId,
+    enabled: Boolean(hubId && userId),
     queryFn: async () => {
       const { data, error } = await supabase
         .from("hub_members")
@@ -91,6 +91,7 @@ export const hubMembersQuery = (
 ) =>
   queryOptions({
     queryKey: ["hub-members", hubId, search, page, status],
+    enabled: Boolean(hubId),
     queryFn: async () => {
       let q = supabase
         .from("hub_members")

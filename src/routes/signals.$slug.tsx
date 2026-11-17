@@ -57,6 +57,7 @@ import {
 } from "@/components/ui/dialog";
 import { pageHead } from "@/lib/site";
 import { cn } from "@/lib/utils";
+import { QueryErrorCard } from "@/components/QueryErrorCard";
 
 export const Route = createFileRoute("/signals/$slug")({
   staticData: { sitemap: true },
@@ -770,15 +771,25 @@ function SignalDetailPage() {
   const [verifyDialogOpen, setVerifyDialogOpen] = useState(false);
   const [selectedPostCategory, setSelectedPostCategory] = useState<string>("all");
 
-  const { data: signal, isLoading: signalLoading } = useQuery(signalBySlugQuery(slug));
+  const {
+    data: signal,
+    isLoading: signalLoading,
+    isError: isSignalError,
+    error: signalError,
+    refetch: refetchSignal,
+  } = useQuery(signalBySlugQuery(slug));
   const { data: isFollowing = false } = useQuery(signalFollowingQuery(signal?.id ?? "", user?.id));
   const { data: publisherData } = useQuery(signalPublisherQuery(signal?.id ?? "", user?.id));
   const isPublisher = publisherData?.isPublisher ?? false;
   const isSignalAdmin = publisherData?.role === "admin" || signal?.created_by === user?.id;
 
-  const { data: posts = [], isLoading: postsLoading } = useQuery(
-    signalPostsQuery(signal?.id ?? "", user?.id),
-  );
+  const {
+    data: posts = [],
+    isLoading: postsLoading,
+    isError: isPostsError,
+    error: postsError,
+    refetch: refetchPosts,
+  } = useQuery(signalPostsQuery(signal?.id ?? "", user?.id));
 
   const followMutation = useSignalFollow(signal?.id ?? "", user?.id);
   const deletePostMutation = useDeleteSignalPost(signal?.id ?? "");
@@ -837,6 +848,19 @@ function SignalDetailPage() {
     return (
       <div className="mx-auto max-w-4xl px-4 py-16 text-center text-muted-foreground">
         Loading Signal channel…
+      </div>
+    );
+  }
+
+  if (isSignalError) {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-16">
+        <QueryErrorCard
+          title="Couldn't load Signal channel"
+          description="A connection issue prevented loading this Signal channel."
+          error={signalError}
+          onRetry={() => void refetchSignal()}
+        />
       </div>
     );
   }
@@ -1082,6 +1106,13 @@ function SignalDetailPage() {
                       <div key={i} className="h-40 rounded-3xl bg-muted/40 animate-pulse" />
                     ))}
                   </div>
+                ) : isPostsError ? (
+                  <QueryErrorCard
+                    title="Couldn't load broadcasts"
+                    description="A connection issue prevented loading broadcasts for this channel."
+                    error={postsError}
+                    onRetry={() => void refetchPosts()}
+                  />
                 ) : filteredPosts.length === 0 ? (
                   <div className="surface-card rounded-3xl p-10 text-center border border-border/60">
                     <Radio className="mx-auto size-10 text-muted-foreground/40" />
