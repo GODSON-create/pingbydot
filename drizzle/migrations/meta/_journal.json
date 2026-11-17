@@ -141,6 +141,13 @@
       "when": 1795200000000,
       "tag": "0019_lockdown_economy_and_private_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1795300000000,
+      "tag": "0020_pre_merge_security_hardening",
+      "breakpoints": true
     }
   ]
 }

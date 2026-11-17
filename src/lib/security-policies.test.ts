@@ -127,6 +127,7 @@ describe("Database RLS and Storage Security Audit", () => {
       [17, "0017_human_coordination_forums_broadcasts"],
       [18, "0018_fix_conversation_rls_and_close_circle"],
       [19, "0019_lockdown_economy_and_private_grants"],
+      [20, "0020_pre_merge_security_hardening"],
     ] as const;
 
     for (const [idx, tag] of expectedTags) {
@@ -178,6 +179,23 @@ describe("Database RLS and Storage Security Audit", () => {
       "REVOKE ALL ON public.dot_wallets, public.dot_transactions, public.account_subscriptions",
     );
 
+    const m20Sql = fs.readFileSync(
+      path.join(migrationsDir, "0020_pre_merge_security_hardening.sql"),
+      "utf8",
+    );
+    expect(m20Sql).toContain(
+      "REVOKE ALL ON FUNCTION public.is_close_circle_member(uuid, uuid) FROM PUBLIC, anon",
+    );
+    expect(m20Sql).toContain("cannot inspect another user''s Close Circle membership");
+    expect(m20Sql).toContain("cannot inspect another user''s conversation membership");
+    expect(m20Sql).toContain('CREATE POLICY "Public moments viewable by anyone" ON public.moments');
+    expect(m20Sql).toContain(
+      "REVOKE UPDATE, TRUNCATE ON public.dot_transactions FROM service_role",
+    );
+    expect(m20Sql).toContain(
+      'CREATE POLICY "Authenticated hub broadcasts viewable" ON public.hub_broadcasts',
+    );
+
     const runnerSrc = fs.readFileSync(
       path.resolve(__dirname, "../../scripts/migrate-remote.mjs"),
       "utf8",
@@ -185,5 +203,8 @@ describe("Database RLS and Storage Security Audit", () => {
     expect(runnerSrc).toContain('const EXPECTED_PROJECT_REF = "exlttyafomvqfwgzzjrm"');
     expect(runnerSrc).toContain("LOVABLE_DB_MIGRATION_URL");
     expect(runnerSrc).toContain('port === "6543"');
+    expect(runnerSrc).toContain("VerificationRollbackSignal");
+    expect(runnerSrc).not.toContain('err.message.includes("ROLLBACK")');
+    expect(runnerSrc).toContain("SCHEMA VERIFIED ONLY");
   });
 });
