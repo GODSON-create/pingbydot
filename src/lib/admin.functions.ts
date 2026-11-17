@@ -4,6 +4,7 @@ import {
   ADMIN_PAGE_SIZE,
   adminListSchema,
   moderationSchema,
+  verifySignalSchema,
   assertAdminRole,
 } from "./admin-policy";
 
@@ -75,6 +76,37 @@ export const getAdminList = createServerFn({ method: "POST" })
       if (result.error) throw new Error("Couldn't load reports.");
       return { view: "reports" as const, rows: result.data ?? [], total: result.count ?? 0 };
     }
+    if (data.view === "signals") {
+      let q = supabaseAdmin
+        .from("signals")
+        .select(
+          "id,name,slug,institution_type,verified,verification_status,follower_count,created_at",
+          { count: "exact" },
+        );
+      if (search) q = q.or(`name.ilike.%${search}%,verification_status.ilike.%${search}%`);
+      const result = await q
+        .order("verification_status", { ascending: false })
+        .order("created_at", { ascending: false })
+        .range(start, start + ADMIN_PAGE_SIZE - 1);
+      if (result.error) {
+        const code = result.error.code;
+        if (code === "42P01" || code === "PGRST205") {
+          return {
+            view: "signals" as const,
+            rows: [],
+            total: 0,
+            unmigrated: true,
+          };
+        }
+        throw new Error("Couldn't load Signals.");
+      }
+      return {
+        view: "signals" as const,
+        rows: result.data ?? [],
+        total: result.count ?? 0,
+        unmigrated: false,
+      };
+    }
     let q = supabaseAdmin
       .from("moderation_audit")
       .select("id,actor_id,action,target_id,reason,created_at", { count: "exact" });
@@ -102,5 +134,21 @@ export const moderatePing = createServerFn({ method: "POST" })
     });
     if (error)
       throw new Error("Couldn't complete moderation. No success has been recorded; please retry.");
+    return { ok: true };
+  });
+
+export const verifySignal = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(verifySignalSchema)
+  .handler(async ({ data, context }) => {
+    const { data: allowed, error: roleError } = await context.supabase.rpc("is_ping_admin");
+    assertAdminRole(!roleError && allowed === true);
+    const { error } = await context.supabase.rpc("verify_signal", {
+      _signal: data.id,
+      _status: data.status,
+    });
+    if (error) {
+      throw new Error(error.message || "Couldn't update signal verification status.");
+    }
     return { ok: true };
   });

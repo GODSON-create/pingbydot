@@ -38,7 +38,7 @@ export function FounderAvatar({
   return (
     <span
       className={cn(
-        "relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full border-[1.5px] border-foreground font-display font-bold",
+        "relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full border-[1.5px] border-foreground/80 dark:border-border font-display font-bold",
         tone,
         sz,
         className,

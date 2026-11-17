@@ -313,7 +313,7 @@ CREATE TABLE IF NOT EXISTS public.signals (
   name text NOT NULL CHECK (char_length(name) BETWEEN 2 AND 80),
   tagline text NOT NULL DEFAULT '' CHECK (char_length(tagline) <= 140),
   description text NOT NULL DEFAULT '' CHECK (char_length(description) <= 3000),
-  institution_type text NOT NULL DEFAULT 'organization' CHECK (institution_type IN ('university','company','government','association','organization','community','public_institution')),
+  institution_type text NOT NULL DEFAULT 'organization' CHECK (institution_type IN ('university','company','incubator','government','association','organization','community','public_institution','other')),
   avatar_url text,
   cover_url text,
   website_url text CHECK (website_url IS NULL OR website_url ~* '^https?://'),
@@ -492,7 +492,8 @@ DROP POLICY IF EXISTS "Signal reads readable by self or staff" ON public.signal_
 CREATE POLICY "Signal reads readable by self or staff" ON public.signal_reads FOR SELECT TO authenticated
   USING (user_id = (select auth.uid()) OR public.signal_role(signal_id, (select auth.uid())) IS NOT NULL);
 
-DROP POLICY IF EXISTS "Users record signal reads" ON public.signal_reads FOR INSERT TO authenticated
+DROP POLICY IF EXISTS "Users record signal reads" ON public.signal_reads;
+CREATE POLICY "Users record signal reads" ON public.signal_reads FOR INSERT TO authenticated
   WITH CHECK (user_id = (select auth.uid()));
 
 -- Create Signal RPC function

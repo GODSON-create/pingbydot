@@ -80,7 +80,7 @@ function Signup() {
     return (
       <AuthShell title="Check your inbox" subtitle={`We sent a confirmation link to ${f.email}.`}>
         <div className="flex flex-col items-center text-center">
-          <div className="flex size-16 items-center justify-center rounded-full bg-lime animate-float-a">
+          <div className="flex size-16 items-center justify-center rounded-full bg-lime text-lime-foreground animate-float-a">
             <MailCheck className="size-7" />
           </div>
           <p className="mt-5 text-sm text-muted-foreground">

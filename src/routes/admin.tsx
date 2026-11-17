@@ -18,6 +18,7 @@ import {
   getAdminOverview,
   getAdminList,
   moderatePing,
+  verifySignal,
 } from "@/lib/admin.functions";
 import { ADMIN_PAGE_SIZE, moderationSchema } from "@/lib/admin-policy";
 import { Button } from "@/components/ui/button";
@@ -92,7 +93,8 @@ function AdminDashboard() {
   const overviewFn = useServerFn(getAdminOverview);
   const listFn = useServerFn(getAdminList);
   const moderateFn = useServerFn(moderatePing);
-  const [view, setView] = useState<"pings" | "users" | "reports" | "audit">("pings");
+  const verifySignalFn = useServerFn(verifySignal);
+  const [view, setView] = useState<"pings" | "users" | "reports" | "signals" | "audit">("pings");
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState("");
   const [draftSearch, setDraftSearch] = useState("");
@@ -125,6 +127,17 @@ function AdminDashboard() {
     },
     onError: () => toast.error("Couldn't complete moderation. Please retry."),
   });
+  const verifySignalMutation = useMutation({
+    mutationFn: (data: {
+      id: string;
+      status: "verified" | "rejected" | "pending" | "unverified";
+    }) => verifySignalFn({ data }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["admin-list"] });
+      toast.success("Signal verification status updated.");
+    },
+    onError: (e: any) => toast.error(e?.message || "Couldn't update Signal verification status."),
+  });
   const metric = (key: string) => {
     const data = overview.data;
     return data && typeof data === "object" && !Array.isArray(data) && typeof data[key] === "number"
@@ -140,6 +153,13 @@ function AdminDashboard() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <span className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+            <img
+              src="/brand/ping-mark-silver.png"
+              alt="PING Official Silver Mark"
+              width={22}
+              height={22}
+              className="size-5.5 rounded-md object-contain"
+            />
             <ShieldCheck className="size-4" /> Ping by DOT
           </span>
           <h1 className="mt-2 font-display text-4xl font-bold">Administration</h1>
@@ -187,7 +207,7 @@ function AdminDashboard() {
         </p>
       </section>
       <div className="flex flex-wrap gap-2" role="tablist" aria-label="Administration views">
-        {(["pings", "users", "reports", "audit"] as const).map((v) => (
+        {(["pings", "users", "reports", "signals", "audit"] as const).map((v) => (
           <Button
             key={v}
             role="tab"
@@ -204,9 +224,11 @@ function AdminDashboard() {
               ? "Audit trail"
               : v === "reports"
                 ? "Moderation queue"
-                : v === "users"
-                  ? "Users"
-                  : "Pings"}
+                : v === "signals"
+                  ? "Signal verification"
+                  : v === "users"
+                    ? "Users"
+                    : "Pings"}
           </Button>
         ))}
       </div>
@@ -227,7 +249,9 @@ function AdminDashboard() {
                 ? "Search Ping text"
                 : view === "reports"
                   ? "Search report reason"
-                  : "Search audit action"
+                  : view === "signals"
+                    ? "Search signal name or status"
+                    : "Search audit action"
           }
           value={draftSearch}
           maxLength={100}
@@ -327,9 +351,67 @@ function AdminDashboard() {
               </p>
             </article>
           ))}
-        {list.data?.rows.length === 0 && (
-          <p className="py-10 text-muted-foreground">No matching entries.</p>
-        )}
+        {list.data?.view === "signals" &&
+          (list.data.unmigrated ? (
+            <p className="py-8 text-sm text-muted-foreground">
+              Signals table is not yet present on the connected database (migration 0011+ pending).
+            </p>
+          ) : (
+            list.data.rows.map((s) => (
+              <article
+                key={s.id}
+                className="flex flex-wrap items-center justify-between gap-3 py-5"
+              >
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-semibold">{s.name}</h3>
+                    <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium capitalize">
+                      {s.verification_status}
+                    </span>
+                    {s.verified && (
+                      <span className="rounded-full bg-gold/15 text-gold border border-gold/30 px-2 py-0.5 text-xs font-bold">
+                        Verified
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    @{s.slug} · {s.institution_type} · {s.follower_count} subscribers · Created{" "}
+                    {new Date(s.created_at).toLocaleDateString()}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button asChild size="sm" variant="outline">
+                    <Link to="/signals/$slug" params={{ slug: s.slug }}>
+                      Open Channel
+                    </Link>
+                  </Button>
+                  {s.verification_status !== "verified" && (
+                    <Button
+                      size="sm"
+                      disabled={verifySignalMutation.isPending}
+                      onClick={() => verifySignalMutation.mutate({ id: s.id, status: "verified" })}
+                    >
+                      Approve Verified
+                    </Button>
+                  )}
+                  {s.verification_status !== "rejected" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={verifySignalMutation.isPending}
+                      onClick={() => verifySignalMutation.mutate({ id: s.id, status: "rejected" })}
+                    >
+                      Reject
+                    </Button>
+                  )}
+                </div>
+              </article>
+            ))
+          ))}
+        {list.data?.rows.length === 0 &&
+          !(list.data.view === "signals" && list.data.unmigrated) && (
+            <p className="py-10 text-muted-foreground">No matching entries.</p>
+          )}
       </div>
       <div className="mt-5 flex items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">

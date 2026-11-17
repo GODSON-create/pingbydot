@@ -1672,6 +1672,297 @@ export type Database = {
           },
         ];
       };
+      dot_wallets: {
+        Row: {
+          user_id: string;
+          balance: number;
+          lifetime_earned: number;
+          lifetime_spent: number;
+          streak_days: number;
+          last_checkin_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          balance?: number;
+          lifetime_earned?: number;
+          lifetime_spent?: number;
+          streak_days?: number;
+          last_checkin_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          balance?: number;
+          lifetime_earned?: number;
+          lifetime_spent?: number;
+          streak_days?: number;
+          last_checkin_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      dot_transactions: {
+        Row: {
+          id: string;
+          user_id: string;
+          amount: number;
+          tx_type: string;
+          source: string;
+          reference_id: string | null;
+          description: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          amount: number;
+          tx_type: string;
+          source: string;
+          reference_id?: string | null;
+          description?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          amount?: number;
+          tx_type?: string;
+          source?: string;
+          reference_id?: string | null;
+          description?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      account_subscriptions: {
+        Row: {
+          user_id: string;
+          tier: string;
+          status: string;
+          billing_cycle: string;
+          started_at: string;
+          expires_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          tier?: string;
+          status?: string;
+          billing_cycle?: string;
+          started_at?: string;
+          expires_at?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          tier?: string;
+          status?: string;
+          billing_cycle?: string;
+          started_at?: string;
+          expires_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      profile_reports: {
+        Row: {
+          id: string;
+          reported_user_id: string;
+          reporter_id: string;
+          reason: string;
+          details: string | null;
+          created_at: string;
+          resolved_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          reported_user_id: string;
+          reporter_id: string;
+          reason: string;
+          details?: string | null;
+          created_at?: string;
+          resolved_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          reported_user_id?: string;
+          reporter_id?: string;
+          reason?: string;
+          details?: string | null;
+          created_at?: string;
+          resolved_at?: string | null;
+        };
+        Relationships: [];
+      };
+      saved_pings: {
+        Row: {
+          user_id: string;
+          ping_id: string;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          ping_id: string;
+          created_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          ping_id?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      hub_forums: {
+        Row: {
+          id: string;
+          hub_id: string;
+          slug: string;
+          name: string;
+          description: string;
+          forum_type: string;
+          access_level: string;
+          allow_member_posts: boolean;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          hub_id: string;
+          slug: string;
+          name: string;
+          description?: string;
+          forum_type?: string;
+          access_level?: string;
+          allow_member_posts?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          hub_id?: string;
+          slug?: string;
+          name?: string;
+          description?: string;
+          forum_type?: string;
+          access_level?: string;
+          allow_member_posts?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      hub_forum_members: {
+        Row: {
+          forum_id: string;
+          user_id: string;
+          role: string;
+          can_publish: boolean;
+          notifications_enabled: boolean;
+          created_at: string;
+        };
+        Insert: {
+          forum_id: string;
+          user_id: string;
+          role?: string;
+          can_publish?: boolean;
+          notifications_enabled?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          forum_id?: string;
+          user_id?: string;
+          role?: string;
+          can_publish?: boolean;
+          notifications_enabled?: boolean;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      hub_broadcasts: {
+        Row: {
+          id: string;
+          hub_id: string;
+          forum_id: string | null;
+          author_id: string;
+          title: string;
+          content: string;
+          broadcast_type: string;
+          target_audience: string;
+          is_pinned: boolean;
+          is_urgent: boolean;
+          media_urls: string[];
+          scheduled_for: string | null;
+          published_at: string | null;
+          delivery_count: number;
+          read_count: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          hub_id: string;
+          forum_id?: string | null;
+          author_id: string;
+          title: string;
+          content: string;
+          broadcast_type?: string;
+          target_audience?: string;
+          is_pinned?: boolean;
+          is_urgent?: boolean;
+          media_urls?: string[];
+          scheduled_for?: string | null;
+          published_at?: string | null;
+          delivery_count?: number;
+          read_count?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          hub_id?: string;
+          forum_id?: string | null;
+          author_id?: string;
+          title?: string;
+          content?: string;
+          broadcast_type?: string;
+          target_audience?: string;
+          is_pinned?: boolean;
+          is_urgent?: boolean;
+          media_urls?: string[];
+          scheduled_for?: string | null;
+          published_at?: string | null;
+          delivery_count?: number;
+          read_count?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      hub_broadcast_reads: {
+        Row: {
+          broadcast_id: string;
+          user_id: string;
+          read_at: string;
+        };
+        Insert: {
+          broadcast_id: string;
+          user_id: string;
+          read_at?: string;
+        };
+        Update: {
+          broadcast_id?: string;
+          user_id?: string;
+          read_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -1901,6 +2192,39 @@ export type Database = {
         Args: {
           _highlight_id: string;
           _moment_id: string;
+        };
+        Returns: undefined;
+      };
+      get_my_dot_summary: {
+        Args: Record<PropertyKey, never>;
+        Returns: Json;
+      };
+      claim_daily_dot: {
+        Args: Record<PropertyKey, never>;
+        Returns: Json;
+      };
+      upgrade_account_with_dots: {
+        Args: {
+          _tier: string;
+          _billing_cycle?: string;
+        };
+        Returns: Json;
+      };
+      get_public_account_tier: {
+        Args: {
+          _user_id: string;
+        };
+        Returns: string;
+      };
+      get_creator_analytics: {
+        Args: {
+          _days?: number;
+        };
+        Returns: Json;
+      };
+      mark_hub_broadcast_read: {
+        Args: {
+          _broadcast_id: string;
         };
         Returns: undefined;
       };

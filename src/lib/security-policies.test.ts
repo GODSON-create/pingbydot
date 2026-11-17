@@ -113,4 +113,77 @@ describe("Database RLS and Storage Security Audit", () => {
     expect(m12Sql).toContain("public.highlight_items");
     expect(m12Sql).toContain("public.reping_moment");
   });
+
+  it("verifies migrations 0011–0017 have valid DROP POLICY syntax, is_admin helper, DOT wallet idempotency, and safe migration runner", () => {
+    const journalPath = path.join(migrationsDir, "meta/_journal.json");
+    const journal = JSON.parse(fs.readFileSync(journalPath, "utf8"));
+    const expectedTags = [
+      [11, "0011_hubs_signals_read_receipts"],
+      [12, "0012_moments_highlights_reping"],
+      [13, "0013_critical_repairs_hubs_signals"],
+      [14, "0014_private_direct_messaging"],
+      [15, "0015_product_completion_sprint"],
+      [16, "0016_profile_economy_analytics_and_fixes"],
+      [17, "0017_human_coordination_forums_broadcasts"],
+      [18, "0018_fix_conversation_rls_and_close_circle"],
+      [19, "0019_lockdown_economy_and_private_grants"],
+    ] as const;
+
+    for (const [idx, tag] of expectedTags) {
+      const entry = journal.entries.find((e: { idx: number }) => e.idx === idx);
+      expect(entry?.tag).toBe(tag);
+      const sql = fs.readFileSync(path.join(migrationsDir, `${tag}.sql`), "utf8");
+      // Ensure no invalid DROP POLICY ... FOR INSERT/SELECT/UPDATE/DELETE syntax exists
+      expect(sql).not.toMatch(/DROP\s+POLICY\s+IF\s+EXISTS\s+"[^"]+"\s+ON\s+\S+\s+FOR\s+/i);
+    }
+
+    const m11Sql = fs.readFileSync(
+      path.join(migrationsDir, "0011_hubs_signals_read_receipts.sql"),
+      "utf8",
+    );
+    expect(m11Sql).toContain(
+      'DROP POLICY IF EXISTS "Users record signal reads" ON public.signal_reads;',
+    );
+    expect(m11Sql).toContain(
+      'CREATE POLICY "Users record signal reads" ON public.signal_reads FOR INSERT TO authenticated',
+    );
+
+    const m15Sql = fs.readFileSync(
+      path.join(migrationsDir, "0015_product_completion_sprint.sql"),
+      "utf8",
+    );
+    expect(m15Sql).toContain(
+      "CREATE OR REPLACE FUNCTION public.is_admin(_user uuid DEFAULT auth.uid())",
+    );
+
+    const m16Sql = fs.readFileSync(
+      path.join(migrationsDir, "0016_profile_economy_analytics_and_fixes.sql"),
+      "utf8",
+    );
+    expect(m16Sql).toContain("dot_transactions_user_source_ref_uidx");
+
+    const m18Sql = fs.readFileSync(
+      path.join(migrationsDir, "0018_fix_conversation_rls_and_close_circle.sql"),
+      "utf8",
+    );
+    expect(m18Sql).toContain("public.is_conversation_member");
+    expect(m18Sql).toContain("cm.conversation_id = private_messages.conversation_id");
+    expect(m18Sql).toContain("public.is_close_circle_member");
+
+    const m19Sql = fs.readFileSync(
+      path.join(migrationsDir, "0019_lockdown_economy_and_private_grants.sql"),
+      "utf8",
+    );
+    expect(m19Sql).toContain(
+      "REVOKE ALL ON public.dot_wallets, public.dot_transactions, public.account_subscriptions",
+    );
+
+    const runnerSrc = fs.readFileSync(
+      path.resolve(__dirname, "../../scripts/migrate-remote.mjs"),
+      "utf8",
+    );
+    expect(runnerSrc).toContain('const EXPECTED_PROJECT_REF = "exlttyafomvqfwgzzjrm"');
+    expect(runnerSrc).toContain("LOVABLE_DB_MIGRATION_URL");
+    expect(runnerSrc).toContain('port === "6543"');
+  });
 });

@@ -3,7 +3,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/lib/auth";
 import { PingComposer, type PingDraft } from "@/components/ping/PingComposer";
 import { pingSchema } from "@/lib/validation";
 
@@ -15,10 +14,13 @@ export const Route = createFileRoute("/_authenticated/create")({
   head: () => ({
     meta: [
       { name: "robots", content: "noindex, nofollow" },
-      { title: "Create a Ping — Ping" },
-      { name: "description", content: "Share progress, an idea, a launch or a milestone." },
+      { title: "Create a Ping — PING" },
+      {
+        name: "description",
+        content: "Share an intention. Find the people and resources to make it happen.",
+      },
       { property: "og:title", content: "Create a Ping" },
-      { property: "og:description", content: "Share your story on Ping." },
+      { property: "og:description", content: "Share your intention on PING." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -27,7 +29,6 @@ export const Route = createFileRoute("/_authenticated/create")({
 });
 
 function Create() {
-  const { user } = useAuth();
   const { hub: initialHubId } = Route.useSearch();
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -43,6 +44,7 @@ function Create() {
           user_id: author.id,
           category: draft.category,
           content: draft.content,
+          image_url: d.image_url || null,
           cta_url: draft.cta_url || null,
           cta_label: draft.cta_label || null,
         })
@@ -65,21 +67,20 @@ function Create() {
     },
     onSuccess: (id) => {
       qc.invalidateQueries();
-      toast.success("Your Ping is live 🎉");
+      toast.success("Your Ping is live");
       navigate({ to: "/p/$id", params: { id } });
     },
     onError: () => toast.error("Couldn't publish your Ping. Try again."),
   });
   return (
-    <div className="mx-auto max-w-2xl px-5 py-12">
-      <span className="sticker -rotate-2 bg-blush text-blush-foreground">new Ping</span>
-      <h1 className="mt-4 font-display text-4xl font-extrabold sm:text-5xl">
-        What are you building?
+    <div className="mx-auto max-w-2xl px-5 py-10 pb-24">
+      <h1 className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">
+        Create a Ping
       </h1>
-      <p className="mt-2 text-muted-foreground">
-        Share a step, however small. Every Ping gets its own public link.
+      <p className="mt-1.5 text-sm text-muted-foreground">
+        Share an intention. Find the people and resources to make it happen.
       </p>
-      <div className="mt-8">
+      <div className="mt-6">
         <PingComposer
           initial={initialHubId ? { hub_id: initialHubId } : undefined}
           submitLabel="Publish Ping"

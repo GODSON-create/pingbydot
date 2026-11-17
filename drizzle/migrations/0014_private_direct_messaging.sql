@@ -70,6 +70,7 @@ ALTER TABLE public.private_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_blocks ENABLE ROW LEVEL SECURITY;
 
 -- Conversations RLS
+DROP POLICY IF EXISTS "Members read own conversations" ON public.conversations;
 CREATE POLICY "Members read own conversations" ON public.conversations
   FOR SELECT TO authenticated
   USING (
@@ -80,6 +81,7 @@ CREATE POLICY "Members read own conversations" ON public.conversations
   );
 
 -- Conversation Members RLS
+DROP POLICY IF EXISTS "Members read conversation members" ON public.conversation_members;
 CREATE POLICY "Members read conversation members" ON public.conversation_members
   FOR SELECT TO authenticated
   USING (
@@ -91,12 +93,14 @@ CREATE POLICY "Members read conversation members" ON public.conversation_members
     )
   );
 
+DROP POLICY IF EXISTS "Users update own conversation membership" ON public.conversation_members;
 CREATE POLICY "Users update own conversation membership" ON public.conversation_members
   FOR UPDATE TO authenticated
   USING (user_id = auth.uid())
   WITH CHECK (user_id = auth.uid());
 
 -- Private Messages RLS
+DROP POLICY IF EXISTS "Members read conversation messages" ON public.private_messages;
 CREATE POLICY "Members read conversation messages" ON public.private_messages
   FOR SELECT TO authenticated
   USING (
@@ -108,6 +112,7 @@ CREATE POLICY "Members read conversation messages" ON public.private_messages
     )
   );
 
+DROP POLICY IF EXISTS "Members insert conversation messages" ON public.private_messages;
 CREATE POLICY "Members insert conversation messages" ON public.private_messages
   FOR INSERT TO authenticated
   WITH CHECK (
@@ -129,20 +134,24 @@ CREATE POLICY "Members insert conversation messages" ON public.private_messages
     )
   );
 
+DROP POLICY IF EXISTS "Senders soft delete own messages" ON public.private_messages;
 CREATE POLICY "Senders soft delete own messages" ON public.private_messages
   FOR UPDATE TO authenticated
   USING (sender_id = auth.uid())
   WITH CHECK (sender_id = auth.uid());
 
 -- User Blocks RLS
+DROP POLICY IF EXISTS "Users view own block list" ON public.user_blocks;
 CREATE POLICY "Users view own block list" ON public.user_blocks
   FOR SELECT TO authenticated
   USING (blocker_id = auth.uid());
 
+DROP POLICY IF EXISTS "Users manage own blocks" ON public.user_blocks;
 CREATE POLICY "Users manage own blocks" ON public.user_blocks
   FOR INSERT TO authenticated
   WITH CHECK (blocker_id = auth.uid());
 
+DROP POLICY IF EXISTS "Users delete own blocks" ON public.user_blocks;
 CREATE POLICY "Users delete own blocks" ON public.user_blocks
   FOR DELETE TO authenticated
   USING (blocker_id = auth.uid());
@@ -459,3 +468,21 @@ BEGIN
 END;
 $$;
 GRANT EXECUTE ON FUNCTION public.send_message(uuid, text, text, text) TO authenticated, service_role;
+
+-- 12. Explicit Role Table Grants & Realtime Publication for Direct Messaging
+REVOKE ALL ON public.conversations, public.conversation_members, public.private_messages, public.conversation_messages, public.user_blocks FROM anon;
+GRANT SELECT, INSERT, UPDATE ON public.conversations, public.conversation_members, public.private_messages TO authenticated;
+GRANT SELECT, INSERT, DELETE ON public.user_blocks TO authenticated;
+GRANT ALL ON public.conversations, public.conversation_members, public.private_messages, public.user_blocks TO service_role;
+
+DO $$
+BEGIN
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.conversations;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.private_messages;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+END $$;

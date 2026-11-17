@@ -49,6 +49,7 @@
 }
 
 :root {
+  color-scheme: light;
   /* Portable sRGB artwork tokens for PNG/SVG renderers. */
   --share-paper: #fff9ef;
   --share-ink: #182822;
@@ -111,6 +112,7 @@
     0 24px 48px -20px color-mix(in oklab, var(--primary) 40%, transparent);
 }
 .dark {
+  color-scheme: dark;
   /* ======================================================================== */
   /* LOCKED 4-COLOUR DARK THEME PALETTE + TYPOGRAPHY NEUTRALS                 */
   /* ======================================================================== */
@@ -202,6 +204,14 @@
   .dark select {
     background-color: #121513;
     border-color: #2d352e;
+    color: #f4f2e9;
+  }
+  .dark input::placeholder,
+  .dark textarea::placeholder {
+    color: #7e877d;
+  }
+  .dark select option {
+    background-color: #171b18;
     color: #f4f2e9;
   }
   .dark
@@ -417,7 +427,7 @@
     90deg,
     var(--primary) 0%,
     var(--primary) 40%,
-    oklch(0.55 0.12 150) 50%,
+    var(--foreground) 50%,
     var(--primary) 60%,
     var(--primary) 100%
   );

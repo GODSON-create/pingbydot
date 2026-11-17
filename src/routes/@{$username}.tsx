@@ -2,22 +2,86 @@ import { useState } from "react";
 import { pageHead, siteUrl, NOINDEX } from "@/lib/site";
 import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
 import { useSuspenseQuery, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { format } from "date-fns";
-import { Link2, UserPlus, Check, Building2, MessageSquare } from "lucide-react";
+import { format, formatDistanceToNowStrict } from "date-fns";
+import {
+  Link2,
+  UserPlus,
+  Check,
+  Building2,
+  MessageSquare,
+  MoreVertical,
+  Menu,
+  BarChart3,
+  Coins,
+  Crown,
+  Settings,
+  Users,
+  Sun,
+  Moon,
+  Laptop,
+  LogOut,
+  ShieldBan,
+  ShieldCheck,
+  Flag,
+  Sparkles,
+  UserCheck,
+  CheckCircle2,
+  Share2,
+  Bell,
+  HelpCircle,
+  Lock,
+  Wallet,
+  Activity,
+} from "lucide-react";
 import { toast } from "sonner";
-import { profileQuery, type Profile, type Ping } from "@/lib/pings";
-import { useGetOrCreateDirectConversation } from "@/lib/messages";
+import { profileQuery, likeCount, replyCount, type Profile, type Ping } from "@/lib/pings";
+import { parseStructuredPing } from "@/lib/validation";
+import {
+  useGetOrCreateDirectConversation,
+  blockedUsersQuery,
+  useBlockUser,
+  useUnblockUser,
+} from "@/lib/messages";
 import { FounderAvatar } from "@/components/ping/Avatar";
 import { PingCard } from "@/components/ping/PingCard";
 import { ErrorComponent } from "@/routes/__root";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/lib/auth";
+import { useTheme } from "@/lib/theme";
+import { useSignOut } from "@/components/layout/SiteHeader";
+import { PingMark } from "@/components/BrandLogo";
 import { PublicConnections } from "@/components/connections/PublicConnections";
 import { ProfileHighlights } from "@/components/moments/ProfileHighlights";
-import { userActiveMomentsQuery } from "@/lib/moments";
+import { CloseCircleDialog } from "@/components/moments/CloseCircleDialog";
+import {
+  userActiveMomentsQuery,
+  closeCircleQuery,
+  useAddCloseCircleMember,
+  useRemoveCloseCircleMember,
+} from "@/lib/moments";
 import { MomentViewerModal } from "@/components/moments/MomentViewerModal";
+import { dotSummaryQuery, publicAccountTierQuery } from "@/lib/economy";
 import { followQuery, myHubsQuery } from "@/lib/hub-queries";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/@{$username}")({
   staticData: { sitemap: true },
@@ -99,6 +163,7 @@ function FollowButton({
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ["follow", profileId] });
+      qc.invalidateQueries({ queryKey: ["profile-follow-list", profileId] });
     },
   });
 
@@ -133,6 +198,238 @@ function FollowButton({
   );
 }
 
+function FollowListDialog({
+  profileId,
+  displayName,
+  initialMode,
+  open,
+  onOpenChange,
+}: {
+  profileId: string;
+  displayName: string;
+  initialMode: "followers" | "following";
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [mode, setMode] = useState<"followers" | "following">(initialMode);
+
+  const { data: rows = [], isLoading } = useQuery({
+    queryKey: ["profile-follow-list", profileId, mode],
+    enabled: open && Boolean(profileId),
+    queryFn: async (): Promise<Profile[]> => {
+      if (mode === "followers") {
+        const { data, error } = await supabase
+          .from("follows")
+          .select(
+            "follower:profiles!follows_follower_id_fkey(id, username, display_name, bio, avatar_url, created_at)",
+          )
+          .eq("following_id", profileId)
+          .order("created_at", { ascending: false })
+          .limit(60);
+        if (error || !data) return [];
+        return data
+          .map((r) => (r as unknown as { follower: Profile | null }).follower)
+          .filter((p): p is Profile => Boolean(p));
+      }
+      const { data, error } = await supabase
+        .from("follows")
+        .select(
+          "following:profiles!follows_following_id_fkey(id, username, display_name, bio, avatar_url, created_at)",
+        )
+        .eq("follower_id", profileId)
+        .order("created_at", { ascending: false })
+        .limit(60);
+      if (error || !data) return [];
+      return data
+        .map((r) => (r as unknown as { following: Profile | null }).following)
+        .filter((p): p is Profile => Boolean(p));
+    },
+  });
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (next) setMode(initialMode);
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent className="max-w-md rounded-3xl p-6 max-h-[80vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="font-display text-xl">{displayName}</DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground">
+            Browse builders connected with this profile.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="mt-2 grid grid-cols-2 gap-2 rounded-full bg-secondary p-1">
+          <button
+            type="button"
+            onClick={() => setMode("followers")}
+            className={cn(
+              "rounded-full py-1.5 text-xs font-semibold transition-colors",
+              mode === "followers"
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            Followers
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("following")}
+            className={cn(
+              "rounded-full py-1.5 text-xs font-semibold transition-colors",
+              mode === "following"
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            Following
+          </button>
+        </div>
+
+        <div className="mt-4 flex-1 overflow-y-auto space-y-2 pr-1">
+          {isLoading ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-14 animate-pulse rounded-2xl bg-muted/40" />
+              ))}
+            </div>
+          ) : rows.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              {mode === "followers" ? "No followers yet." : "Not following anyone yet."}
+            </p>
+          ) : (
+            rows.map((p) => {
+              const pName = p.display_name || p.username;
+              return (
+                <Link
+                  key={p.id}
+                  to="/@{$username}"
+                  params={{ username: p.username }}
+                  onClick={() => onOpenChange(false)}
+                  className="flex items-center gap-3 rounded-2xl border border-border/60 p-2.5 transition-colors hover:bg-secondary/60"
+                >
+                  <FounderAvatar name={pName} src={p.avatar_url} size="sm" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold truncate text-foreground">{pName}</p>
+                    <p className="text-xs text-muted-foreground truncate">@{p.username}</p>
+                  </div>
+                </Link>
+              );
+            })
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ReportProfileDialog({
+  targetProfile,
+  reporterId,
+  open,
+  onOpenChange,
+}: {
+  targetProfile: Profile;
+  reporterId: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [reason, setReason] = useState("Impersonation or spam");
+  const [details, setDetails] = useState("");
+
+  const submitMutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from("profile_reports").insert({
+        reported_user_id: targetProfile.id,
+        reporter_id: reporterId,
+        reason: reason.trim(),
+        details: details.trim() || null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Profile report submitted for review.");
+      setDetails("");
+      onOpenChange(false);
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || "Could not submit profile report.");
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md rounded-3xl p-6">
+        <DialogHeader>
+          <DialogTitle className="font-display text-lg">
+            Report @{targetProfile.username}
+          </DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground">
+            Reports help moderators review abuse, impersonation, or unsafe content.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            submitMutation.mutate();
+          }}
+          className="mt-3 space-y-4"
+        >
+          <div>
+            <Label htmlFor="profile-report-reason" className="text-xs font-semibold">
+              Reason
+            </Label>
+            <Input
+              id="profile-report-reason"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              maxLength={120}
+              required
+              className="mt-1.5 rounded-xl"
+            />
+          </div>
+          <div>
+            <Label htmlFor="profile-report-details" className="text-xs font-semibold">
+              Additional details (optional)
+            </Label>
+            <Textarea
+              id="profile-report-details"
+              value={details}
+              onChange={(e) => setDetails(e.target.value)}
+              placeholder="Share specific context or links…"
+              rows={3}
+              maxLength={500}
+              className="mt-1.5 rounded-xl resize-none"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              className="rounded-xl"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="destructive"
+              disabled={submitMutation.isPending || !reason.trim()}
+              className="rounded-xl"
+            >
+              {submitMutation.isPending ? "Submitting…" : "Submit Report"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ProfilePage() {
   const { username } = Route.useParams();
   const { data } = useSuspenseQuery(profileQuery(username));
@@ -153,161 +450,683 @@ function ProfileContent({
   username: string;
 }) {
   const { user } = useAuth();
+  const { theme, setTheme } = useTheme();
+  const signOut = useSignOut();
   const navigate = useNavigate();
   const startChatMutation = useGetOrCreateDirectConversation();
+  const addCloseCircle = useAddCloseCircleMember();
+  const removeCloseCircle = useRemoveCloseCircleMember();
+  const blockUser = useBlockUser();
+  const unblockUser = useUnblockUser();
+
+  const [menuDrawerOpen, setMenuDrawerOpen] = useState(false);
+  const [momentModalOpen, setMomentModalOpen] = useState(false);
+  const [closeCircleOpen, setCloseCircleOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [followDialog, setFollowDialog] = useState<{
+    open: boolean;
+    mode: "followers" | "following";
+  }>({ open: false, mode: "followers" });
+
   const { profile, pings, connections } = data;
   const isMe = user?.id === profile.id;
   const name = profile.display_name || profile.username || username;
 
-  // Follow counts and status
   const { data: follow } = useQuery(followQuery(profile.id, user?.id));
+  const { data: joinedHubs = [] } = useQuery(myHubsQuery(profile.id));
+  const { data: activeMoments = [] } = useQuery(userActiveMomentsQuery(profile.id, user?.id));
+  const { data: accountTier = "free" } = useQuery(publicAccountTierQuery(profile.id));
+  // Retrieve DOT balance from the authenticated user's real wallet/account query
+  const { data: dotSummary } = useQuery(dotSummaryQuery(user?.id));
+  const { data: closeCircleMembers = [] } = useQuery(closeCircleQuery(user?.id));
+  const { data: blockedUsers = [] } = useQuery(blockedUsersQuery(user?.id));
 
-  // Hubs joined by this founder
-  const { data: joinedHubs } = useQuery(myHubsQuery(profile.id));
+  const hasActiveMoments = activeMoments.length > 0;
+  const hasUnseenMoments = activeMoments.some((m) => !m.has_viewed);
+  const inCloseCircle = closeCircleMembers.some((m) => m.member_id === profile.id);
+  const isBlocked = blockedUsers.some((b) => b.blocked_id === profile.id);
+
+  // Extract relevant skills / interests from the creator's structured Pings & bio hashtags
+  const skillTags = (() => {
+    const set = new Set<string>();
+    for (const p of pings) {
+      const meta = parseStructuredPing(p);
+      for (const s of [...meta.skills, ...meta.offers, ...meta.needs]) {
+        if (s.length <= 28) set.add(s);
+      }
+      if (meta.intentLabel) set.add(meta.intentLabel);
+    }
+    if (profile.bio) {
+      const hashMatches = profile.bio.match(/#[a-zA-Z0-9_-]{2,24}/g) ?? [];
+      for (const tag of hashMatches) {
+        set.add(tag.replace(/^#/, ""));
+      }
+    }
+    return [...set].slice(0, 6);
+  })();
+
+  const cycleTheme = () => {
+    const next = theme === "light" ? "dark" : theme === "dark" ? "system" : "light";
+    setTheme(next);
+    toast.success(`Theme set to ${next}`);
+  };
+
+  const shareProfile = async () => {
+    const url = siteUrl(`/@${encodeURIComponent(profile.username)}`);
+    try {
+      if (typeof navigator !== "undefined" && navigator.share) {
+        await navigator.share({ title: `${name} on PING`, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      toast.success("Profile link copied");
+    } catch {
+      toast.error("Couldn't copy profile link.");
+    }
+  };
+
+  const verificationBadge =
+    accountTier === "institution" ? (
+      <span className="inline-flex items-center gap-1 rounded-full bg-gold/15 text-gold border border-gold/30 px-2.5 py-0.5 text-[11px] font-bold">
+        <ShieldCheck className="size-3" /> Verified Institution
+      </span>
+    ) : accountTier === "pro" ? (
+      <span className="inline-flex items-center gap-1 rounded-full bg-gold/15 text-gold border border-gold/30 px-2.5 py-0.5 text-[11px] font-bold">
+        <Crown className="size-3" /> Founder Pro
+      </span>
+    ) : accountTier === "plus" ? (
+      <span className="inline-flex items-center gap-1 rounded-full bg-lime/20 dark:bg-lime/15 text-lime-foreground dark:text-lime border border-lime/30 px-2.5 py-0.5 text-[11px] font-bold">
+        <Sparkles className="size-3" /> Builder Plus
+      </span>
+    ) : (
+      <CheckCircle2 className="size-4 text-primary shrink-0" aria-label="Verified PING profile" />
+    );
+
+  const drawerLinkClass =
+    "flex w-full items-center justify-between gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
   return (
     <div className="pb-24">
       <section className="bg-hero">
-        <div className="mx-auto max-w-4xl px-5 pb-10 pt-12">
+        <div className="mx-auto max-w-4xl px-4 sm:px-5 pb-8 pt-8 sm:pt-12">
           <div className="surface-card relative rounded-[2rem] p-6 sm:p-9 border border-border shadow-lift">
-            <span className="sticker absolute -top-3 right-6 rotate-3 bg-lime text-lime-foreground">
-              founder
-            </span>
-            <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
-              <FounderAvatar name={name} src={profile.avatar_url} size="xl" />
+            {/* Top-Right Three-Line Menu Button (opens full-height account & profile drawer) */}
+            <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-10">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => setMenuDrawerOpen(true)}
+                aria-label="Profile options menu"
+                title="Open account & profile menu"
+                className="size-10 rounded-full bg-card/90 shadow-sm hover:bg-secondary"
+              >
+                <Menu className="size-5" />
+                <MoreVertical className="sr-only" />
+              </Button>
+            </div>
+
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-start pr-12">
+              {hasActiveMoments ? (
+                <button
+                  type="button"
+                  onClick={() => setMomentModalOpen(true)}
+                  className={cn(
+                    "self-start rounded-full p-1 transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary",
+                    hasUnseenMoments
+                      ? "bg-gradient-to-tr from-lime via-primary to-gold"
+                      : "border-2 border-muted-foreground/40",
+                  )}
+                  aria-label={`View active Moments from ${name}`}
+                >
+                  <div className="rounded-full bg-card p-0.5">
+                    <FounderAvatar name={name} src={profile.avatar_url} size="xl" />
+                  </div>
+                </button>
+              ) : (
+                <FounderAvatar name={name} src={profile.avatar_url} size="xl" />
+              )}
+
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="font-display text-3xl font-extrabold sm:text-4xl">{name}</h1>
+                  <h1 className="font-display text-2xl font-extrabold sm:text-4xl">{name}</h1>
+                  {verificationBadge}
                 </div>
-                <p className="text-muted-foreground text-sm">
-                  @{profile.username} · on Ping since{" "}
-                  {format(new Date(profile.created_at), "MMM yyyy")}
+                <p className="text-muted-foreground text-sm mt-0.5">
+                  @{profile.username} · Joined {format(new Date(profile.created_at), "MMM yyyy")}
                 </p>
 
-                {/* Follower counts */}
-                <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
-                  <span>
+                {/* Interactive Follower / Following Counts */}
+                <div className="mt-2.5 flex items-center gap-3 text-xs text-muted-foreground tabular-nums">
+                  <button
+                    type="button"
+                    onClick={() => setFollowDialog({ open: true, mode: "followers" })}
+                    className="hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-primary rounded"
+                  >
                     <strong className="text-foreground">
                       {(follow?.followers ?? 0).toLocaleString()}
                     </strong>{" "}
                     followers
-                  </span>
+                  </button>
                   <span>·</span>
-                  <span>
+                  <button
+                    type="button"
+                    onClick={() => setFollowDialog({ open: true, mode: "following" })}
+                    className="hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-primary rounded"
+                  >
                     <strong className="text-foreground">
                       {(follow?.following ?? 0).toLocaleString()}
                     </strong>{" "}
                     following
-                  </span>
+                  </button>
                 </div>
 
+                {/* Biography */}
                 {profile.bio && (
-                  <p className="mt-3 max-w-xl whitespace-pre-line text-sm">{profile.bio}</p>
+                  <p className="mt-3 max-w-xl whitespace-pre-line text-sm leading-relaxed text-foreground/90">
+                    {profile.bio}
+                  </p>
                 )}
-              </div>
 
-              <div className="flex gap-2 sm:flex-col shrink-0">
-                {!isMe && <FollowButton profileId={profile.id} currentUserId={user?.id} />}
-                {!isMe && user && (
+                {/* Relevant Skills / Interests */}
+                {skillTags.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Skills and interests">
+                    {skillTags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="rounded-full border border-border bg-secondary/70 px-2.5 py-0.5 text-[11px] font-medium text-secondary-foreground"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Primary Profile Actions: Edit Profile / Follow / Message & Share Profile */}
+                <div className="mt-5 flex flex-wrap items-center gap-2.5">
+                  {isMe ? (
+                    <Button asChild size="sm" variant="hero" className="rounded-full px-5">
+                      <Link to="/settings">Edit Profile</Link>
+                    </Button>
+                  ) : (
+                    <>
+                      <FollowButton profileId={profile.id} currentUserId={user?.id} />
+                      {user && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          className="rounded-full font-semibold"
+                          disabled={startChatMutation.isPending}
+                          onClick={async () => {
+                            try {
+                              const convId = await startChatMutation.mutateAsync(profile.id);
+                              navigate({
+                                to: "/messages",
+                                search: { conversationId: convId },
+                              });
+                            } catch (e: any) {
+                              toast.error(e.message || "Failed to start direct conversation");
+                            }
+                          }}
+                        >
+                          <MessageSquare className="size-4 mr-1.5" /> Message
+                        </Button>
+                      )}
+                    </>
+                  )}
                   <Button
+                    type="button"
+                    variant="outline"
                     size="sm"
-                    className="rounded-full bg-primary text-primary-foreground font-semibold hover:bg-primary/90"
-                    disabled={startChatMutation.isPending}
-                    onClick={async () => {
-                      try {
-                        const convId = await startChatMutation.mutateAsync(profile.id);
-                        navigate({
-                          to: "/messages",
-                          search: { conversationId: convId },
-                        });
-                      } catch (e: any) {
-                        toast.error(e.message || "Failed to start direct conversation");
-                      }
-                    }}
+                    className="rounded-full"
+                    onClick={shareProfile}
                   >
-                    <MessageSquare className="size-4 mr-1.5" /> Message
+                    <Share2 className="size-4" /> Share Profile
                   </Button>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="rounded-full"
-                  onClick={async () => {
-                    try {
-                      await navigator.clipboard.writeText(
-                        siteUrl(`/@${encodeURIComponent(profile.username)}`),
-                      );
-                      toast.success("Profile link copied");
-                    } catch {
-                      toast.error("Couldn't copy. Copy the link from the address bar.");
-                    }
-                  }}
-                >
-                  <Link2 className="size-4" /> Copy link
-                </Button>
-                {isMe && (
-                  <Button asChild size="sm" variant="secondary" className="rounded-full">
-                    <Link to="/settings">Edit profile</Link>
-                  </Button>
-                )}
+                </div>
               </div>
             </div>
+
             <PublicConnections connections={connections} />
-            <ProfileHighlights profile={profile} isMe={isMe} />
           </div>
         </div>
       </section>
 
-      {/* Hubs Joined Section */}
-      {joinedHubs && joinedHubs.length > 0 && (
-        <section className="mx-auto max-w-4xl px-5 mt-6 mb-8">
-          <h2 className="font-display text-lg font-bold flex items-center gap-2">
-            <Building2 className="size-4 text-primary" /> Hubs Joined
-          </h2>
-          <div className="mt-3 flex flex-wrap gap-2.5">
-            {joinedHubs.map((jh) => (
-              <Link
-                key={jh.hub.id}
-                to="/hubs/$slug"
-                params={{ slug: jh.hub.slug }}
-                className="surface-card flex items-center gap-2 rounded-2xl px-3.5 py-2 text-sm font-semibold transition-transform hover:-translate-y-0.5 hover:border-primary"
-              >
-                <span>{jh.hub.name}</span>
-                <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold uppercase text-muted-foreground">
-                  {jh.role}
-                </span>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
+      {/* Profile Content Tabs: PINGs | Moments | Activity */}
+      <section className="mx-auto max-w-4xl px-4 sm:px-5 mt-4">
+        <Tabs defaultValue="pings">
+          <TabsList className="h-11 rounded-full p-1 bg-secondary/80 overflow-x-auto max-w-full">
+            <TabsTrigger value="pings" className="rounded-full px-6 text-sm font-semibold">
+              PINGs ({pings.length})
+            </TabsTrigger>
+            <TabsTrigger value="moments" className="rounded-full px-6 text-sm font-semibold">
+              Moments ({activeMoments.length})
+            </TabsTrigger>
+            <TabsTrigger value="activity" className="rounded-full px-6 text-sm font-semibold">
+              Activity
+            </TabsTrigger>
+          </TabsList>
 
-      {/* Pings Section */}
-      <section className="mx-auto max-w-4xl px-5 mt-4">
-        <h2 className="font-display text-xl font-bold">
-          {pings.length} {pings.length === 1 ? "Ping" : "Pings"}
-        </h2>
-        {pings.length === 0 ? (
-          <div className="mt-5 rounded-3xl border border-dashed p-10 text-center text-muted-foreground">
-            {isMe ? (
-              <>
-                <p>You haven't shared anything yet.</p>
-                <Button asChild variant="hero" className="mt-4 rounded-full">
-                  <Link to="/create">Create your first Ping</Link>
-                </Button>
-              </>
+          {/* TAB 1: PINGS */}
+          <TabsContent value="pings" className="mt-6">
+            {pings.length === 0 ? (
+              <div className="rounded-3xl border border-dashed p-10 text-center text-muted-foreground">
+                {isMe ? (
+                  <>
+                    <p>You haven't published a Ping yet.</p>
+                    <Button asChild variant="hero" className="mt-4 rounded-full">
+                      <Link to="/create">Create your first Ping</Link>
+                    </Button>
+                  </>
+                ) : (
+                  <p>{name} hasn't shared a Ping yet.</p>
+                )}
+              </div>
             ) : (
-              <p>{name} hasn't shared a Ping yet.</p>
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2 items-start">
+                {pings.map((p: any) => (
+                  <PingCard key={p.id} ping={p} />
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* TAB 2: MOMENTS (Highlights & Active Moments) */}
+          <TabsContent value="moments" className="mt-6 space-y-6">
+            <div className="surface-card rounded-3xl p-5 sm:p-6">
+              <ProfileHighlights profile={profile} isMe={isMe} />
+            </div>
+
+            {activeMoments.length === 0 ? (
+              <div className="surface-card rounded-3xl p-10 text-center text-muted-foreground">
+                <Sparkles className="mx-auto size-9 text-muted-foreground/40" />
+                <p className="mt-3 font-medium">No active Moments right now.</p>
+                <p className="mt-1 text-xs">Moments and saved Highlight collections appear here.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3">
+                {activeMoments.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setMomentModalOpen(true)}
+                    className="group relative aspect-[9/14] overflow-hidden rounded-3xl bg-black text-left shadow-sm"
+                  >
+                    {m.media_type === "video" ? (
+                      <video
+                        src={m.media_url}
+                        muted
+                        playsInline
+                        className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                      />
+                    ) : (
+                      <img
+                        src={m.media_url}
+                        alt={m.caption || "Moment"}
+                        className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                      />
+                    )}
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-3 text-white">
+                      {m.caption && <p className="line-clamp-2 text-xs font-medium">{m.caption}</p>}
+                      <p className="mt-1 text-[10px] text-white/70">
+                        {formatDistanceToNowStrict(new Date(m.created_at))} ago
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* TAB 3: ACTIVITY (Coordination & Community Participation) */}
+          <TabsContent value="activity" className="mt-6 space-y-6">
+            <div className="grid gap-4 sm:grid-cols-3 tabular-nums">
+              <div className="surface-card rounded-3xl p-5">
+                <p className="text-xs text-muted-foreground">Published PINGs</p>
+                <p className="mt-1 font-display text-2xl font-extrabold">{pings.length}</p>
+              </div>
+              <div className="surface-card rounded-3xl p-5">
+                <p className="text-xs text-muted-foreground">Responses & Likes</p>
+                <p className="mt-1 font-display text-2xl font-extrabold">
+                  {pings.reduce((acc, p) => acc + likeCount(p) + replyCount(p), 0)}
+                </p>
+              </div>
+              <div className="surface-card rounded-3xl p-5">
+                <p className="text-xs text-muted-foreground">Joined Hubs</p>
+                <p className="mt-1 font-display text-2xl font-extrabold">{joinedHubs.length}</p>
+              </div>
+            </div>
+
+            {joinedHubs.length > 0 && (
+              <div className="surface-card rounded-3xl p-6">
+                <h3 className="font-display text-base font-bold flex items-center gap-2">
+                  <Building2 className="size-4 text-primary" /> Community Hubs & Forums
+                </h3>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  {joinedHubs.map((jh) => (
+                    <Link
+                      key={jh.hub.id}
+                      to="/hubs/$slug"
+                      params={{ slug: jh.hub.slug }}
+                      className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 p-3.5 transition-colors hover:border-primary"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-display font-bold text-sm truncate">{jh.hub.name}</p>
+                        <p className="text-xs text-muted-foreground">Community Hub</p>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-secondary px-2.5 py-0.5 text-[10px] font-bold uppercase text-muted-foreground">
+                        {jh.role}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {isMe && (
+              <div className="surface-card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-3xl p-6">
+                <div>
+                  <h3 className="font-display text-base font-bold flex items-center gap-2">
+                    <Activity className="size-4 text-primary" /> Full Creator Telemetry
+                  </h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Inspect 7/30/90-day engagement charts, category breakdowns, and top PINGs.
+                  </p>
+                </div>
+                <Button asChild variant="outline" size="sm" className="rounded-full shrink-0">
+                  <Link to="/analytics">
+                    <BarChart3 className="size-4" /> Open Analytics
+                  </Link>
+                </Button>
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+      </section>
+
+      {/* THREE-LINE MENU SIDE DRAWER (Full-Height Account & Profile Menu) */}
+      <Sheet open={menuDrawerOpen} onOpenChange={setMenuDrawerOpen}>
+        <SheetContent
+          side="right"
+          className="w-full sm:max-w-sm overflow-y-auto rounded-l-3xl p-6 flex flex-col justify-between"
+        >
+          <div>
+            <SheetHeader className="text-left pb-4 border-b border-border/60">
+              <SheetTitle className="font-display text-xl font-extrabold">
+                {isMe ? "Account & Coordination" : `@${profile.username}`}
+              </SheetTitle>
+              <SheetDescription className="text-xs text-muted-foreground">
+                {isMe
+                  ? "Manage your DOT balance, verification, privacy, and account settings."
+                  : `Interact with ${name} on PING.`}
+              </SheetDescription>
+            </SheetHeader>
+
+            {user ? (
+              <div className="mt-5 space-y-1.5">
+                {/* 1. DOT Balance Summary (Connected to real wallet/account data) */}
+                <div className="mb-3 rounded-2xl border border-gold/30 bg-gold/10 p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-muted-foreground flex items-center gap-2">
+                      <PingMark variant="gold" size="xs" />
+                      <Coins className="size-4 text-gold" /> DOT Balance Summary
+                    </span>
+                    <span className="rounded-full bg-gold/20 px-2 py-0.5 text-[10px] font-bold text-gold uppercase">
+                      {dotSummary?.subscription.tier ?? "free"}
+                    </span>
+                  </div>
+                  <p className="mt-2 font-display text-2xl font-extrabold tabular-nums text-foreground">
+                    {(dotSummary?.wallet.balance ?? 0).toLocaleString()} DOT
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground tabular-nums">
+                    Streak: {dotSummary?.wallet.streak_days ?? 0} days · Lifetime earned:{" "}
+                    {(dotSummary?.wallet.lifetime_earned ?? 0).toLocaleString()} DOT
+                  </p>
+                </div>
+
+                {/* 2. DOT Wallet */}
+                <Link
+                  to="/balance"
+                  onClick={() => setMenuDrawerOpen(false)}
+                  className={drawerLinkClass}
+                >
+                  <span className="flex items-center gap-3">
+                    <Wallet className="size-4 text-primary" /> DOT Wallet
+                  </span>
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {(dotSummary?.wallet.balance ?? 0).toLocaleString()} DOT
+                  </span>
+                </Link>
+
+                {/* 3. Verification */}
+                <Link
+                  to="/upgrades"
+                  onClick={() => setMenuDrawerOpen(false)}
+                  className={drawerLinkClass}
+                >
+                  <span className="flex items-center gap-3">
+                    <ShieldCheck className="size-4 text-gold" /> Verification & Upgrades
+                  </span>
+                  <span className="text-xs capitalize text-muted-foreground">{accountTier}</span>
+                </Link>
+
+                {/* 4. Settings */}
+                <Link
+                  to="/settings"
+                  onClick={() => setMenuDrawerOpen(false)}
+                  className={drawerLinkClass}
+                >
+                  <span className="flex items-center gap-3">
+                    <Settings className="size-4" /> Settings
+                  </span>
+                </Link>
+
+                {/* 5. Privacy and Security */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuDrawerOpen(false);
+                    setCloseCircleOpen(true);
+                  }}
+                  className={drawerLinkClass}
+                >
+                  <span className="flex items-center gap-3">
+                    <Lock className="size-4 text-primary" /> Privacy and Security
+                  </span>
+                  <span className="text-xs text-muted-foreground">Close Circle</span>
+                </button>
+
+                {/* 6. Notifications */}
+                <Link
+                  to="/settings"
+                  onClick={() => setMenuDrawerOpen(false)}
+                  className={drawerLinkClass}
+                >
+                  <span className="flex items-center gap-3">
+                    <Bell className="size-4" /> Notifications
+                  </span>
+                </Link>
+
+                {/* 7. Help and Support */}
+                <Link
+                  to="/terms"
+                  onClick={() => setMenuDrawerOpen(false)}
+                  className={drawerLinkClass}
+                >
+                  <span className="flex items-center gap-3">
+                    <HelpCircle className="size-4" /> Help and Support
+                  </span>
+                </Link>
+
+                {/* 8. Account Management & Analytics */}
+                <Link
+                  to="/analytics"
+                  onClick={() => setMenuDrawerOpen(false)}
+                  className={drawerLinkClass}
+                >
+                  <span className="flex items-center gap-3">
+                    <BarChart3 className="size-4 text-primary" /> Account Management & Analytics
+                  </span>
+                </Link>
+
+                <button type="button" onClick={cycleTheme} className={drawerLinkClass}>
+                  <span className="flex items-center gap-3">
+                    {theme === "light" ? (
+                      <Sun className="size-4" />
+                    ) : theme === "dark" ? (
+                      <Moon className="size-4" />
+                    ) : (
+                      <Laptop className="size-4" />
+                    )}
+                    Appearance
+                  </span>
+                  <span className="text-xs capitalize text-muted-foreground">{theme}</span>
+                </button>
+
+                {!isMe && (
+                  <div className="mt-3 pt-3 border-t border-border/60 space-y-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuDrawerOpen(false);
+                        if (inCloseCircle) {
+                          removeCloseCircle.mutate(profile.id, {
+                            onSuccess: () =>
+                              toast.success(`Removed @${profile.username} from Close Circle`),
+                          });
+                        } else {
+                          addCloseCircle.mutate(profile.id, {
+                            onSuccess: () =>
+                              toast.success(`Added @${profile.username} to Close Circle`),
+                          });
+                        }
+                      }}
+                      className={drawerLinkClass}
+                    >
+                      <span className="flex items-center gap-3">
+                        <UserCheck className="size-4" />
+                        {inCloseCircle ? "Remove from Close Circle" : "Add to Close Circle"}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuDrawerOpen(false);
+                        if (isBlocked) {
+                          unblockUser.mutate(profile.id, {
+                            onSuccess: () => toast.success(`Unblocked @${profile.username}`),
+                          });
+                        } else {
+                          blockUser.mutate(profile.id, {
+                            onSuccess: () => toast.success(`Blocked @${profile.username}`),
+                          });
+                        }
+                      }}
+                      className={drawerLinkClass}
+                    >
+                      <span className="flex items-center gap-3">
+                        <ShieldBan className="size-4" />
+                        {isBlocked ? "Unblock User" : "Block User"}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuDrawerOpen(false);
+                        setReportOpen(true);
+                      }}
+                      className={cn(drawerLinkClass, "text-destructive")}
+                    >
+                      <span className="flex items-center gap-3">
+                        <Flag className="size-4" /> Report Profile
+                      </span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="mt-5 space-y-3">
+                <button type="button" onClick={shareProfile} className={drawerLinkClass}>
+                  <span className="flex items-center gap-3">
+                    <Link2 className="size-4" /> Share Profile Link
+                  </span>
+                </button>
+                <Link
+                  to="/terms"
+                  onClick={() => setMenuDrawerOpen(false)}
+                  className={drawerLinkClass}
+                >
+                  <span className="flex items-center gap-3">
+                    <HelpCircle className="size-4" /> Help and Support
+                  </span>
+                </Link>
+                <Button asChild variant="hero" className="w-full rounded-full mt-2">
+                  <Link to="/login">Sign in to PING</Link>
+                </Button>
+              </div>
             )}
           </div>
-        ) : (
-          <div className="mt-5 grid gap-5 md:grid-cols-2">
-            {pings.map((p: any) => (
-              <PingCard key={p.id} ping={p} />
-            ))}
-          </div>
-        )}
-      </section>
+
+          {/* 9. Logout */}
+          {user && (
+            <div className="pt-4 border-t border-border/60">
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuDrawerOpen(false);
+                  signOut();
+                }}
+                className={cn(drawerLinkClass, "text-destructive hover:bg-destructive/10")}
+              >
+                <span className="flex items-center gap-3">
+                  <LogOut className="size-4" /> Logout
+                </span>
+              </button>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Active Moments Modal */}
+      {hasActiveMoments && (
+        <MomentViewerModal
+          sequences={[
+            {
+              author: profile,
+              moments: activeMoments,
+              hasUnseen: hasUnseenMoments,
+              latestCreatedAt:
+                activeMoments[activeMoments.length - 1]?.created_at ?? new Date().toISOString(),
+            },
+          ]}
+          open={momentModalOpen}
+          onOpenChange={setMomentModalOpen}
+        />
+      )}
+
+      {/* Followers / Following Modal */}
+      <FollowListDialog
+        profileId={profile.id}
+        displayName={name}
+        initialMode={followDialog.mode}
+        open={followDialog.open}
+        onOpenChange={(open) => setFollowDialog((prev) => ({ ...prev, open }))}
+      />
+
+      {/* Close Circle Modal */}
+      {user && <CloseCircleDialog open={closeCircleOpen} onOpenChange={setCloseCircleOpen} />}
+
+      {/* Visitor Report Profile Modal */}
+      {!isMe && user && (
+        <ReportProfileDialog
+          targetProfile={profile}
+          reporterId={user.id}
+          open={reportOpen}
+          onOpenChange={setReportOpen}
+        />
+      )}
     </div>
   );
 }

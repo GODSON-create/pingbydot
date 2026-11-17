@@ -51,8 +51,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
       if (activeResolved === "dark") {
         root.classList.add("dark");
+        root.style.colorScheme = "dark";
       } else {
         root.classList.remove("dark");
+        root.style.colorScheme = "light";
+      }
+      const themeMeta = document.querySelector('meta[name="theme-color"]');
+      if (themeMeta) {
+        themeMeta.setAttribute("content", activeResolved === "dark" ? "#090b0a" : "#173C32");
       }
     };
 

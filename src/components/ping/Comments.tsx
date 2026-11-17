@@ -399,7 +399,8 @@ function CommentItem({
               disabled={like.isPending}
               onClick={() => (user ? like.mutate() : signIn())}
             >
-              <Heart className={cn(isLiked && "fill-blush text-blush")} /> {commentLikeCount(node)}
+              <Heart className={cn(isLiked && "fill-blush-foreground text-blush-foreground")} />{" "}
+              {commentLikeCount(node)}
             </Button>
             <Button
               size="sm"

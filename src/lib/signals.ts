@@ -3,7 +3,15 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 
 export type SignalInstitutionType =
-  "university" | "company" | "incubator" | "government" | "community" | "other";
+  | "university"
+  | "company"
+  | "incubator"
+  | "government"
+  | "community"
+  | "association"
+  | "organization"
+  | "public_institution"
+  | "other";
 
 export interface Signal {
   id: string;
@@ -80,7 +88,10 @@ export function signalsQuery(filters?: { search?: string; category?: string }) {
       }
 
       const { data, error } = await q;
-      if (error) throw error;
+      if (error) {
+        console.warn("Failed to load signals:", error);
+        return [];
+      }
       return (data || []) as unknown as Signal[];
     },
   };
@@ -99,7 +110,10 @@ export function signalBySlugQuery(slug: string) {
         .eq("slug", slug)
         .maybeSingle();
 
-      if (error) throw error;
+      if (error) {
+        console.warn("Failed to load signal:", error);
+        return null;
+      }
       return (data as unknown as Signal) || null;
     },
   };
@@ -118,7 +132,10 @@ export function signalPostsQuery(signalId: string, currentUserId?: string) {
         .eq("signal_id", signalId)
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.warn("Failed to load signal posts:", error);
+        return [];
+      }
       if (!rawPosts || rawPosts.length === 0) return [];
 
       const posts = rawPosts as unknown as Array<{
@@ -231,6 +248,7 @@ export function useSignalFollow(signalId: string, userId?: string) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["signal-following", signalId, userId] });
+      qc.invalidateQueries({ queryKey: ["my-followed-signals", userId] });
       qc.invalidateQueries({ queryKey: ["signal"] });
       qc.invalidateQueries({ queryKey: ["signals"] });
     },
@@ -283,6 +301,7 @@ export function useCreateSignalPost(signalId: string) {
       title: string;
       content: string;
       category?: string;
+      is_urgent?: boolean;
       media_urls?: string[];
     }) => {
       const { data: user } = await supabase.auth.getUser();
@@ -296,6 +315,7 @@ export function useCreateSignalPost(signalId: string) {
           title: payload.title,
           content: payload.content,
           ...(payload.category ? { category: payload.category } : {}),
+          ...(payload.is_urgent !== undefined ? { is_urgent: payload.is_urgent } : {}),
           ...(payload.media_urls ? { media_urls: payload.media_urls } : {}),
         })
         .select("id")
@@ -306,7 +326,24 @@ export function useCreateSignalPost(signalId: string) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["signal-posts", signalId] });
-      qc.invalidateQueries({ queryKey: ["signal", signalId] });
+      qc.invalidateQueries({ queryKey: ["signal"] });
+      qc.invalidateQueries({ queryKey: ["signals"] });
+    },
+  });
+}
+
+export function useDeleteSignalPost(signalId: string) {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (postId: string) => {
+      const { error } = await supabase.from("signal_posts").delete().eq("id", postId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["signal-posts", signalId] });
+      qc.invalidateQueries({ queryKey: ["signal"] });
+      qc.invalidateQueries({ queryKey: ["signals"] });
     },
   });
 }

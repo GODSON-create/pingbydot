@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { pageHead } from "@/lib/site";
+import { pageHead, siteUrl } from "@/lib/site";
 import type { SignalInstitutionType } from "@/lib/signals";
 
 export const Route = createFileRoute("/signals/create")({
@@ -215,7 +215,7 @@ function CreateSignalPage() {
           </Label>
           <div className="mt-1.5 flex items-center rounded-2xl border border-input bg-background/50 px-3 h-11 focus-within:ring-2 focus-within:ring-ring">
             <span className="text-xs text-muted-foreground select-none shrink-0">
-              pingbydot.lovable.app/signals/
+              {siteUrl("/signals/").replace(/^https?:\/\//, "")}
             </span>
             <input
               id={slugId}

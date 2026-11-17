@@ -11,7 +11,9 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "db:migrate": "node scripts/migrate-remote.mjs",
+    "db:verify": "node scripts/migrate-remote.mjs --verify-only"
   },
   "overrides": {
     "rolldown": "1.2.1"

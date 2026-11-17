@@ -42,7 +42,7 @@ import {
   useSignalFollow,
   type Signal,
 } from "@/lib/signals";
-import { CATEGORIES, type Category } from "@/lib/validation";
+import { INTENT_FORMATS, parseStructuredPing, type Category } from "@/lib/validation";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -50,7 +50,20 @@ export const Route = createFileRoute("/")({
   staticData: { sitemap: true },
   validateSearch: z.object({
     tab: z.enum(["foryou", "following"]).optional().default("foryou"),
-    c: z.enum(["progress", "idea", "launch", "milestone", "question", "opportunity"]).optional(),
+    c: z
+      .enum([
+        "progress",
+        "need",
+        "offer",
+        "opportunity",
+        "idea",
+        "question",
+        "collaboration",
+        "update",
+        "launch",
+        "milestone",
+      ])
+      .optional(),
     page: z.coerce.number().int().min(0).max(10000).catch(0).default(0),
   }),
   head: () =>
@@ -178,7 +191,7 @@ function HomeHubCard({
         </Button>
 
         {isOwner ? (
-          <span className="w-1/2 text-center text-xs font-bold text-lime-foreground bg-lime/20 py-1.5 rounded-xl border border-lime/30">
+          <span className="w-1/2 text-center text-xs font-bold text-lime-foreground dark:text-lime bg-lime/20 dark:bg-lime/15 py-1.5 rounded-xl border border-lime/30">
             Owner
           </span>
         ) : isMember ? (
@@ -186,7 +199,7 @@ function HomeHubCard({
             <Check className="size-3" /> Joined
           </span>
         ) : isPending ? (
-          <span className="w-1/2 inline-flex items-center justify-center gap-1 text-xs font-semibold text-amber-500 bg-amber-500/10 py-1.5 rounded-xl border border-amber-500/20">
+          <span className="w-1/2 inline-flex items-center justify-center gap-1 text-xs font-semibold text-amber-700 dark:text-amber-400 bg-amber-500/10 py-1.5 rounded-xl border border-amber-500/20">
             <Clock className="size-3" /> Pending
           </span>
         ) : (
@@ -352,26 +365,31 @@ function HomePage() {
   const { data: followedSignals = new Set<string>() } = useQuery(myFollowedSignalsQuery(user?.id));
   const { data: recentBroadcasts = {} } = useQuery(recentSignalBroadcastsQuery());
 
-  const displayedPings = activeTab === "following" ? followingPings : forYouPings;
+  const rawPings = activeTab === "following" ? followingPings : forYouPings;
+  const displayedPings = categoryFilter
+    ? rawPings.filter((p) => {
+        const meta = parseStructuredPing(p);
+        return meta.intentFormat === categoryFilter || p.category === categoryFilter;
+      })
+    : rawPings;
   const isPingsLoading = activeTab === "following" ? followingLoading : pingsLoading;
 
   // Set of joined hub IDs
   const myHubIds = new Set(myHubs.map((h) => h.hub.id));
 
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 py-6 pb-24">
-      {/* 1. TOP GREETING & MOMENTS TRAY */}
-      <section className="mb-8">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+    <div className="mx-auto max-w-7xl w-full min-w-0 px-4 sm:px-6 py-5 pb-24 overflow-x-clip">
+      {/* 1. MOMENTS RAIL */}
+      <section className="mb-6">
+        <div className="hidden md:flex items-center justify-between gap-4 mb-4">
           <div>
-            <span className="sticker rotate-[-1deg] bg-lime text-lime-foreground">
-              build in public
-            </span>
-            <h1 className="mt-2 font-display text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">
+            <h1 className="font-display text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">
               {user ? (
-                <>Hey {profile?.display_name || profile?.username || "Builder"}, what's shipping?</>
+                <>
+                  Hey {profile?.display_name || profile?.username || "Builder"}, share your intent.
+                </>
               ) : (
-                <>Where founders share daily progress.</>
+                <>Coordinate intentions, people, and opportunities.</>
               )}
             </h1>
           </div>
@@ -385,7 +403,7 @@ function HomePage() {
                 className="rounded-full shadow-lift h-9 px-4"
               >
                 <Link to="/create">
-                  <Plus className="size-4" /> Post a Ping
+                  <Plus className="size-4" /> Create a Ping
                 </Link>
               </Button>
             ) : (
@@ -395,30 +413,24 @@ function HomePage() {
                 size="sm"
                 className="rounded-full shadow-lift h-9 px-5"
               >
-                <Link to="/signup">Join Ping</Link>
+                <Link to="/signup">Join PING</Link>
               </Button>
             )}
           </div>
         </div>
 
-        {/* Moments Tray */}
+        {/* Horizontal Moments Rail */}
         <div className="surface-card rounded-3xl p-4 sm:p-5 border border-border/80 shadow-soft">
-          <div className="flex items-center justify-between mb-2 px-1">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-              <Sparkles className="size-3.5 text-primary" /> Active Moments
-            </span>
-            <span className="text-[11px] text-muted-foreground">Stories expire in 24 hours</span>
-          </div>
           <MomentsTray />
         </div>
       </section>
 
       {/* 2. MAIN 2-COLUMN DISCOVERY GRID */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] xl:grid-cols-[1fr_360px] gap-6 xl:gap-8 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] xl:grid-cols-[1fr_360px] gap-6 xl:gap-8 items-start min-w-0">
         {/* =================================================================== */}
         {/* LEFT COLUMN: PINGS FEED                                             */}
         {/* =================================================================== */}
-        <main className="space-y-6">
+        <div className="min-w-0 space-y-6">
           {/* Feed Header Tabs: For You vs Following */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-border/60 pb-3">
             <div className="flex items-center gap-2">
@@ -454,44 +466,43 @@ function HomePage() {
             </span>
           </div>
 
-          {/* Category Filter Bar */}
+          {/* Intent Category Filter Bar */}
           <nav
-            className="-mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-2 scrollbar-none sm:-mx-0 sm:px-0"
-            aria-label="Filter by type"
+            className="flex max-w-full min-w-0 items-center gap-2 overflow-x-auto pb-2 scrollbar-none"
+            aria-label="Filter by intent"
           >
             <Link
               to="/"
               search={{ tab: activeTab, c: undefined, page: 0 }}
               className={cn(
-                "shrink-0 rounded-full border px-3.5 py-1 text-xs font-semibold transition-colors",
+                "shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors",
                 !categoryFilter
                   ? "border-foreground bg-foreground text-background"
                   : "border-border bg-card hover:bg-secondary",
               )}
             >
-              All Types
+              All Intents
             </Link>
-            {CATEGORIES.map((cat) => (
+            {INTENT_FORMATS.map((cat) => (
               <Link
                 key={cat.value}
                 to="/"
                 search={{ tab: activeTab, c: cat.value as any, page: 0 }}
                 className={cn(
-                  "shrink-0 rounded-full border px-3.5 py-1 text-xs font-semibold transition-colors flex items-center gap-1",
+                  "shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors",
                   categoryFilter === cat.value
                     ? "border-foreground bg-foreground text-background"
                     : "border-border bg-card hover:bg-secondary",
                 )}
               >
-                <span>{cat.emoji}</span>
-                <span>{cat.label}</span>
+                {cat.label}
               </Link>
             ))}
           </nav>
 
-          {/* Quick Post Banner for Logged-In Users */}
+          {/* Quick Post Banner for Desktop Logged-In Users */}
           {user && (
-            <div className="surface-card flex items-center justify-between gap-3 rounded-2xl p-3 sm:p-4 border border-border/80">
+            <div className="surface-card hidden md:flex items-center justify-between gap-3 rounded-2xl p-3 sm:p-4 border border-border/80">
               <Link
                 to="/@{$username}"
                 params={{ username: profile?.username || "" }}
@@ -503,11 +514,11 @@ function HomePage() {
                   size="sm"
                 />
                 <span className="text-xs text-muted-foreground truncate font-medium">
-                  What did you ship today?
+                  Share an intention, need, or opportunity…
                 </span>
               </Link>
               <Button asChild variant="hero" size="sm" className="rounded-xl h-8 px-3 text-xs">
-                <Link to="/create">Post Ping</Link>
+                <Link to="/create">Create Ping</Link>
               </Button>
             </div>
           )}
@@ -537,7 +548,7 @@ function HomePage() {
               </div>
             ) : displayedPings.length === 0 ? (
               <div className="surface-card rounded-3xl p-10 text-center border border-border/60">
-                <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-lime/20 text-lime-foreground font-bold">
+                <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-lime/20 dark:bg-lime/15 text-lime-foreground dark:text-lime font-bold">
                   <Sparkles className="size-6" />
                 </div>
                 <h3 className="mt-4 font-display font-bold text-lg">
@@ -583,7 +594,9 @@ function HomePage() {
                   </Link>
                 </Button>
               )}
-              {displayedPings.length >= 25 && (
+              {(activeTab === "following"
+                ? displayedPings.length >= 30
+                : displayedPings.length >= 60) && (
                 <Button asChild variant="outline" size="sm" className="rounded-xl">
                   <Link
                     to="/"
@@ -600,15 +613,15 @@ function HomePage() {
           <div className="pt-6">
             <AriseCallout />
           </div>
-        </main>
+        </div>
 
         {/* =================================================================== */}
         {/* RIGHT COLUMN: HUBS & SIGNALS DISCOVERY (STICKY ON DESKTOP)          */}
         {/* =================================================================== */}
-        <aside className="space-y-8 lg:sticky lg:top-20">
+        <aside className="min-w-0 space-y-8 lg:sticky lg:top-6">
           {/* 3. HUBS DISCOVERY SECTION */}
           <section aria-labelledby="hubs-discovery-heading">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <h2
                 id="hubs-discovery-heading"
                 className="font-display text-lg font-bold flex items-center gap-2 text-foreground"

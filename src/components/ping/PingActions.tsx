@@ -558,7 +558,7 @@ export function PingMenu({
         <DialogContent className="rounded-3xl">
           {reported ? (
             <div className="py-4 text-center">
-              <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-lime">
+              <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-lime text-lime-foreground">
                 <Check className="size-6" />
               </div>
               <DialogTitle className="mt-4 font-display text-xl">

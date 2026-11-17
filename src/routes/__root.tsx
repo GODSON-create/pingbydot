@@ -21,7 +21,9 @@ import { SiteHeader } from "@/components/layout/SiteHeader";
 import { DesktopSidebar } from "@/components/layout/DesktopSidebar";
 import { SiteFooter } from "@/components/layout/SiteFooter";
 import { BottomNav } from "@/components/layout/BottomNav";
+import { BootSplashScreen } from "@/components/layout/BootSplashScreen";
 import { GestureLayer } from "@/components/layout/GestureLayer";
+import { PingMark } from "@/components/BrandLogo";
 import { Toaster } from "@/components/ui/sonner";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -32,8 +34,8 @@ import { SITE_NAME, siteJsonLd, siteUrl } from "@/lib/site";
 function NotFoundComponent() {
   return (
     <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center px-5 text-center">
-      <span className="sticker -rotate-3 bg-blush text-blush-foreground">404 · lost signal</span>
-      <h1 className="mt-6 font-display text-5xl font-extrabold">This Ping went quiet.</h1>
+      <PingMark variant="silver" size="xl" alt="PING Silver Mark" />
+      <h1 className="mt-5 font-display text-4xl font-extrabold">This Ping went quiet.</h1>
       <p className="mt-3 text-muted-foreground">
         The page you're looking for doesn't exist, or the Ping was deleted.
       </p>
@@ -112,8 +114,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         href: "https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap",
       },
       { rel: "stylesheet", href: appCss },
+      { rel: "icon", href: "/brand/ping-mark-lime.png", type: "image/png" },
       { rel: "icon", href: "/brand/ping-icon.svg", type: "image/svg+xml" },
-      { rel: "apple-touch-icon", href: "/brand/ping-icon.svg" },
+      { rel: "apple-touch-icon", href: "/brand/ping-mark-lime.png" },
     ],
     scripts: [{ type: "application/ld+json", children: JSON.stringify(siteJsonLd()) }],
   }),
@@ -131,7 +134,7 @@ function RootShell({ children }: { children: ReactNode }) {
         <script
           dangerouslySetInnerHTML={{
             __html:
-              "(function(){try{var t=localStorage.getItem('ping-theme');var d=t==='dark'||(!t||t==='system')&&window.matchMedia('(prefers-color-scheme: dark)').matches;if(d)document.documentElement.classList.add('dark');}catch(e){}})();",
+              "(function(){try{var t=localStorage.getItem('ping-theme');var d=t==='dark'||(!t||t==='system')&&window.matchMedia('(prefers-color-scheme: dark)').matches;if(d){document.documentElement.classList.add('dark');document.documentElement.style.colorScheme='dark';var m=document.querySelector('meta[name=\"theme-color\"]');if(m)m.setAttribute('content','#090b0a');}}catch(e){}})();",
           }}
         />
       </head>
@@ -155,6 +158,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <AuthProvider>
+          <BootSplashScreen />
           <a
             href="#main"
             className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-full focus:bg-lime focus:px-4 focus:py-2"
@@ -165,12 +169,18 @@ function RootComponent() {
           <div className="mx-auto w-full max-w-7xl flex flex-col lg:flex-row items-start min-h-screen">
             <DesktopSidebar />
             <div className="flex-1 min-w-0 w-full flex flex-col min-h-screen">
-              <main id="main" key={pathname} className="animate-page-in">
+              <main
+                id="main"
+                key={pathname}
+                className="animate-page-in flex-1 w-full min-w-0 overflow-x-clip"
+              >
                 <Outlet />
               </main>
-              <div className="pb-24 lg:pb-0">
-                <SiteFooter />
-              </div>
+              {!pathname.startsWith("/messages") && (
+                <div className="pb-24 lg:pb-0">
+                  <SiteFooter />
+                </div>
+              )}
             </div>
           </div>
           <BottomNav />

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { toast } from "sonner";
 import { lovable } from "@/integrations/lovable";
 import { Button } from "@/components/ui/button";
+import { PingMark } from "@/components/BrandLogo";
 
 export function AuthShell({
   title,
@@ -22,6 +23,18 @@ export function AuthShell({
             {sticker}
           </span>
         )}
+        <div className="mb-5 flex items-center gap-3">
+          <PingMark variant="lime" size="lg" alt="PING Official Lime Mark" />
+          <div>
+            <span className="font-display text-lg font-extrabold tracking-tight text-foreground">
+              Ping
+            </span>
+            <span className="ml-1.5 text-[10px] font-bold uppercase tracking-widest text-primary">
+              BY DOT
+            </span>
+            <p className="text-xs text-muted-foreground">Human Coordination Network</p>
+          </div>
+        </div>
         <h1 className="font-display text-3xl font-extrabold">{title}</h1>
         <p className="mt-2 text-sm text-muted-foreground">{subtitle}</p>
         <div className="mt-7">{children}</div>

@@ -113,6 +113,34 @@
       "when": 1794800000000,
       "tag": "0015_product_completion_sprint",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1794900000000,
+      "tag": "0016_profile_economy_analytics_and_fixes",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1795000000000,
+      "tag": "0017_human_coordination_forums_broadcasts",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1795100000000,
+      "tag": "0018_fix_conversation_rls_and_close_circle",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1795200000000,
+      "tag": "0019_lockdown_economy_and_private_grants",
+      "breakpoints": true
     }
   ]
 }

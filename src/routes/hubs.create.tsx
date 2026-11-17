@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { pageHead } from "@/lib/site";
+import { pageHead, siteUrl } from "@/lib/site";
 import { hubError } from "@/lib/hub-queries";
 
 export const Route = createFileRoute("/hubs/create")({
@@ -236,7 +236,7 @@ function CreateHub() {
           </Label>
           <div className="mt-1.5 flex items-center rounded-2xl border border-input bg-muted/50 px-3 py-2 text-sm">
             <span className="text-muted-foreground shrink-0 select-none">
-              pingbydot.lovable.app/hubs/
+              {siteUrl("/hubs/").replace(/^https?:\/\//, "")}
             </span>
             <input
               id="slug"

@@ -3,10 +3,16 @@ import { siteUrl } from "@/lib/site";
 
 export const HUB_CATEGORIES = [
   { value: "organization", label: "Organization", emoji: "🏢" },
-  { value: "school", label: "School", emoji: "🎓" },
+  { value: "school", label: "Educational / School", emoji: "🎓" },
+  { value: "university", label: "University", emoji: "🏛️" },
+  { value: "company", label: "Company", emoji: "💼" },
+  { value: "government", label: "Government", emoji: "⚖️" },
+  { value: "ngo", label: "NGO / Nonprofit", emoji: "🌱" },
+  { value: "association", label: "Association", emoji: "🪪" },
   { value: "incubator", label: "Incubator", emoji: "🚀" },
   { value: "ecosystem", label: "Ecosystem", emoji: "🌍" },
   { value: "community", label: "Community", emoji: "🤝" },
+  { value: "other", label: "Other Network", emoji: "🔗" },
 ] as const;
 export type HubCategory = (typeof HUB_CATEGORIES)[number]["value"];
 
@@ -71,7 +77,19 @@ export const hubSchema = z.object({
   tagline: z.string().trim().max(120).default(""),
   description: z.string().trim().max(2000).default(""),
   rules: z.string().trim().max(2000).default(""),
-  category: z.enum(["organization", "school", "incubator", "ecosystem", "community"]),
+  category: z.enum([
+    "organization",
+    "school",
+    "university",
+    "company",
+    "government",
+    "ngo",
+    "association",
+    "incubator",
+    "ecosystem",
+    "community",
+    "other",
+  ]),
   access: z.enum(["public", "private"]),
   resources: z
     .array(z.object({ label: z.string().trim().min(1).max(40), url: safeUrl }))

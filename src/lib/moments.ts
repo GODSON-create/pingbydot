@@ -701,3 +701,130 @@ export function useRemoveMomentFromHighlight() {
     },
   });
 }
+
+export interface MomentActivityView {
+  id: string;
+  viewer_id: string;
+  viewed_at: string;
+  viewer?: Profile;
+}
+
+export interface MomentActivityReply {
+  id: string;
+  sender_id: string;
+  message: string;
+  created_at: string;
+  sender?: Profile;
+}
+
+/**
+ * Fetch Moment viewers & private replies for the Moment creator.
+ */
+export function momentActivityQuery(momentId: string | undefined, enabled: boolean) {
+  return {
+    queryKey: ["moment-activity", momentId],
+    enabled: Boolean(momentId && enabled),
+    queryFn: async (): Promise<{
+      views: MomentActivityView[];
+      replies: MomentActivityReply[];
+    }> => {
+      if (!momentId) return { views: [], replies: [] };
+      const [viewsRes, repliesRes] = await Promise.all([
+        supabase
+          .from("moment_views")
+          .select(
+            "id, viewer_id, viewed_at, viewer:profiles!moment_views_viewer_id_fkey(id, username, display_name, avatar_url, bio, created_at)",
+          )
+          .eq("moment_id", momentId)
+          .order("viewed_at", { ascending: false })
+          .limit(50),
+        supabase
+          .from("moment_replies")
+          .select(
+            "id, sender_id, message, created_at, sender:profiles!moment_replies_sender_id_fkey(id, username, display_name, avatar_url, bio, created_at)",
+          )
+          .eq("moment_id", momentId)
+          .order("created_at", { ascending: false })
+          .limit(50),
+      ]);
+
+      return {
+        views: (viewsRes.data ?? []) as unknown as MomentActivityView[],
+        replies: (repliesRes.data ?? []) as unknown as MomentActivityReply[],
+      };
+    },
+  };
+}
+
+export interface CloseCircleEntry {
+  id: string;
+  member_id: string;
+  created_at: string;
+  member?: Profile | undefined;
+}
+
+export function closeCircleQuery(userId?: string) {
+  return {
+    queryKey: ["close-circle", userId],
+    enabled: Boolean(userId),
+    queryFn: async (): Promise<CloseCircleEntry[]> => {
+      if (!userId) return [];
+      const { data, error } = await supabase
+        .from("user_close_circle")
+        .select("id, member_id, created_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+
+      if (error || !data || data.length === 0) return [];
+      const memberIds = data.map((d) => d.member_id);
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, username, display_name, avatar_url, bio, created_at")
+        .in("id", memberIds);
+
+      const profileMap = new Map((profiles ?? []).map((p) => [p.id, p as Profile]));
+      return data.map((row) => ({
+        ...row,
+        member: profileMap.get(row.member_id),
+      }));
+    },
+  };
+}
+
+export function useAddCloseCircleMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (memberId: string) => {
+      const { data: u } = await supabase.auth.getUser();
+      if (!u.user) throw new Error("Sign in first.");
+      if (u.user.id === memberId) throw new Error("You cannot add yourself.");
+      const { error } = await supabase.from("user_close_circle").insert({
+        user_id: u.user.id,
+        member_id: memberId,
+      });
+      if (error && error.code !== "23505") throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["close-circle"] });
+    },
+  });
+}
+
+export function useRemoveCloseCircleMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (memberId: string) => {
+      const { data: u } = await supabase.auth.getUser();
+      if (!u.user) throw new Error("Sign in first.");
+      const { error } = await supabase
+        .from("user_close_circle")
+        .delete()
+        .eq("user_id", u.user.id)
+        .eq("member_id", memberId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["close-circle"] });
+    },
+  });
+}

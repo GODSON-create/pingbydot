@@ -3,6 +3,22 @@
 -- Hub Deletion, Signal Editing, Message Reactions, Highlight Management & Re-Ping Hardening
 -- ==============================================================================
 
+-- 0. Admin role helper overload accepting user_id (compatible with is_ping_admin)
+CREATE OR REPLACE FUNCTION public.is_admin(_user uuid DEFAULT auth.uid())
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.user_roles
+    WHERE user_id = coalesce(_user, auth.uid()) AND role = 'admin'
+  );
+$$;
+REVOKE ALL ON FUNCTION public.is_admin(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.is_admin(uuid) TO authenticated, service_role;
+
 -- 1. DELETE HUB RPC
 -- Allows the owner of a Hub to permanently delete the Hub and its cascading associations
 CREATE OR REPLACE FUNCTION public.delete_hub(_hub uuid)
@@ -82,7 +98,7 @@ BEGIN
   END IF;
 
   v_clean_type := coalesce(_institution_type, 'community');
-  IF v_clean_type NOT IN ('university','company','government','association','organization','community','public_institution') THEN
+  IF v_clean_type NOT IN ('university','company','incubator','government','association','organization','community','public_institution','other') THEN
     RAISE EXCEPTION 'Invalid institution type';
   END IF;
 
@@ -282,10 +298,10 @@ BEGIN
   END IF;
 
   -- AUTHORIZATION & PRIVACY: If moment is followers-only, caller must be follower or creator
-  IF v_moment.audience = 'followers' AND v_moment.user_id <> v_user THEN
+  IF v_moment.audience = 'followers' AND v_moment.author_id <> v_user THEN
     IF NOT EXISTS (
       SELECT 1 FROM public.follows
-      WHERE follower_id = v_user AND following_id = v_moment.user_id
+      WHERE follower_id = v_user AND following_id = v_moment.author_id
     ) THEN
       RAISE EXCEPTION 'You must follow the creator to re-ping this moment';
     END IF;

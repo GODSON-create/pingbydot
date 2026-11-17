@@ -1,216 +1,200 @@
-import { Link, useLocation } from "@tanstack/react-router";
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import {
+  ArrowLeft,
+  Building2,
   Compass,
   Home,
-  LayoutGrid,
-  LogIn,
-  LogOut,
   Plus,
-  Settings,
-  ShieldCheck,
+  Radio,
   Sparkles,
   User,
-  UserPlus,
-  Building2,
-  Radio,
-  MessageSquare,
-  Sun,
-  Moon,
-  Laptop,
+  Users,
 } from "lucide-react";
-import { useTheme } from "@/lib/theme";
-import { toast } from "sonner";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import { useAuth } from "@/lib/auth";
-import { checkAdminAccess } from "@/lib/admin.functions";
-import { useSignOut } from "./SiteHeader";
+import { FounderAvatar } from "@/components/ping/Avatar";
+import { CreateStackModal } from "./CreateStackModal";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 
 const item =
   "flex min-h-14 min-w-12 flex-1 flex-col items-center justify-center gap-0.5 rounded-2xl text-[10px] font-semibold text-muted-foreground transition-colors active:scale-95 motion-reduce:active:scale-100";
-const active = { className: "text-primary bg-primary/15 font-bold" };
-const row =
-  "flex min-h-12 items-center gap-3 rounded-2xl px-4 py-3 font-medium hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+const activeClass = "text-primary bg-primary/15 font-bold";
 
-/** Mobile-only persistent navigation; desktop keeps the header nav. */
+const PREV_MAIN_ROUTE_KEY = "ping_prev_main_route";
+
+export function isCommunityPath(pathname: string): boolean {
+  return (
+    pathname === "/hubs" ||
+    pathname.startsWith("/hubs/") ||
+    pathname === "/signals" ||
+    pathname.startsWith("/signals/")
+  );
+}
+
+/**
+ * Mobile persistent bottom navigation:
+ * - Primary 5-item bar: Home, Explore, Create (elevated central +), Community, Profile
+ * - Contextual 4-item bar when inside Community: Back, Hub, Signal, Moment
+ * Only one bottom navigation bar is ever rendered at a time.
+ */
 export function BottomNav() {
-  const { user, profile, ready } = useAuth();
-  const { pathname } = useLocation();
-  const { theme, resolvedTheme, setTheme } = useTheme();
-  const [open, setOpen] = useState(false);
-  const signOut = useSignOut();
-  const verifyAdmin = useServerFn(checkAdminAccess);
-  const admin = useQuery({
-    queryKey: ["admin-access", user?.id],
-    queryFn: () => verifyAdmin(),
-    enabled: ready && !!user,
-    retry: false,
-    staleTime: 0,
-  });
-  const close = () => setOpen(false);
+  const { user, profile } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [prevMainRoute, setPrevMainRoute] = useState<string>("/");
+
+  const { pathname, searchStr } = location;
+  const inCommunity = isCommunityPath(pathname);
+  const isCommunityMomentsView = pathname === "/hubs" && searchStr.includes("view=moments");
+
+  useEffect(() => {
+    if (!inCommunity) {
+      const fullPath = `${pathname}${searchStr || ""}`;
+      setPrevMainRoute(fullPath);
+      try {
+        sessionStorage.setItem(PREV_MAIN_ROUTE_KEY, fullPath);
+      } catch {
+        // Ignore storage errors
+      }
+    } else {
+      try {
+        const stored = sessionStorage.getItem(PREV_MAIN_ROUTE_KEY);
+        if (stored && !isCommunityPath(stored.split("?")[0] || "/")) {
+          setPrevMainRoute(stored);
+        }
+      } catch {
+        // Ignore storage errors
+      }
+    }
+  }, [inCommunity, pathname, searchStr]);
+
+  const handleExitCommunity = () => {
+    const target =
+      prevMainRoute && !isCommunityPath(prevMainRoute.split("?")[0] || "/") ? prevMainRoute : "/";
+    navigate({ to: target as any });
+  };
+
+  const isProfileActive =
+    (user && profile && pathname === `/@${profile.username}`) || (!user && pathname === "/login");
 
   return (
     <>
-      <nav
-        aria-label="Primary"
-        className="fixed inset-x-0 bottom-0 z-50 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:hidden"
-      >
-        <div className="glass mx-auto flex max-w-md items-center gap-1 rounded-3xl p-1.5">
-          <Link
-            to="/"
-            className={item}
-            activeProps={active}
-            activeOptions={{ exact: true, includeHash: false }}
-          >
-            <Home className="size-5" />
-            Home
-          </Link>
-          <Link to="/explore" className={item} activeProps={active}>
-            <Compass className="size-5" />
-            Explore
-          </Link>
-          <Link to="/hubs" className={item} activeProps={active}>
-            <Building2 className="size-5" />
-            Hubs
-          </Link>
-          <Link
-            to={user ? "/create" : "/signup"}
-            aria-label={user ? "New Ping" : "Create your first Ping"}
-            className="flex min-h-14 min-w-12 flex-1 items-center justify-center"
-          >
-            <span className="flex size-11 items-center justify-center rounded-full bg-lime text-lime-foreground shadow-lift transition-transform active:scale-95 motion-reduce:active:scale-100">
-              <Plus className="size-5" />
-            </span>
-          </Link>
-          {user && profile ? (
-            <Link
-              to="/@{$username}"
-              params={{ username: profile.username }}
-              className={item}
-              activeProps={active}
-            >
-              <User className="size-5" />
-              Profile
-            </Link>
-          ) : (
-            <Link to="/login" className={item} activeProps={active}>
-              <LogIn className="size-5" />
-              Log in
-            </Link>
-          )}
-          <Button
-            variant="ghost"
-            type="button"
-            onClick={() => setOpen(true)}
-            aria-haspopup="dialog"
-            aria-expanded={open}
-            className={cn(
-              item,
-              "h-auto whitespace-normal px-0",
-              open && "bg-secondary text-foreground",
-            )}
-          >
-            <LayoutGrid className="size-5" />
-            More
-          </Button>
-        </div>
-      </nav>
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent
-          side="bottom"
-          className="rounded-t-3xl pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+      {inCommunity ? (
+        /* CONTEXTUAL 4-ITEM COMMUNITY NAVIGATION BAR: Back, Hub, Signal, Moment */
+        <nav
+          aria-label="Community navigation"
+          data-nav-mode="community"
+          className="fixed inset-x-0 bottom-0 z-50 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:hidden"
         >
-          <SheetHeader className="text-left">
-            <SheetTitle className="font-display">Quick actions</SheetTitle>
-            <SheetDescription>
-              {pathname.startsWith("/p/")
-                ? "Share or report this Ping with the buttons on the page."
-                : "Everything else on Ping, one tap away."}
-            </SheetDescription>
-          </SheetHeader>
-          <div className="mt-2 grid gap-1" onClick={close}>
-            <Link to="/hubs" className={row}>
-              <Building2 className="size-5" /> Discover Hubs
-            </Link>
-            <Link to="/signals" className={row}>
-              <Radio className="size-5" /> Official Signals
-            </Link>
-            {user && (
-              <Link to="/messages" className={row}>
-                <MessageSquare className="size-5" /> Direct Messages
-              </Link>
-            )}
-            {user && (
-              <Link to="/hubs/create" className={row}>
-                <Plus className="size-5" /> Create a Hub
-              </Link>
-            )}
+          <div className="glass mx-auto flex max-w-md items-center gap-1 rounded-3xl p-1.5 shadow-lift">
             <button
               type="button"
-              onClick={() => {
-                const nextTheme =
-                  theme === "system" ? "light" : theme === "light" ? "dark" : "system";
-                setTheme(nextTheme);
-                toast.success(
-                  nextTheme === "system"
-                    ? "Theme: System Default"
-                    : `Theme: ${nextTheme.charAt(0).toUpperCase() + nextTheme.slice(1)} Mode`,
-                );
-              }}
-              className={cn(row, "w-full justify-start text-left")}
+              onClick={handleExitCommunity}
+              aria-label="Back to main navigation"
+              className={cn(item, "hover:bg-secondary hover:text-foreground")}
             >
-              {theme === "system" ? (
-                <Laptop className="size-5" />
-              ) : resolvedTheme === "dark" ? (
-                <Moon className="size-5" />
-              ) : (
-                <Sun className="size-5" />
-              )}
-              Appearance:{" "}
-              {theme === "system"
-                ? "System Default"
-                : `${theme.charAt(0).toUpperCase() + theme.slice(1)} Mode`}
+              <ArrowLeft className="size-5" />
+              <span>Back</span>
             </button>
-            <Link to="/" hash="how" className={row}>
-              <Sparkles className="size-5" /> How it works
+
+            <Link
+              to="/hubs"
+              search={{}}
+              className={cn(
+                item,
+                pathname.startsWith("/hubs") && !isCommunityMomentsView && activeClass,
+              )}
+            >
+              <Building2 className="size-5" />
+              <span>Hub</span>
             </Link>
-            {user ? (
-              <>
-                <Link to="/settings" className={row}>
-                  <Settings className="size-5" /> Settings & connections
-                </Link>
-                {admin.data?.isAdmin && (
-                  <Link to="/admin" className={row}>
-                    <ShieldCheck className="size-5" /> Administration
-                  </Link>
-                )}
-                <Button
-                  variant="ghost"
-                  type="button"
-                  onClick={signOut}
-                  className={cn(row, "h-auto justify-start text-left")}
-                >
-                  <LogOut className="size-5" /> Log out
-                </Button>
-              </>
+
+            <Link
+              to="/signals"
+              className={cn(item, pathname.startsWith("/signals") && activeClass)}
+            >
+              <Radio className="size-5" />
+              <span>Signal</span>
+            </Link>
+
+            <Link
+              to="/hubs"
+              search={{ view: "moments" }}
+              className={cn(item, isCommunityMomentsView && activeClass)}
+            >
+              <Sparkles className="size-5" />
+              <span>Moment</span>
+            </Link>
+          </div>
+        </nav>
+      ) : (
+        /* PRIMARY 5-DESTINATION NAVIGATION BAR: Home, Explore, Create (+), Community, Profile */
+        <nav
+          aria-label="Primary"
+          data-nav-mode="primary"
+          className="fixed inset-x-0 bottom-0 z-50 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:hidden"
+        >
+          <div className="glass mx-auto flex max-w-md items-center gap-1 rounded-3xl p-1.5 shadow-lift">
+            <Link
+              to="/"
+              className={cn(item, pathname === "/" && activeClass)}
+              activeOptions={{ exact: true, includeHash: false }}
+            >
+              <Home className="size-5" />
+              <span>Home</span>
+            </Link>
+
+            <Link
+              to="/explore"
+              className={cn(item, pathname.startsWith("/explore") && activeClass)}
+            >
+              <Compass className="size-5" />
+              <span>Explore</span>
+            </Link>
+
+            <button
+              type="button"
+              onClick={() => setCreateOpen(true)}
+              aria-label="Create a Ping, Moment, or Live session"
+              className="flex min-h-14 min-w-12 flex-1 flex-col items-center justify-center gap-0.5"
+            >
+              <span className="-mt-3 flex size-12 items-center justify-center rounded-full bg-lime text-lime-foreground shadow-lift ring-4 ring-background transition-transform active:scale-95 motion-reduce:active:scale-100">
+                <Plus className="size-6 stroke-[2.5]" />
+              </span>
+              <span className="text-[10px] font-semibold text-muted-foreground">Create</span>
+            </button>
+
+            <Link to="/hubs" search={{}} className={cn(item, inCommunity && activeClass)}>
+              <Users className="size-5" />
+              <span>Community</span>
+            </Link>
+
+            {user && profile ? (
+              <Link
+                to="/@{$username}"
+                params={{ username: profile.username }}
+                className={cn(item, isProfileActive && activeClass)}
+              >
+                <FounderAvatar
+                  name={profile.display_name || profile.username}
+                  src={profile.avatar_url}
+                  size="sm"
+                  className="size-5 text-[9px]"
+                />
+                <span>Profile</span>
+              </Link>
             ) : (
-              <Link to="/signup" className={row}>
-                <UserPlus className="size-5" /> Sign up
+              <Link to="/login" className={cn(item, isProfileActive && activeClass)}>
+                <User className="size-5" />
+                <span>Profile</span>
               </Link>
             )}
           </div>
-        </SheetContent>
-      </Sheet>
+        </nav>
+      )}
+
+      <CreateStackModal open={createOpen} onOpenChange={setCreateOpen} />
     </>
   );
 }

@@ -3,7 +3,7 @@ import { ArrowUpRight } from "lucide-react";
 export function AriseCallout({ compact = false }: { compact?: boolean }) {
   return (
     <aside
-      className={`bg-forest grain relative overflow-hidden rounded-3xl text-primary-foreground ${compact ? "p-5" : "p-8 sm:p-10"}`}
+      className={`bg-forest grain relative overflow-hidden rounded-3xl border border-border/60 text-[#f4f2e9] ${compact ? "p-5" : "p-8 sm:p-10"}`}
       aria-label="ARISE opportunity"
     >
       <div
@@ -14,11 +14,11 @@ export function AriseCallout({ compact = false }: { compact?: boolean }) {
         <div className="max-w-xl">
           <span className="sticker bg-lime text-lime-foreground">Opportunity</span>
           <h3
-            className={`mt-3 font-display font-bold ${compact ? "text-lg" : "text-2xl sm:text-3xl"}`}
+            className={`mt-3 font-display font-bold text-[#f4f2e9] ${compact ? "text-lg" : "text-2xl sm:text-3xl"}`}
           >
             Looking for founder programmes? Have a look at ARISE.
           </h3>
-          <p className="mt-2 text-sm text-primary-foreground/80">
+          <p className="mt-2 text-sm text-[#f4f2e9]/80">
             ARISE is a separate opportunity with its own application and criteria. Activity on Ping,
             including likes or Pings, doesn't qualify you for or guarantee any funding.
           </p>

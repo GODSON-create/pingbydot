@@ -1,6 +1,6 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import {
   Radio,
@@ -34,6 +34,7 @@ import {
   signalPublishersListQuery,
   useSignalFollow,
   useCreateSignalPost,
+  useDeleteSignalPost,
   useMarkSignalRead,
   useManageSignalPublisher,
   useRequestSignalVerification,
@@ -46,6 +47,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -91,16 +93,24 @@ function SignalPostCard({
   post,
   isPublisher,
   currentUserId,
+  canDelete = false,
+  onDelete,
+  deleting = false,
 }: {
   post: SignalPost;
   isPublisher: boolean;
   currentUserId?: string | undefined;
+  canDelete?: boolean;
+  onDelete?: () => void;
+  deleting?: boolean;
 }) {
-  const markRead = useMarkSignalRead();
+  const { mutate: markRead } = useMarkSignalRead();
+  const markedRef = useRef(false);
 
   useEffect(() => {
-    if (currentUserId && !post.has_read) {
-      markRead.mutate(post.id);
+    if (currentUserId && !post.has_read && !markedRef.current) {
+      markedRef.current = true;
+      markRead(post.id);
     }
   }, [post.id, post.has_read, currentUserId, markRead]);
 
@@ -128,9 +138,25 @@ function SignalPostCard({
           </span>
         </div>
 
-        <div className="flex items-center gap-1.5 text-muted-foreground font-medium">
-          <Calendar className="size-3.5" />
-          <span>{dateFormatted}</span>
+        <div className="flex items-center gap-2 text-muted-foreground font-medium">
+          <span className="flex items-center gap-1.5">
+            <Calendar className="size-3.5" />
+            <span>{dateFormatted}</span>
+          </span>
+          {canDelete && onDelete && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              disabled={deleting}
+              onClick={onDelete}
+              className="size-7 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              aria-label="Delete broadcast"
+              title="Delete broadcast"
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          )}
         </div>
       </div>
 
@@ -175,7 +201,6 @@ function NewBroadcastDialog({
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [category, setCategory] = useState("announcement");
-  const [tags, setTags] = useState("");
   const [mediaUrl, setMediaUrl] = useState("");
   const [isUrgent, setIsUrgent] = useState(false);
 
@@ -194,6 +219,7 @@ function NewBroadcastDialog({
         title: title.trim(),
         content: content.trim(),
         category,
+        is_urgent: isUrgent,
         ...(mediaUrl.trim() ? { media_urls: [mediaUrl.trim()] } : {}),
       },
       {
@@ -202,7 +228,6 @@ function NewBroadcastDialog({
           onOpenChange(false);
           setTitle("");
           setContent("");
-          setTags("");
           setMediaUrl("");
           setIsUrgent(false);
         },
@@ -270,6 +295,20 @@ function NewBroadcastDialog({
               onChange={(e) => setMediaUrl(e.target.value)}
               placeholder="https://…/image.png"
               className="mt-1 rounded-xl"
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-secondary/40 px-4 py-3">
+            <div>
+              <p className="text-xs font-bold text-foreground">Mark as Urgent Alert</p>
+              <p className="text-[11px] text-muted-foreground">
+                Highlights this broadcast with an urgent status badge.
+              </p>
+            </div>
+            <Switch
+              checked={isUrgent}
+              onCheckedChange={setIsUrgent}
+              aria-label="Mark broadcast as urgent"
             />
           </div>
 
@@ -729,6 +768,7 @@ function SignalDetailPage() {
   const [publishersDialogOpen, setPublishersDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [verifyDialogOpen, setVerifyDialogOpen] = useState(false);
+  const [selectedPostCategory, setSelectedPostCategory] = useState<string>("all");
 
   const { data: signal, isLoading: signalLoading } = useQuery(signalBySlugQuery(slug));
   const { data: isFollowing = false } = useQuery(signalFollowingQuery(signal?.id ?? "", user?.id));
@@ -741,6 +781,7 @@ function SignalDetailPage() {
   );
 
   const followMutation = useSignalFollow(signal?.id ?? "", user?.id);
+  const deletePostMutation = useDeleteSignalPost(signal?.id ?? "");
 
   // Real-time subscription for broadcasts
   useEffect(() => {
@@ -751,7 +792,7 @@ function SignalDetailPage() {
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "signal_posts",
           filter: `signal_id=eq.${signal.id}`,
@@ -759,12 +800,14 @@ function SignalDetailPage() {
         (payload) => {
           qc.invalidateQueries({ queryKey: ["signal-posts", signal.id] });
           qc.invalidateQueries({ queryKey: ["signal", slug] });
-          const newPost = payload.new as { title?: string };
-          toast.info(
-            newPost?.title
-              ? `New official broadcast: ${newPost.title}`
-              : "New official broadcast received!",
-          );
+          if (payload.eventType === "INSERT") {
+            const newPost = payload.new as { title?: string };
+            toast.info(
+              newPost?.title
+                ? `New official broadcast: ${newPost.title}`
+                : "New official broadcast received!",
+            );
+          }
         },
       )
       .subscribe();
@@ -849,7 +892,7 @@ function SignalDetailPage() {
                     Verified Institution
                   </span>
                 ) : signal.verification_status === "pending" ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-bold text-amber-500">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-bold text-amber-700 dark:text-amber-400">
                     <Clock className="size-3.5" />
                     Verification Pending Review
                   </span>
@@ -860,6 +903,10 @@ function SignalDetailPage() {
                   </span>
                 )}
               </div>
+
+              {signal.tagline && (
+                <p className="mt-1.5 text-sm font-semibold text-foreground/90">{signal.tagline}</p>
+              )}
 
               {signal.description && (
                 <p className="mt-2 text-sm text-muted-foreground max-w-2xl leading-relaxed">
@@ -983,54 +1030,105 @@ function SignalDetailPage() {
 
       {/* Broadcast Feed */}
       <section className="mt-8">
-        <div className="flex items-center justify-between">
-          <h2 className="font-display text-xl font-bold flex items-center gap-2">
-            <Radio className="size-5 text-primary" />
-            Official Broadcasts
-          </h2>
-          <span className="text-xs text-muted-foreground">
-            {posts.length} {posts.length === 1 ? "bulletin" : "bulletins"}
-          </span>
-        </div>
+        {(() => {
+          const postCategories = [
+            { value: "all", label: "All" },
+            { value: "announcement", label: "Announcement" },
+            { value: "alert", label: "Alert" },
+            { value: "update", label: "Update" },
+            { value: "opportunity", label: "Opportunity" },
+            { value: "event", label: "Event" },
+          ] as const;
+          const filteredPosts =
+            selectedPostCategory === "all"
+              ? posts
+              : posts.filter((p) => (p.category || "announcement") === selectedPostCategory);
 
-        <div className="mt-4 space-y-4">
-          {postsLoading ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="h-40 rounded-3xl bg-muted/40 animate-pulse" />
-              ))}
-            </div>
-          ) : posts.length === 0 ? (
-            <div className="surface-card rounded-3xl p-10 text-center border border-border/60">
-              <Radio className="mx-auto size-10 text-muted-foreground/40" />
-              <p className="mt-3 font-display font-semibold text-foreground">
-                No broadcasts published yet
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Stay tuned for official updates and announcements from {signal.name}.
-              </p>
-              {isPublisher && (
-                <Button
-                  onClick={() => setBroadcastDialogOpen(true)}
-                  variant="hero"
-                  size="sm"
-                  className="mt-4 rounded-xl"
-                >
-                  Publish first broadcast
-                </Button>
-              )}
-            </div>
-          ) : (
-            posts.map((post) => (
-              <SignalPostCard
-                key={post.id}
-                post={post}
-                isPublisher={isPublisher}
-                currentUserId={user?.id}
-              />
-            ))
-          )}
-        </div>
+          return (
+            <>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <h2 className="font-display text-xl font-bold flex items-center gap-2">
+                  <Radio className="size-5 text-primary" />
+                  Official Broadcasts
+                </h2>
+                <span className="text-xs text-muted-foreground">
+                  {filteredPosts.length} {filteredPosts.length === 1 ? "bulletin" : "bulletins"}
+                </span>
+              </div>
+
+              {/* Category Filter Pills */}
+              <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+                {postCategories.map((c) => (
+                  <button
+                    key={c.value}
+                    type="button"
+                    onClick={() => setSelectedPostCategory(c.value)}
+                    className={cn(
+                      "shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors",
+                      selectedPostCategory === c.value
+                        ? "bg-foreground text-background"
+                        : "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+                    )}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-4 space-y-4">
+                {postsLoading ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="h-40 rounded-3xl bg-muted/40 animate-pulse" />
+                    ))}
+                  </div>
+                ) : filteredPosts.length === 0 ? (
+                  <div className="surface-card rounded-3xl p-10 text-center border border-border/60">
+                    <Radio className="mx-auto size-10 text-muted-foreground/40" />
+                    <p className="mt-3 font-display font-semibold text-foreground">
+                      {selectedPostCategory === "all"
+                        ? "No broadcasts published yet"
+                        : `No ${selectedPostCategory} broadcasts yet`}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Stay tuned for official updates and announcements from {signal.name}.
+                    </p>
+                    {isPublisher && selectedPostCategory === "all" && (
+                      <Button
+                        onClick={() => setBroadcastDialogOpen(true)}
+                        variant="hero"
+                        size="sm"
+                        className="mt-4 rounded-xl"
+                      >
+                        Publish first broadcast
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  filteredPosts.map((post) => (
+                    <SignalPostCard
+                      key={post.id}
+                      post={post}
+                      isPublisher={isPublisher}
+                      currentUserId={user?.id}
+                      canDelete={
+                        isSignalAdmin || (Boolean(user?.id) && post.author_id === user?.id)
+                      }
+                      deleting={deletePostMutation.isPending}
+                      onDelete={() => {
+                        deletePostMutation.mutate(post.id, {
+                          onSuccess: () => toast.success("Broadcast deleted."),
+                          onError: (err: any) =>
+                            toast.error(err?.message || "Could not delete broadcast."),
+                        });
+                      }}
+                    />
+                  ))
+                )}
+              </div>
+            </>
+          );
+        })()}
       </section>
 
       {/* Composer Dialog */}
@@ -1050,6 +1148,11 @@ function SignalDetailPage() {
           open={publishersDialogOpen}
           onOpenChange={setPublishersDialogOpen}
         />
+      )}
+
+      {/* Edit Signal Dialog */}
+      {isSignalAdmin && (
+        <EditSignalDialog signal={signal} open={editDialogOpen} onOpenChange={setEditDialogOpen} />
       )}
 
       {/* Request Verification Dialog */}

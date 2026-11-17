@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useUserPrivacy } from "@/lib/privacy";
 import type { Profile } from "@/lib/pings";
 
 export type MessageMediaType = "image" | "video" | "audio" | "document";
@@ -206,6 +207,7 @@ export function useGetOrCreateDirectConversation() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["user-conversations"] });
+      qc.invalidateQueries({ queryKey: ["blocked-users"] });
     },
   });
 }
@@ -284,6 +286,7 @@ export function useHideConversation() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["user-conversations"] });
+      qc.invalidateQueries({ queryKey: ["blocked-users"] });
     },
   });
 }
@@ -303,8 +306,69 @@ export function useBlockUser() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["user-conversations"] });
+      qc.invalidateQueries({ queryKey: ["blocked-users"] });
     },
   });
+}
+
+/**
+ * Mutation: Soft delete (unsend) own private message.
+ */
+export function useDeletePrivateMessage() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      messageId,
+      conversationId,
+    }: {
+      messageId: string;
+      conversationId: string;
+    }) => {
+      const { error } = await supabase
+        .from("private_messages")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", messageId);
+      if (error) throw error;
+      return conversationId;
+    },
+    onSuccess: (conversationId) => {
+      qc.invalidateQueries({ queryKey: ["conversation-messages", conversationId] });
+      qc.invalidateQueries({ queryKey: ["user-conversations"] });
+    },
+  });
+}
+
+/**
+ * Fetch blocked users list for current user.
+ */
+export function blockedUsersQuery(currentUserId?: string) {
+  return {
+    queryKey: ["blocked-users", currentUserId],
+    enabled: Boolean(currentUserId),
+    queryFn: async (): Promise<
+      Array<{ blocked_id: string; created_at: string; profile?: Profile }>
+    > => {
+      if (!currentUserId) return [];
+      const { data, error } = await supabase
+        .from("user_blocks")
+        .select(
+          `
+          blocked_id, created_at,
+          profile:profiles!user_blocks_blocked_id_fkey(id, username, display_name, avatar_url, bio, created_at)
+        `,
+        )
+        .eq("blocker_id", currentUserId)
+        .order("created_at", { ascending: false });
+
+      if (error || !data) return [];
+      return data as unknown as Array<{
+        blocked_id: string;
+        created_at: string;
+        profile?: Profile;
+      }>;
+    },
+  };
 }
 
 /**
@@ -322,12 +386,13 @@ export function useUnblockUser() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["user-conversations"] });
+      qc.invalidateQueries({ queryKey: ["blocked-users"] });
     },
   });
 }
 
 /**
- * Real-time message listener for active conversation.
+ * Real-time message listener for active conversation (INSERT + UPDATE for read receipts & deletes).
  */
 export function useConversationRealtime(
   conversationId: string | undefined,
@@ -343,14 +408,16 @@ export function useConversationRealtime(
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "private_messages",
           filter: `conversation_id=eq.${conversationId}`,
         },
         (payload) => {
-          const newMsg = payload.new as unknown as PrivateMessage;
-          onNewMessage?.(newMsg);
+          if (payload.eventType === "INSERT") {
+            const newMsg = payload.new as unknown as PrivateMessage;
+            onNewMessage?.(newMsg);
+          }
           qc.invalidateQueries({
             queryKey: ["conversation-messages", conversationId],
           });
@@ -363,4 +430,80 @@ export function useConversationRealtime(
       supabase.removeChannel(channel);
     };
   }, [conversationId, qc, onNewMessage]);
+}
+
+/**
+ * Real-time presence & typing indicator for 1-to-1 conversation (privacy-aware).
+ */
+export function useConversationPresence(
+  conversationId: string | undefined,
+  currentUserId: string | undefined,
+  otherUserId: string | undefined,
+) {
+  const { preferences } = useUserPrivacy(currentUserId);
+  const [otherOnline, setOtherOnline] = useState(false);
+  const [otherTyping, setOtherTyping] = useState(false);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const canBroadcast = Boolean(currentUserId && preferences.active_presence_enabled);
+
+  useEffect(() => {
+    if (!conversationId || !currentUserId || !otherUserId) {
+      setOtherOnline(false);
+      setOtherTyping(false);
+      return;
+    }
+
+    const channel = supabase.channel(`dm-presence:${conversationId}`, {
+      config: { presence: { key: currentUserId } },
+    });
+    channelRef.current = channel;
+
+    const syncState = () => {
+      const state = channel.presenceState() as Record<
+        string,
+        Array<{ user_id?: string; typing?: boolean }>
+      >;
+      const otherPresences = state[otherUserId] ?? [];
+      setOtherOnline(otherPresences.length > 0);
+      setOtherTyping(otherPresences.some((p) => p.typing === true));
+    };
+
+    channel
+      .on("presence", { event: "sync" }, syncState)
+      .on("presence", { event: "join" }, syncState)
+      .on("presence", { event: "leave" }, syncState)
+      .subscribe(async (status) => {
+        if (status === "SUBSCRIBED" && canBroadcast) {
+          try {
+            await channel.track({ user_id: currentUserId, typing: false });
+          } catch {
+            // ignore transient presence errors
+          }
+        }
+      });
+
+    return () => {
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+      channelRef.current = null;
+      supabase.removeChannel(channel);
+    };
+  }, [conversationId, currentUserId, otherUserId, canBroadcast]);
+
+  const notifyTyping = useCallback(
+    (isTyping: boolean) => {
+      if (!canBroadcast || !channelRef.current || !currentUserId) return;
+      void channelRef.current.track({ user_id: currentUserId, typing: isTyping });
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+      if (isTyping) {
+        typingTimerRef.current = setTimeout(() => {
+          void channelRef.current?.track({ user_id: currentUserId, typing: false });
+        }, 2500);
+      }
+    },
+    [canBroadcast, currentUserId],
+  );
+
+  return { otherOnline, otherTyping, notifyTyping };
 }

@@ -10,7 +10,9 @@ WITH expected(table_name) AS (
     ('signals'),('signal_publishers'),('signal_followers'),('signal_posts'),('signal_reads'),
     ('moments'),('moment_views'),('moment_likes'),('moment_replies'),('moment_repings'),
     ('highlights'),('highlight_items'),('user_close_circle'),
-    ('conversations'),('conversation_members'),('private_messages'),('conversation_messages'),('user_blocks')
+    ('conversations'),('conversation_members'),('private_messages'),('conversation_messages'),('user_blocks'),
+    ('dot_wallets'),('dot_transactions'),('account_subscriptions'),('profile_reports'),
+    ('saved_pings'),('hub_forums'),('hub_forum_members'),('hub_broadcasts'),('hub_broadcast_reads')
 )
 SELECT e.table_name,
        CASE WHEN t.table_name IS NULL THEN 'MISSING' ELSE 'PRESENT' END AS status,
@@ -34,7 +36,9 @@ AND p.proname IN (
  'mark_signal_read','get_signal_post_analytics','view_moment',
  'toggle_like_moment','reping_moment','delete_reping',
  'update_highlight','remove_moment_from_highlight',
- 'create_conversation','send_message','get_or_create_direct_conversation','send_private_message'
+ 'create_conversation','send_message','get_or_create_direct_conversation','send_private_message',
+ 'is_admin','get_my_dot_summary','claim_daily_dot','upgrade_account_with_dots','get_public_account_tier',
+ 'get_creator_analytics','mark_hub_broadcast_read','is_conversation_member','is_close_circle_member'
 )
 ORDER BY p.proname, arguments;
 

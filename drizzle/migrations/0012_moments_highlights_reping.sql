@@ -154,6 +154,7 @@ GRANT SELECT ON public.highlight_items TO anon;
 GRANT SELECT, INSERT, DELETE ON public.user_close_circle TO authenticated;
 
 -- RLS POLICIES FOR MOMENTS
+DROP POLICY IF EXISTS "Moments viewable by authorized audience" ON public.moments;
 CREATE POLICY "Moments viewable by authorized audience" ON public.moments
   FOR SELECT TO anon, authenticated
   USING (
@@ -181,20 +182,24 @@ CREATE POLICY "Moments viewable by authorized audience" ON public.moments
     )
   );
 
+DROP POLICY IF EXISTS "Authors create moments" ON public.moments;
 CREATE POLICY "Authors create moments" ON public.moments
   FOR INSERT TO authenticated
   WITH CHECK ((select auth.uid()) = author_id);
 
+DROP POLICY IF EXISTS "Authors update own moments" ON public.moments;
 CREATE POLICY "Authors update own moments" ON public.moments
   FOR UPDATE TO authenticated
   USING ((select auth.uid()) = author_id)
   WITH CHECK ((select auth.uid()) = author_id);
 
+DROP POLICY IF EXISTS "Authors delete own moments" ON public.moments;
 CREATE POLICY "Authors delete own moments" ON public.moments
   FOR DELETE TO authenticated
   USING ((select auth.uid()) = author_id);
 
 -- RLS POLICIES FOR MOMENT VIEWS
+DROP POLICY IF EXISTS "Moment views viewable by author" ON public.moment_views;
 CREATE POLICY "Moment views viewable by author" ON public.moment_views
   FOR SELECT TO authenticated
   USING (
@@ -202,11 +207,13 @@ CREATE POLICY "Moment views viewable by author" ON public.moment_views
     EXISTS (SELECT 1 FROM public.moments WHERE id = moment_views.moment_id AND author_id = (select auth.uid()))
   );
 
+DROP POLICY IF EXISTS "Viewers record views" ON public.moment_views;
 CREATE POLICY "Viewers record views" ON public.moment_views
   FOR INSERT TO authenticated
   WITH CHECK (viewer_id = (select auth.uid()));
 
 -- RLS POLICIES FOR MOMENT LIKES
+DROP POLICY IF EXISTS "Moment likes viewable by eligible viewers" ON public.moment_likes;
 CREATE POLICY "Moment likes viewable by eligible viewers" ON public.moment_likes
   FOR SELECT TO anon, authenticated
   USING (
@@ -217,24 +224,29 @@ CREATE POLICY "Moment likes viewable by eligible viewers" ON public.moment_likes
     )
   );
 
+DROP POLICY IF EXISTS "Users like moments" ON public.moment_likes;
 CREATE POLICY "Users like moments" ON public.moment_likes
   FOR INSERT TO authenticated
   WITH CHECK (user_id = (select auth.uid()));
 
+DROP POLICY IF EXISTS "Users remove own likes" ON public.moment_likes;
 CREATE POLICY "Users remove own likes" ON public.moment_likes
   FOR DELETE TO authenticated
   USING (user_id = (select auth.uid()));
 
 -- RLS POLICIES FOR MOMENT REPLIES
+DROP POLICY IF EXISTS "Replies viewable by sender or recipient" ON public.moment_replies;
 CREATE POLICY "Replies viewable by sender or recipient" ON public.moment_replies
   FOR SELECT TO authenticated
   USING (sender_id = (select auth.uid()) OR recipient_id = (select auth.uid()));
 
+DROP POLICY IF EXISTS "Users send moment replies" ON public.moment_replies;
 CREATE POLICY "Users send moment replies" ON public.moment_replies
   FOR INSERT TO authenticated
   WITH CHECK (sender_id = (select auth.uid()));
 
 -- RLS POLICIES FOR MOMENT RE-PINGS
+DROP POLICY IF EXISTS "Repings viewable according to original moment" ON public.moment_repings;
 CREATE POLICY "Repings viewable according to original moment" ON public.moment_repings
   FOR SELECT TO anon, authenticated
   USING (
@@ -247,6 +259,7 @@ CREATE POLICY "Repings viewable according to original moment" ON public.moment_r
     )
   );
 
+DROP POLICY IF EXISTS "Users create repings" ON public.moment_repings;
 CREATE POLICY "Users create repings" ON public.moment_repings
   FOR INSERT TO authenticated
   WITH CHECK (
@@ -260,11 +273,13 @@ CREATE POLICY "Users create repings" ON public.moment_repings
     )
   );
 
+DROP POLICY IF EXISTS "Users delete own repings" ON public.moment_repings;
 CREATE POLICY "Users delete own repings" ON public.moment_repings
   FOR DELETE TO authenticated
   USING (user_id = (select auth.uid()));
 
 -- RLS POLICIES FOR HIGHLIGHTS
+DROP POLICY IF EXISTS "Public highlights viewable by anyone" ON public.highlights;
 CREATE POLICY "Public highlights viewable by anyone" ON public.highlights
   FOR SELECT TO anon, authenticated
   USING (
@@ -272,12 +287,14 @@ CREATE POLICY "Public highlights viewable by anyone" ON public.highlights
     is_private = false
   );
 
+DROP POLICY IF EXISTS "Users manage own highlights" ON public.highlights;
 CREATE POLICY "Users manage own highlights" ON public.highlights
   FOR ALL TO authenticated
   USING (user_id = (select auth.uid()))
   WITH CHECK (user_id = (select auth.uid()));
 
 -- RLS POLICIES FOR HIGHLIGHT ITEMS
+DROP POLICY IF EXISTS "Highlight items viewable by highlight viewers" ON public.highlight_items;
 CREATE POLICY "Highlight items viewable by highlight viewers" ON public.highlight_items
   FOR SELECT TO anon, authenticated
   USING (
@@ -288,6 +305,7 @@ CREATE POLICY "Highlight items viewable by highlight viewers" ON public.highligh
     )
   );
 
+DROP POLICY IF EXISTS "Users manage own highlight items" ON public.highlight_items;
 CREATE POLICY "Users manage own highlight items" ON public.highlight_items
   FOR ALL TO authenticated
   USING (
@@ -306,6 +324,7 @@ CREATE POLICY "Users manage own highlight items" ON public.highlight_items
   );
 
 -- RLS POLICIES FOR CLOSE CIRCLE
+DROP POLICY IF EXISTS "Users manage own close circle" ON public.user_close_circle;
 CREATE POLICY "Users manage own close circle" ON public.user_close_circle
   FOR ALL TO authenticated
   USING (user_id = (select auth.uid()))
@@ -459,6 +478,11 @@ BEGIN
   END IF;
 END;
 $$;
+
+GRANT EXECUTE ON FUNCTION public.view_moment(uuid) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.toggle_like_moment(uuid, text) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.reping_moment(uuid, text, text) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.delete_reping(uuid) TO authenticated, service_role;
 
 -- ENABLE REALTIME
 DO $$

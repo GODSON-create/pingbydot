@@ -31,6 +31,7 @@ import {
   HUB_INTENTS,
   canSeeHubContent,
   isHubStaff,
+  topBuilders,
   type Hub,
   type HubCategory,
   type HubIntent,
@@ -77,6 +78,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { HubShareModal } from "@/components/hubs/HubShareModal";
 import { HubChat } from "@/components/hubs/HubChat";
+import { HubForumsAndBroadcasts } from "@/components/hubs/HubForumsAndBroadcasts";
 import { cn } from "@/lib/utils";
 import { pageHead } from "@/lib/site";
 
@@ -204,7 +206,7 @@ function MemberRow({
             <span className="font-display font-bold text-sm truncate">{name}</span>
             <span className="text-xs text-muted-foreground truncate">@{profile?.username}</span>
             {member.role === "owner" && (
-              <span className="rounded-full bg-lime/20 text-lime-foreground px-2 py-0.5 text-[10px] font-bold border border-lime/30">
+              <span className="rounded-full bg-lime/20 dark:bg-lime/15 text-lime-foreground dark:text-lime px-2 py-0.5 text-[10px] font-bold border border-lime/30">
                 Owner
               </span>
             )}
@@ -317,7 +319,7 @@ function PendingRequestsSection({
 
   return (
     <div className="surface-card rounded-3xl p-5 sm:p-6 border border-amber-500/30 bg-amber-500/5 mb-6">
-      <div className="flex items-center gap-2 text-sm font-bold text-amber-500 mb-3">
+      <div className="flex items-center gap-2 text-sm font-bold text-amber-700 dark:text-amber-400 mb-3">
         <Clock className="size-4" />
         <span>Pending Access Requests ({pendingMembers.length})</span>
       </div>
@@ -770,6 +772,7 @@ function HubDetail() {
   const { slug } = Route.useParams();
   const { intent: intentParam, tab: tabParam, invite: inviteTokenParam } = Route.useSearch();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const [shareOpen, setShareOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -779,7 +782,10 @@ function HubDetail() {
   const activeIntent = HUB_INTENTS.some((i) => i.value === intentParam)
     ? (intentParam as HubIntent)
     : null;
-  const activeTab = tabParam || "feed";
+  const validTabs = ["forums", "chat", "feed", "members", "about"] as const;
+  const activeTab = validTabs.includes(tabParam as (typeof validTabs)[number])
+    ? (tabParam as (typeof validTabs)[number])
+    : "forums";
 
   // Hub data query
   const {
@@ -883,6 +889,10 @@ function HubDetail() {
   const feedItems = isPrivate ? (privateFeed ?? []) : (hubData?.feed ?? []);
   const pinnedPings = feedItems.filter((i) => i.is_pinned);
   const regularPings = feedItems.filter((i) => !i.is_pinned);
+  const buildersLeaderboard = topBuilders(
+    feedItems.map((i) => i.ping).filter((p): p is NonNullable<typeof p> => Boolean(p)),
+    5,
+  );
   const canViewFeed = canSeeHubContent(hub.access, membership?.role);
 
   return (
@@ -1019,7 +1029,7 @@ function HubDetail() {
 
                 {user ? (
                   isOwner ? (
-                    <span className="rounded-full bg-lime/20 text-lime-foreground px-4 py-2 text-xs font-bold border border-lime/30">
+                    <span className="rounded-full bg-lime/20 dark:bg-lime/15 text-lime-foreground dark:text-lime px-4 py-2 text-xs font-bold border border-lime/30">
                       Owner
                     </span>
                   ) : isMember ? (
@@ -1072,25 +1082,46 @@ function HubDetail() {
 
       {/* Tabs Layout */}
       <section className="mx-auto max-w-5xl px-5 mt-6">
-        <Tabs defaultValue={activeTab}>
-          <TabsList className="h-11 rounded-full p-1 bg-secondary/80">
+        <Tabs
+          value={activeTab}
+          onValueChange={(v) =>
+            navigate({
+              to: "/hubs/$slug",
+              params: { slug: hub.slug },
+              search: (prev) => ({
+                ...prev,
+                tab: v === "forums" ? undefined : v,
+              }),
+              replace: true,
+            })
+          }
+        >
+          <TabsList className="h-11 rounded-full p-1 bg-secondary/80 overflow-x-auto max-w-full">
+            <TabsTrigger value="forums" className="rounded-full px-5 text-sm font-semibold">
+              Forums & Broadcasts
+            </TabsTrigger>
             <TabsTrigger value="chat" className="rounded-full px-5 text-sm font-semibold">
-              Live Pings
+              Group Room
             </TabsTrigger>
             <TabsTrigger value="feed" className="rounded-full px-5 text-sm font-semibold">
               Feed ({hub.ping_count ?? 0})
             </TabsTrigger>
             <TabsTrigger value="members" className="rounded-full px-5 text-sm font-semibold">
-              Builders ({(hub.member_count ?? 0).toLocaleString()})
+              Members ({(hub.member_count ?? 0).toLocaleString()})
             </TabsTrigger>
             <TabsTrigger value="about" className="rounded-full px-5 text-sm font-semibold">
-              About & Resources
+              About & Governance
             </TabsTrigger>
           </TabsList>
 
+          {/* TAB: FORUMS & INSTITUTIONAL BROADCASTS */}
+          <TabsContent value="forums" className="mt-6">
+            <HubForumsAndBroadcasts hub={hub} isMember={isMember} isStaff={isStaff} />
+          </TabsContent>
+
           {/* TAB 0: LIVE CHAT */}
           <TabsContent value="chat" className="mt-6">
-            <HubChat hubId={hub.id} isMember={isMember} isPrivate={isPrivate} />
+            <HubChat hubId={hub.id} isMember={isMember} isPrivate={isPrivate} isStaff={isStaff} />
           </TabsContent>
 
           {/* TAB 1: FEED */}
@@ -1118,38 +1149,81 @@ function HubDetail() {
               </div>
             ) : (
               <>
-                {/* Intent Filter Bar */}
-                <div className="-mx-5 flex items-center gap-2 overflow-x-auto px-5 pb-2">
-                  <Link
-                    to="/hubs/$slug"
-                    params={{ slug: hub.slug }}
-                    search={(prev) => ({ ...prev, intent: undefined })}
-                    className={cn(
-                      "shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors",
-                      !activeIntent
-                        ? "border-foreground bg-foreground text-background"
-                        : "border-border bg-card hover:bg-secondary",
-                    )}
-                  >
-                    All Pings
-                  </Link>
-                  {HUB_INTENTS.map((i) => (
+                {/* Feed Actions & Intent Filter Bar */}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="-mx-5 flex flex-1 items-center gap-2 overflow-x-auto px-5 pb-2 sm:mx-0 sm:px-0 sm:pb-0">
                     <Link
-                      key={i.value}
                       to="/hubs/$slug"
                       params={{ slug: hub.slug }}
-                      search={(prev) => ({ ...prev, intent: i.value })}
+                      search={(prev) => ({ ...prev, intent: undefined })}
                       className={cn(
                         "shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors",
-                        activeIntent === i.value
+                        !activeIntent
                           ? "border-foreground bg-foreground text-background"
                           : "border-border bg-card hover:bg-secondary",
                       )}
                     >
-                      <span>{i.emoji}</span> {i.label}
+                      All Pings
                     </Link>
-                  ))}
+                    {HUB_INTENTS.map((i) => (
+                      <Link
+                        key={i.value}
+                        to="/hubs/$slug"
+                        params={{ slug: hub.slug }}
+                        search={(prev) => ({ ...prev, intent: i.value })}
+                        className={cn(
+                          "shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors",
+                          activeIntent === i.value
+                            ? "border-foreground bg-foreground text-background"
+                            : "border-border bg-card hover:bg-secondary",
+                        )}
+                      >
+                        <span>{i.emoji}</span> {i.label}
+                      </Link>
+                    ))}
+                  </div>
+                  {isMember && (
+                    <Button
+                      asChild
+                      variant="hero"
+                      size="sm"
+                      className="rounded-full h-9 px-4 shrink-0 self-start sm:self-auto"
+                    >
+                      <Link to="/create" search={{ hub: hub.id }}>
+                        <Plus className="size-3.5" /> Post to Hub
+                      </Link>
+                    </Button>
+                  )}
                 </div>
+
+                {/* Top Builders Strip */}
+                {buildersLeaderboard.length > 0 && (
+                  <div className="surface-card rounded-2xl px-4 py-3 flex flex-wrap items-center gap-3">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Top Builders
+                    </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {buildersLeaderboard.map(({ author, count }) => (
+                        <Link
+                          key={author.username}
+                          to="/@{$username}"
+                          params={{ username: author.username }}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background/70 px-2.5 py-1 text-xs font-semibold hover:bg-secondary transition-colors"
+                        >
+                          <FounderAvatar
+                            name={author.display_name || author.username}
+                            src={author.avatar_url}
+                            size="sm"
+                          />
+                          <span>@{author.username}</span>
+                          <span className="text-[10px] font-bold text-muted-foreground">
+                            {count}
+                          </span>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Pinned Pings */}
                 {pinnedPings.length > 0 && (
