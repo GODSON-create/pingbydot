@@ -198,9 +198,17 @@ export const followQuery = (profileId: string, userId: string | undefined) =>
 
 /** Friendly message from a database function error. */
 export const hubError = (e: unknown, fallback: string) => {
-  const m = (e as { message?: string })?.message ?? "";
+  const errObj = e as { code?: string; message?: string; details?: string } | null;
+  const code = errObj?.code ?? "";
+  const m = errObj?.message ?? "";
+  if (code === "23505" || /duplicate key value|already exists/i.test(m)) {
+    return "That Hub URL handle is already taken. Please pick another.";
+  }
+  if (/row-level security|permission denied|not authorized|42501/i.test(m) || code === "42501") {
+    return "Please sign in with an active account to create or manage Hubs.";
+  }
   return /hub|ping|allowed|owner|member|full|username|quickly|unpin|sign in/i.test(m) &&
-    m.length < 120
+    m.length < 160
     ? m
     : fallback;
 };

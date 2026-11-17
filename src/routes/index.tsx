@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { z } from "zod";
 import {
   Sparkles,
-  Radio,
   Building2,
   Users,
   Lock,
@@ -14,8 +13,6 @@ import {
   Plus,
   ArrowRight,
   CheckCircle,
-  Bell,
-  BellOff,
   Compass,
   Calendar,
   Check,
@@ -36,13 +33,7 @@ import { feedQuery, followingFeedQuery, type Ping } from "@/lib/pings";
 import { QueryErrorCard } from "@/components/QueryErrorCard";
 import { hubsQuery, myHubsQuery, myPendingHubsQuery, hubError } from "@/lib/hub-queries";
 import { HUB_CATEGORIES, type Hub, type HubCategory } from "@/lib/hubs";
-import {
-  signalsQuery,
-  recentSignalBroadcastsQuery,
-  myFollowedSignalsQuery,
-  useSignalFollow,
-  type Signal,
-} from "@/lib/signals";
+import { userConversationsQuery } from "@/lib/messages";
 import { INTENT_FORMATS, parseStructuredPing, type Category } from "@/lib/validation";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -50,7 +41,7 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/")({
   staticData: { sitemap: true },
   validateSearch: z.object({
-    tab: z.enum(["foryou", "following"]).optional().default("foryou"),
+    tab: z.enum(["foryou", "following"]).optional(),
     c: z
       .enum([
         "progress",
@@ -65,8 +56,11 @@ export const Route = createFileRoute("/")({
         "milestone",
       ])
       .optional(),
-    page: z.coerce.number().int().min(0).max(10000).catch(0).default(0),
+    page: z.coerce.number().int().min(0).max(10000).optional().catch(undefined),
   }),
+  loaderDeps: ({ search: { c, page } }) => ({ cat: c ?? null, page: page ?? 0 }),
+  loader: ({ context, deps }) =>
+    context.queryClient.ensureQueryData(feedQuery(deps.cat, deps.page)),
   head: () =>
     pageHead({
       title: "Ping by DOT — Build in Public, Discover Hubs & Signals",
@@ -220,133 +214,12 @@ function HomeHubCard({
 }
 
 /* -------------------------------------------------------------------------- */
-/*                             SIGNAL CARD (HOME)                             */
-/* -------------------------------------------------------------------------- */
-function HomeSignalCard({
-  signal,
-  isFollowing,
-  latestPost,
-  currentUserId,
-}: {
-  signal: Signal;
-  isFollowing: boolean;
-  latestPost?: { id: string; title: string; content: string; created_at: string } | undefined;
-  currentUserId?: string | undefined;
-}) {
-  const followMutation = useSignalFollow(signal.id, currentUserId);
-
-  const handleToggle = () => {
-    if (!currentUserId) {
-      toast("Sign in to subscribe to official Signals", {
-        action: { label: "Log in", onClick: () => (window.location.href = "/login") },
-      });
-      return;
-    }
-    followMutation.mutate();
-  };
-
-  return (
-    <article className="surface-card group relative flex flex-col justify-between rounded-3xl p-5 border border-border/70 hover:border-border transition-all shadow-sm hover:shadow-md">
-      <div>
-        <div className="flex items-start gap-3">
-          {signal.avatar_url ? (
-            <img
-              src={signal.avatar_url}
-              alt={signal.name}
-              className="size-11 rounded-2xl object-cover shrink-0 border border-border/50"
-            />
-          ) : (
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary font-bold">
-              <Radio className="size-5" />
-            </div>
-          )}
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <Link
-                to="/signals/$slug"
-                params={{ slug: signal.slug }}
-                className="font-display text-base font-bold text-foreground hover:underline truncate"
-              >
-                {signal.name}
-              </Link>
-              {signal.verified && (
-                <span
-                  title="Verified Institution"
-                  className="inline-flex items-center gap-1 rounded-full bg-gold/15 text-gold border border-gold/30 px-2 py-0.5 text-[10px] font-bold"
-                >
-                  <CheckCircle className="size-3" />
-                  Verified
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground">
-              <span className="capitalize font-semibold text-secondary-foreground bg-secondary px-2 py-0.5 rounded-full">
-                {signal.institution_type}
-              </span>
-              <span>{(signal.follower_count ?? 0).toLocaleString()} subscribers</span>
-            </div>
-          </div>
-        </div>
-
-        {signal.description && (
-          <p className="mt-3 text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-            {signal.description}
-          </p>
-        )}
-
-        {/* Latest broadcast snippet preview */}
-        {latestPost ? (
-          <div className="mt-3 rounded-2xl bg-secondary/50 p-2.5 border border-border/40 text-xs">
-            <div className="flex items-center gap-1 text-[11px] font-semibold text-primary">
-              <Radio className="size-3 animate-pulse" />
-              <span className="truncate">Latest: {latestPost.title}</span>
-            </div>
-            <p className="mt-1 text-[11px] text-muted-foreground line-clamp-1">
-              {latestPost.content}
-            </p>
-          </div>
-        ) : (
-          <div className="mt-3 rounded-2xl bg-secondary/30 p-2 border border-border/30 text-[11px] text-muted-foreground text-center">
-            Standing by for upcoming institutional broadcasts.
-          </div>
-        )}
-      </div>
-
-      <div className="mt-4 pt-3 border-t border-border/50 flex items-center gap-2">
-        <Button asChild variant="outline" size="sm" className="w-1/2 rounded-xl text-xs h-8">
-          <Link to="/signals/$slug" params={{ slug: signal.slug }}>
-            Tune In
-          </Link>
-        </Button>
-
-        <Button
-          variant={isFollowing ? "outline" : "hero"}
-          size="sm"
-          onClick={handleToggle}
-          disabled={followMutation.isPending}
-          className="w-1/2 rounded-xl text-xs h-8 gap-1 shadow-sm"
-        >
-          {isFollowing ? (
-            <>
-              <BellOff className="size-3" /> Subscribed
-            </>
-          ) : (
-            <>
-              <Bell className="size-3" /> Subscribe
-            </>
-          )}
-        </Button>
-      </div>
-    </article>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
 /*                              HOMEPAGE COMPONENT                            */
 /* -------------------------------------------------------------------------- */
 function HomePage() {
   const { user, profile } = useAuth();
   const search = Route.useSearch();
+  const initialForYouPings = Route.useLoaderData();
   const activeTab = search.tab || "foryou";
   const categoryFilter = search.c ?? null;
   const page = search.page || 0;
@@ -358,7 +231,11 @@ function HomePage() {
     isError: isForYouError,
     error: forYouError,
     refetch: refetchForYou,
-  } = useQuery(feedQuery(categoryFilter, page));
+  } = useQuery({
+    ...feedQuery(categoryFilter, page),
+    initialData: initialForYouPings,
+    initialDataUpdatedAt: 0,
+  });
   const {
     data: followingPings = [],
     isLoading: followingLoading,
@@ -376,15 +253,8 @@ function HomePage() {
   const { data: myHubs = [] } = useQuery(myHubsQuery(user?.id));
   const { data: myPendingHubs = new Set<string>() } = useQuery(myPendingHubsQuery(user?.id));
 
-  const {
-    data: signals = [],
-    isLoading: signalsLoading,
-    isError: isSignalsError,
-    error: signalsError,
-    refetch: refetchSignals,
-  } = useQuery(signalsQuery());
-  const { data: followedSignals = new Set<string>() } = useQuery(myFollowedSignalsQuery(user?.id));
-  const { data: recentBroadcasts = {} } = useQuery(recentSignalBroadcastsQuery());
+  const { data: conversations = [] } = useQuery(userConversationsQuery(user?.id));
+  const unreadSignalCount = conversations.reduce((sum, c) => sum + (c.unread_count ?? 0), 0);
 
   const rawPings = activeTab === "following" ? followingPings : forYouPings;
   const displayedPings = categoryFilter
@@ -715,66 +585,82 @@ function HomePage() {
             </div>
           </section>
 
-          {/* 4. SIGNALS DISCOVERY SECTION */}
+          {/* 4. SIGNAL — 1-ON-1 CHATS & CONVERSATIONS */}
           <section aria-labelledby="signals-discovery-heading">
             <div className="flex items-center justify-between mb-3">
               <h2
                 id="signals-discovery-heading"
                 className="font-display text-lg font-bold flex items-center gap-2 text-foreground"
               >
-                <Radio className="size-5 text-primary" />
-                <span>Official Signals</span>
+                <MessageSquare className="size-5 text-primary" />
+                <span>Signal · 1-on-1 Chats</span>
               </h2>
-              <div className="flex items-center gap-2">
-                <Button
-                  asChild
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-xs px-2 text-primary font-semibold"
-                >
-                  <Link to="/signals">Browse All</Link>
-                </Button>
-                <Button asChild variant="outline" size="sm" className="h-7 text-xs px-2 rounded-lg">
-                  <Link to="/signals/create">+ Register</Link>
-                </Button>
-              </div>
+              <Button
+                asChild
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs px-2 text-primary font-semibold"
+              >
+                <Link to="/signals">Open Signal</Link>
+              </Button>
             </div>
 
-            <div className="space-y-3">
-              {signalsLoading ? (
+            <div className="surface-card rounded-2xl p-5 border border-border/60">
+              {user && conversations.length > 0 ? (
                 <div className="space-y-3">
-                  {[1, 2].map((i) => (
-                    <div key={i} className="h-36 rounded-3xl bg-muted/40 animate-pulse" />
-                  ))}
-                </div>
-              ) : isSignalsError ? (
-                <QueryErrorCard
-                  compact
-                  title="Couldn't load Signals"
-                  error={signalsError}
-                  onRetry={() => void refetchSignals()}
-                />
-              ) : signals.length === 0 ? (
-                <div className="surface-card rounded-2xl p-6 text-center text-xs text-muted-foreground border border-border/60">
-                  <Radio className="mx-auto size-8 text-muted-foreground/40 mb-2" />
-                  <p className="font-semibold text-foreground">No official Signals yet</p>
-                  <p className="mt-1">Register an official channel for your institution.</p>
-                  <Button asChild variant="hero" size="sm" className="mt-3 rounded-xl text-xs h-7">
-                    <Link to="/signals/create">Register Channel</Link>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>
+                      <strong className="text-foreground">{conversations.length}</strong>{" "}
+                      {conversations.length === 1 ? "conversation" : "conversations"}
+                    </span>
+                    {unreadSignalCount > 0 && (
+                      <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold text-primary">
+                        {unreadSignalCount} unread
+                      </span>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    {conversations.slice(0, 3).map((conv) => {
+                      const peer = conv.other_member;
+                      const peerName = peer?.display_name || peer?.username || "Founder";
+                      return (
+                        <Link
+                          key={conv.id}
+                          to="/signals"
+                          search={{ conversationId: conv.id }}
+                          className="flex items-center gap-2.5 rounded-xl border border-border/60 bg-secondary/35 p-2.5 hover:bg-secondary/70 transition-colors"
+                        >
+                          <FounderAvatar name={peerName} src={peer?.avatar_url} size="sm" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold text-foreground truncate">{peerName}</p>
+                            <p className="text-[11px] text-muted-foreground truncate">
+                              {conv.last_message_preview || "Open conversation"}
+                            </p>
+                          </div>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                  <Button
+                    asChild
+                    variant="hero"
+                    size="sm"
+                    className="w-full rounded-xl text-xs h-8"
+                  >
+                    <Link to="/signals">Open 1-on-1 Chats</Link>
                   </Button>
                 </div>
               ) : (
-                signals
-                  .slice(0, 3)
-                  .map((signal) => (
-                    <HomeSignalCard
-                      key={signal.id}
-                      signal={signal}
-                      isFollowing={followedSignals.has(signal.id)}
-                      latestPost={recentBroadcasts[signal.id]}
-                      currentUserId={user?.id}
-                    />
-                  ))
+                <div className="text-center text-xs text-muted-foreground">
+                  <MessageSquare className="mx-auto size-8 text-muted-foreground/40 mb-2" />
+                  <p className="font-semibold text-foreground">Private 1-on-1 Conversations</p>
+                  <p className="mt-1">
+                    Coordinate directly with founders, collaborators, and builders inside Signal.
+                  </p>
+                  <Button asChild variant="hero" size="sm" className="mt-3 rounded-xl text-xs h-7">
+                    <Link to="/signals">Open Signal Chats</Link>
+                  </Button>
+                </div>
               )}
             </div>
           </section>

@@ -112,6 +112,7 @@ export function BottomNav() {
 
             <Link
               to="/signals"
+              aria-label="Signal — 1-on-1 Chats"
               className={cn(item, pathname.startsWith("/signals") && activeClass)}
             >
               <Radio className="size-5" />

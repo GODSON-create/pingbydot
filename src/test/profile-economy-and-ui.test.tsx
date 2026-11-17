@@ -121,9 +121,11 @@ describe("PING Human Coordination Redesign, Economy, and Navigation Architecture
     expect(forumsSrc).toContain("Publish Institutional Broadcast");
     expect(forumsSrc).toContain("Create Hub Forum");
 
+    const workspaceSrc = readRel("src/components/messages/MessagesWorkspace.tsx");
+    expect(workspaceSrc).toContain("Community Destination · Signal");
+    expect(workspaceSrc).toContain("bg-gold/15 text-gold border border-gold/30");
     const signalsSrc = readRel("src/routes/signals.tsx");
-    expect(signalsSrc).toContain("Community Destination · Signal");
-    expect(signalsSrc).toContain("bg-gold/15 text-gold border border-gold/30");
+    expect(signalsSrc).toContain("MessagesWorkspace");
   });
 
   it("wires top-right menu drawer on profile page to DOT balance, wallet, verification, settings, and tabs", () => {

@@ -319,7 +319,7 @@ export function SiteHeader() {
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild className="rounded-xl">
                         <Link to="/signals">
-                          <Radio /> Signals
+                          <Radio /> Signal (1-on-1 Chats)
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild className="rounded-xl">

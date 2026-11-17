@@ -148,6 +148,13 @@
       "when": 1795300000000,
       "tag": "0020_pre_merge_security_hardening",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1795400000000,
+      "tag": "0021_provision_media_storage_bucket",
+      "breakpoints": true
     }
   ]
 }

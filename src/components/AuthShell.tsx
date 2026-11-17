@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 import { lovable } from "@/integrations/lovable";
+import { supabase } from "@/integrations/supabase/client";
+import { authDestination } from "@/lib/auth-return";
 import { Button } from "@/components/ui/button";
 import { PingMark } from "@/components/BrandLogo";
 
@@ -50,11 +52,113 @@ export function GoogleButton({ label, next = "/create" }: { label: string; next?
       variant="outline"
       className="w-full"
       onClick={async () => {
+        const nextPath = authDestination(next);
+        const redirectUri = `${window.location.origin}/login?next=${encodeURIComponent(nextPath)}`;
+        const isLovableHost = /(?:^|\.)lovable\.(?:app|dev)$|(?:^|\.)lovableproject\.com$/i.test(
+          window.location.hostname,
+        );
+        let isInIframe = false;
         try {
-          const r = await lovable.auth.signInWithOAuth("google", {
-            redirect_uri: `${window.location.origin}/login?next=${encodeURIComponent(next)}`,
+          isInIframe = window.self !== window.top;
+        } catch {
+          isInIframe = true;
+        }
+
+        try {
+          let canUseLovableBroker = isInIframe && isLovableHost;
+          if (!isInIframe && isLovableHost) {
+            try {
+              const probe = await fetch(
+                `/~oauth/initiate?provider=google&redirect_uri=${encodeURIComponent(redirectUri)}`,
+                { method: "GET", redirect: "manual" },
+              );
+              // Only treat a real 3xx / opaque redirect as an active Lovable OAuth broker.
+              canUseLovableBroker =
+                probe.type === "opaqueredirect" || (probe.status >= 300 && probe.status < 400);
+            } catch {
+              canUseLovableBroker = false;
+            }
+          }
+
+          if (canUseLovableBroker) {
+            const r = await lovable.auth.signInWithOAuth("google", {
+              redirect_uri: redirectUri,
+            });
+            if (r.error) {
+              toast.error(
+                r.error.message || "Google sign-in didn't work. Try email & password instead.",
+              );
+            }
+            return;
+          }
+
+          const { data, error } = await supabase.auth.signInWithOAuth({
+            provider: "google",
+            options: {
+              redirectTo: redirectUri,
+              skipBrowserRedirect: true,
+            },
           });
-          if (r.error) toast.error("Google sign-in didn't work. Try again.");
+
+          if (error) {
+            const msg = error.message || "";
+            if (/missing oauth secret|unsupported provider/i.test(msg)) {
+              toast.error(
+                "Google OAuth credentials are not configured on Supabase Auth yet. Enable Google provider secrets in Supabase or use email & password.",
+              );
+            } else {
+              toast.error(msg || "Google sign-in didn't work. Try again.");
+            }
+            return;
+          }
+
+          if (data?.url) {
+            try {
+              const authProbe = await fetch(data.url, {
+                method: "GET",
+                redirect: "manual",
+              });
+              if (
+                authProbe.type === "opaqueredirect" ||
+                (authProbe.status >= 300 && authProbe.status < 400)
+              ) {
+                window.location.href = data.url;
+                return;
+              }
+              if (authProbe.status >= 400) {
+                let serverMsg = "";
+                try {
+                  const payload = (await authProbe.json()) as {
+                    msg?: string;
+                    error_description?: string;
+                    message?: string;
+                  };
+                  serverMsg = payload.msg || payload.error_description || payload.message || "";
+                } catch {
+                  serverMsg = "";
+                }
+                if (/missing oauth secret|unsupported provider/i.test(serverMsg)) {
+                  toast.error(
+                    "Google OAuth credentials are not configured on Supabase Auth yet. Enable Google provider secrets in Supabase or use email & password.",
+                  );
+                } else {
+                  toast.error(
+                    serverMsg || "Google sign-in is unavailable right now. Try email & password.",
+                  );
+                }
+                return;
+              }
+            } catch {
+              if (typeof navigator !== "undefined" && !navigator.onLine) {
+                toast.error("You appear to be offline. Reconnect and try again.");
+                return;
+              }
+              window.location.href = data.url;
+              return;
+            }
+          }
+
+          toast.error("Could not start Google sign-in. Try email & password instead.");
         } catch {
           toast.error("Couldn't connect to Google sign-in. Try again.");
         }

@@ -131,7 +131,19 @@ function CreateHub() {
         return (rpcHub as { slug: string }).slug;
       }
 
-      // Fallback to direct insert
+      // Only fall back to direct insert if create_hub RPC is not present on this database
+      const rpcErrMsg = (rpcError as { message?: string; code?: string } | null)?.message ?? "";
+      const rpcErrCode = (rpcError as { code?: string } | null)?.code ?? "";
+      const rpcMissing =
+        rpcErrCode === "42883" ||
+        rpcErrCode === "PGRST202" ||
+        /could not find the function|function .* does not exist/i.test(rpcErrMsg);
+
+      if (rpcError && !rpcMissing) {
+        throw rpcError;
+      }
+
+      // Legacy fallback: direct insert (trigger seeds owner membership)
       const { data: newHub, error: insertError } = await supabase
         .from("hubs")
         .insert({
@@ -152,17 +164,22 @@ function CreateHub() {
         throw insertError;
       }
 
-      // ATOMIC OWNER MEMBERSHIP GUARANTEE:
-      // In case the DB trigger is pending, ensure owner membership is present immediately
-      await supabase.from("hub_members").upsert(
-        {
+      // Ensure owner membership exists only if trigger did not already insert it
+      const { data: existingMember } = await supabase
+        .from("hub_members")
+        .select("role")
+        .eq("hub_id", newHub.id)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (!existingMember) {
+        await supabase.from("hub_members").insert({
           hub_id: newHub.id,
           user_id: user.id,
           role: "owner",
           status: "active",
-        },
-        { onConflict: "hub_id,user_id" },
-      );
+        });
+      }
 
       return newHub.slug;
     },
@@ -409,6 +426,9 @@ function CreateHub() {
             Add links to Discord, GitHub, documentation, or portals for members. Must start with
             https://.
           </p>
+          {errors["resources"] && (
+            <p className="mt-1 text-xs text-destructive">{errors["resources"]}</p>
+          )}
 
           <div className="mt-3 space-y-3">
             {resources.map((res, i) => (

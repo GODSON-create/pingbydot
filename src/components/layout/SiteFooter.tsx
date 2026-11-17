@@ -27,7 +27,7 @@ export function SiteFooter() {
             Community Hubs
           </Link>
           <Link to="/signals" className="text-muted-foreground hover:text-foreground">
-            Official Signals
+            Signal (1-on-1 Chats)
           </Link>
           <Link to="/create" className="text-muted-foreground hover:text-foreground">
             Create a Ping

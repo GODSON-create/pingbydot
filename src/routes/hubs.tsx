@@ -206,6 +206,7 @@ function HubsDirectory() {
           </Link>
           <Link
             to="/signals"
+            title="1-on-1 Chats & Conversations"
             className="inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
           >
             <Radio className="size-3.5" /> Signal

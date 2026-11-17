@@ -224,29 +224,15 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
         let uploadedUrl = d.mediaUrl;
 
         if (d.mediaFile) {
+          const { uploadUserMedia } = await import("@/lib/storage");
           const ext =
             d.mediaFile.name.split(".").pop()?.toLowerCase() ||
             (d.mediaType === "video" ? "mp4" : "jpg");
           const path = `${user.id}/moments/${Date.now()}_${i}.${ext}`;
-
-          const { data: uploadRes, error: uploadErr } = await supabase.storage
-            .from("media")
-            .upload(path, d.mediaFile, {
-              cacheControl: "3600",
-              upsert: false,
-            });
-
-          if (uploadErr || !uploadRes) {
-            throw new Error(
-              uploadErr?.message ||
-                "Could not upload Moment media to storage. Check storage permissions and try again.",
-            );
-          }
-
-          const { data: publicUrlData } = supabase.storage
-            .from("media")
-            .getPublicUrl(uploadRes.path);
-          uploadedUrl = publicUrlData.publicUrl;
+          uploadedUrl = await uploadUserMedia(path, d.mediaFile, {
+            cacheControl: "3600",
+            upsert: false,
+          });
         }
 
         if (uploadedUrl.startsWith("blob:")) {

@@ -161,15 +161,22 @@ export function DesktopSidebar() {
               <Link
                 to="/signals"
                 className={cn(
-                  "relative flex items-center justify-center xl:justify-start gap-3.5 h-11 rounded-2xl px-3.5 transition-all text-sm font-semibold",
+                  "relative flex items-center justify-center xl:justify-between gap-3 h-11 rounded-2xl px-3.5 transition-all text-sm font-semibold",
                   pathname.startsWith("/signals")
                     ? "bg-primary/15 text-primary border border-primary/25 shadow-soft"
                     : "text-muted-foreground hover:bg-secondary/80 hover:text-foreground",
                 )}
-                title="Signal"
+                title="Signal — 1-on-1 Chats"
               >
-                <Radio className="size-5 shrink-0" />
-                <span className="hidden xl:inline-block truncate">Signal</span>
+                <span className="flex items-center gap-3.5 min-w-0">
+                  <MessageSquare className="size-5 shrink-0" />
+                  <span className="hidden xl:inline-block truncate">Signal</span>
+                </span>
+                {unreadMessages > 0 ? (
+                  <span className="xl:static absolute top-1.5 right-1.5 inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold tabular-nums">
+                    {unreadMessages > 99 ? "99+" : unreadMessages}
+                  </span>
+                ) : null}
               </Link>
 
               <Link

@@ -255,15 +255,15 @@ export function HubChat({ hubId, isMember, isPrivate, isStaff = false }: HubChat
     }
     try {
       setIsUploading(true);
+      const { uploadUserMedia } = await import("@/lib/storage");
       const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
       const path = `${user.id}/hubs/${hubId}/${Date.now()}.${ext}`;
-      const { data, error } = await supabase.storage.from("media").upload(path, file);
-      if (error) throw error;
-      const { data: pub } = supabase.storage.from("media").getPublicUrl(data.path);
-      setMediaUrl(pub.publicUrl);
+      const publicUrl = await uploadUserMedia(path, file);
+      setMediaUrl(publicUrl);
       toast.success("Image attached");
     } catch (err: any) {
-      toast.error(err?.message || "Image upload failed");
+      const { formatStorageUploadError } = await import("@/lib/storage");
+      toast.error(formatStorageUploadError(err, "Image upload failed"));
     } finally {
       setIsUploading(false);
       e.target.value = "";

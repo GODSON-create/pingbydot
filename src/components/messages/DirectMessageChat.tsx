@@ -136,18 +136,17 @@ export function DirectMessageChat({ conversation, messages, onBack }: DirectMess
 
     try {
       setIsUploading(true);
+      const { uploadUserMedia } = await import("@/lib/storage");
       const ext = file.name.split(".").pop()?.toLowerCase() || (isVideo ? "mp4" : "jpg");
       const path = `${user.id}/dm/${conversation.id}/${Date.now()}.${ext}`;
 
-      const { data, error } = await supabase.storage.from("media").upload(path, file);
-      if (error) throw error;
-
-      const { data: urlData } = supabase.storage.from("media").getPublicUrl(data.path);
-      setMediaUrl(urlData.publicUrl);
+      const publicUrl = await uploadUserMedia(path, file);
+      setMediaUrl(publicUrl);
       setMediaType(isVideo ? "video" : "image");
       toast.success("Attachment ready");
     } catch (err: any) {
-      toast.error(err.message || "Upload failed");
+      const { formatStorageUploadError } = await import("@/lib/storage");
+      toast.error(formatStorageUploadError(err, "Upload failed"));
     } finally {
       setIsUploading(false);
       e.target.value = "";

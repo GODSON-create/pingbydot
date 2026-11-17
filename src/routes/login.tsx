@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { AuthShell, GoogleButton, OrDivider } from "@/components/AuthShell";
 import { useAuth } from "@/lib/auth";
 import { authDestination } from "@/lib/auth-return";
+import { sanitizeErrorMessage } from "@/lib/error-diagnostics";
 
 export const Route = createFileRoute("/login")({
   staticData: { sitemap: false },
@@ -31,13 +32,48 @@ function Login() {
   const navigate = useNavigate();
   const { next } = Route.useSearch();
   const { ready, user } = useAuth();
-  useEffect(() => {
-    if (ready && user) navigate({ to: next, replace: true });
-  }, [ready, user, next, navigate]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+
+  // Handle OAuth redirect tokens (including token-only hash responses) or errors cleanly
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const searchParams = new URLSearchParams(window.location.search);
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+
+    const oauthError =
+      hashParams.get("error_description") ||
+      hashParams.get("error") ||
+      searchParams.get("error_description") ||
+      searchParams.get("error");
+    if (oauthError) {
+      setErr(sanitizeErrorMessage(oauthError));
+    }
+
+    const accessToken = hashParams.get("access_token");
+    const refreshToken = hashParams.get("refresh_token");
+    if (accessToken && refreshToken) {
+      void supabase.auth
+        .setSession({ access_token: accessToken, refresh_token: refreshToken })
+        .then(({ error }) => {
+          if (error) {
+            setErr(sanitizeErrorMessage(error.message));
+          } else {
+            window.history.replaceState(
+              window.history.state,
+              "",
+              `${window.location.pathname}${window.location.search}`,
+            );
+          }
+        });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (ready && user) navigate({ to: next, replace: true });
+  }, [ready, user, next, navigate]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

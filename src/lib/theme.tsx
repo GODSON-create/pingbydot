@@ -23,26 +23,26 @@ export function getSystemTheme(): ResolvedTheme {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(() => {
-    if (typeof window === "undefined") return "system";
+  // Match SSR initial state on the first client render to avoid React #418 hydration mismatches,
+  // then sync with localStorage + system media query right after hydration.
+  const [theme, setThemeState] = useState<Theme>("system");
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>("light");
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
     try {
       const stored = localStorage.getItem(THEME_STORAGE_KEY);
       if (stored === "light" || stored === "dark" || stored === "system") {
-        return stored;
+        setThemeState(stored);
       }
     } catch {
       // Ignore storage errors
     }
-    return "system";
-  });
-
-  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() => {
-    if (typeof window === "undefined") return "light";
-    const initialTheme = (localStorage.getItem(THEME_STORAGE_KEY) as Theme) || "system";
-    return initialTheme === "system" ? getSystemTheme() : initialTheme;
-  });
+    setHydrated(true);
+  }, []);
 
   useEffect(() => {
+    if (!hydrated) return;
     const root = document.documentElement;
 
     const applyTheme = () => {
@@ -73,7 +73,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
     mediaQuery.addEventListener("change", handleSystemChange);
     return () => mediaQuery.removeEventListener("change", handleSystemChange);
-  }, [theme]);
+  }, [theme, hydrated]);
 
   const setTheme = (nextTheme: Theme) => {
     try {
