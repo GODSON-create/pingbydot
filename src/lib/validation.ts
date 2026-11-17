@@ -255,6 +255,17 @@ export function parseStructuredPing(ping: {
   };
 }
 
+export const PARTICIPATION_PATHWAY_VALUES = [
+  "general",
+  "creator",
+  "business",
+  "community",
+  "builder",
+  "investor",
+] as const;
+
+export const participationPathwaySchema = z.enum(PARTICIPATION_PATHWAY_VALUES);
+
 export const usernameSchema = z
   .string()
   .trim()
@@ -271,4 +282,5 @@ export const profileSchema = z.object({
     .refine((v) => v === "" || /^https:\/\//i.test(v), "Use an https:// image link")
     .optional()
     .default(""),
+  participation_pathways: z.array(participationPathwaySchema).max(6).optional(),
 });

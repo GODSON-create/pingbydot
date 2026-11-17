@@ -385,7 +385,7 @@ function Explore() {
                   People you should know
                 </h2>
                 <p className="text-xs text-muted-foreground">
-                  Builders, operators, and collaborators active on PING.
+                  Creators, businesses, builders, investors, and community members across PING.
                 </p>
               </div>
               {activeFilter === "all" && people.length > 4 && (

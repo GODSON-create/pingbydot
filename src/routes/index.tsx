@@ -1,7 +1,7 @@
 import { pageHead } from "@/lib/site";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import {
@@ -31,6 +31,9 @@ import { AriseCallout } from "@/components/AriseCallout";
 import { useAuth } from "@/lib/auth";
 import { feedQuery, followingFeedQuery, type Ping } from "@/lib/pings";
 import { QueryErrorCard } from "@/components/QueryErrorCard";
+import { WelcomeCarousel } from "@/components/onboarding/WelcomeCarousel";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { hasSeenWelcome, markWelcomeSeen } from "@/lib/pathways";
 import { hubsQuery, myHubsQuery, myPendingHubsQuery, hubError } from "@/lib/hub-queries";
 import { HUB_CATEGORIES, type Hub, type HubCategory } from "@/lib/hubs";
 import { userConversationsQuery } from "@/lib/messages";
@@ -63,9 +66,9 @@ export const Route = createFileRoute("/")({
     context.queryClient.ensureQueryData(feedQuery(deps.cat, deps.page)),
   head: () =>
     pageHead({
-      title: "Ping by DOT — Build in Public, Discover Hubs & Signals",
+      title: "Ping by DOT — Connect, Share, Discover Hubs & Signals",
       description:
-        "Real-time social discovery for founders and builders. Share Pings, publish Moments, collaborate in Hubs, and subscribe to official institutional Signals.",
+        "Social, communication, discovery, and economic network for everyone. Share Pings, publish Moments, join Hubs, and chat 1-on-1 in Signal.",
       path: "/",
       card: "summary_large_image",
     }),
@@ -217,12 +220,22 @@ function HomeHubCard({
 /*                              HOMEPAGE COMPONENT                            */
 /* -------------------------------------------------------------------------- */
 function HomePage() {
-  const { user, profile } = useAuth();
+  const { user, ready, profile } = useAuth();
   const search = Route.useSearch();
   const initialForYouPings = Route.useLoaderData();
   const activeTab = search.tab || "foryou";
   const categoryFilter = search.c ?? null;
   const page = search.page || 0;
+  const [hydrated, setHydrated] = useState(false);
+  const [welcomeDismissed, setWelcomeDismissed] = useState(false);
+  const [welcomeModalOpen, setWelcomeModalOpen] = useState(false);
+
+  useEffect(() => {
+    setHydrated(true);
+    setWelcomeDismissed(hasSeenWelcome());
+  }, []);
+
+  const showFirstVisitWelcome = hydrated && ready && !user && !welcomeDismissed;
 
   // Real Queries
   const {
@@ -279,11 +292,9 @@ function HomePage() {
           <div>
             <h1 className="font-display text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">
               {user ? (
-                <>
-                  Hey {profile?.display_name || profile?.username || "Builder"}, share your intent.
-                </>
+                <>Hey {profile?.display_name || profile?.username || "there"}, welcome to Ping.</>
               ) : (
-                <>Coordinate intentions, people, and opportunities.</>
+                <>Connect, share, discover &amp; coordinate on Ping.</>
               )}
             </h1>
           </div>
@@ -318,6 +329,79 @@ function HomePage() {
           <MomentsTray />
         </div>
       </section>
+
+      {/* First-visit non-blocking Welcome Tour banner for signed-out guests */}
+      {showFirstVisitWelcome && (
+        <section
+          aria-label="New to Ping welcome banner"
+          className="surface-card mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-3xl border border-primary/30 bg-hero p-5"
+        >
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-primary">
+              New to Ping by DOT?
+            </p>
+            <h2 className="mt-0.5 font-display text-lg font-extrabold text-foreground">
+              Take our 3-slide introduction — open to everyone
+            </h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Sign in fast with Google or Email, or explore public Pings, Hubs, and Signals right
+              away.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <Button
+              type="button"
+              variant="hero"
+              size="sm"
+              onClick={() => setWelcomeModalOpen(true)}
+              className="rounded-full gap-1.5"
+            >
+              Start 3-Slide Tour <ArrowRight className="size-3.5" />
+            </Button>
+            <Button asChild variant="outline" size="sm" className="rounded-full">
+              <Link to="/welcome">Open Welcome</Link>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                markWelcomeSeen();
+                setWelcomeDismissed(true);
+              }}
+              className="rounded-full text-xs text-muted-foreground"
+            >
+              Dismiss
+            </Button>
+          </div>
+        </section>
+      )}
+
+      <Dialog
+        open={welcomeModalOpen}
+        onOpenChange={(open) => {
+          setWelcomeModalOpen(open);
+          if (!open) {
+            markWelcomeSeen();
+            setWelcomeDismissed(true);
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl border-none bg-transparent p-0 shadow-none">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Welcome to Ping by DOT</DialogTitle>
+          </DialogHeader>
+          <WelcomeCarousel
+            compact
+            nextPath="/"
+            onCompleteOrSkip={() => {
+              markWelcomeSeen();
+              setWelcomeDismissed(true);
+              setWelcomeModalOpen(false);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
 
       {/* 2. MAIN 2-COLUMN DISCOVERY GRID */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] xl:grid-cols-[1fr_360px] gap-6 xl:gap-8 items-start min-w-0">
@@ -654,9 +738,7 @@ function HomePage() {
                 <div className="text-center text-xs text-muted-foreground">
                   <MessageSquare className="mx-auto size-8 text-muted-foreground/40 mb-2" />
                   <p className="font-semibold text-foreground">Private 1-on-1 Conversations</p>
-                  <p className="mt-1">
-                    Coordinate directly with founders, collaborators, and builders inside Signal.
-                  </p>
+                  <p className="mt-1">Message anyone directly inside Signal across Ping.</p>
                   <Button asChild variant="hero" size="sm" className="mt-3 rounded-xl text-xs h-7">
                     <Link to="/signals">Open Signal Chats</Link>
                   </Button>

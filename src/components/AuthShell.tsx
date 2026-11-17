@@ -34,7 +34,9 @@ export function AuthShell({
             <span className="ml-1.5 text-[10px] font-bold uppercase tracking-widest text-primary">
               BY DOT
             </span>
-            <p className="text-xs text-muted-foreground">Human Coordination Network</p>
+            <p className="text-xs text-muted-foreground">
+              Social · Communication · Discovery · Economy
+            </p>
           </div>
         </div>
         <h1 className="font-display text-3xl font-extrabold">{title}</h1>
@@ -45,11 +47,20 @@ export function AuthShell({
   );
 }
 
-export function GoogleButton({ label, next = "/create" }: { label: string; next?: string }) {
+export function GoogleButton({
+  label,
+  next = "/",
+  variant = "hero",
+}: {
+  label: string;
+  next?: string;
+  variant?: "hero" | "outline";
+}) {
   return (
     <Button
       type="button"
-      variant="outline"
+      variant={variant}
+      size="lg"
       className="w-full"
       onClick={async () => {
         const nextPath = authDestination(next);

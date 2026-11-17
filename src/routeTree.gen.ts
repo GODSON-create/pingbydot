@@ -24,9 +24,11 @@ import { Route as SignalsRouteImport } from './routes/signals'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as TermsRouteImport } from './routes/terms'
+import { Route as WelcomeRouteImport } from './routes/welcome'
 import { Route as AuthenticatedAnalyticsRouteImport } from './routes/_authenticated/analytics'
 import { Route as AuthenticatedBalanceRouteImport } from './routes/_authenticated/balance'
 import { Route as AuthenticatedCreateRouteImport } from './routes/_authenticated/create'
+import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedUpgradesRouteImport } from './routes/_authenticated/upgrades'
 import { Route as HubsSlugRouteImport } from './routes/hubs.$slug'
@@ -113,6 +115,11 @@ const TermsRoute = TermsRouteImport.update({
   path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WelcomeRoute = WelcomeRouteImport.update({
+  id: '/welcome',
+  path: '/welcome',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedAnalyticsRoute = AuthenticatedAnalyticsRouteImport.update({
   id: '/analytics',
   path: '/analytics',
@@ -126,6 +133,11 @@ const AuthenticatedBalanceRoute = AuthenticatedBalanceRouteImport.update({
 const AuthenticatedCreateRoute = AuthenticatedCreateRouteImport.update({
   id: '/create',
   path: '/create',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedOnboardingRoute = AuthenticatedOnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
@@ -194,9 +206,11 @@ export interface FileRoutesByFullPath {
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
+  '/welcome': typeof WelcomeRoute
   '/analytics': typeof AuthenticatedAnalyticsRoute
   '/balance': typeof AuthenticatedBalanceRoute
   '/create': typeof AuthenticatedCreateRoute
+  '/onboarding': typeof AuthenticatedOnboardingRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/upgrades': typeof AuthenticatedUpgradesRoute
   '/hubs/$slug': typeof HubsSlugRoute
@@ -223,9 +237,11 @@ export interface FileRoutesByTo {
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
+  '/welcome': typeof WelcomeRoute
   '/analytics': typeof AuthenticatedAnalyticsRoute
   '/balance': typeof AuthenticatedBalanceRoute
   '/create': typeof AuthenticatedCreateRoute
+  '/onboarding': typeof AuthenticatedOnboardingRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/upgrades': typeof AuthenticatedUpgradesRoute
   '/hubs/$slug': typeof HubsSlugRoute
@@ -254,9 +270,11 @@ export interface FileRoutesById {
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
+  '/welcome': typeof WelcomeRoute
   '/_authenticated/analytics': typeof AuthenticatedAnalyticsRoute
   '/_authenticated/balance': typeof AuthenticatedBalanceRoute
   '/_authenticated/create': typeof AuthenticatedCreateRoute
+  '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/upgrades': typeof AuthenticatedUpgradesRoute
   '/hubs/$slug': typeof HubsSlugRoute
@@ -285,9 +303,11 @@ export interface FileRouteTypes {
     | '/signup'
     | '/sitemap.xml'
     | '/terms'
+    | '/welcome'
     | '/analytics'
     | '/balance'
     | '/create'
+    | '/onboarding'
     | '/settings'
     | '/upgrades'
     | '/hubs/$slug'
@@ -314,9 +334,11 @@ export interface FileRouteTypes {
     | '/signup'
     | '/sitemap.xml'
     | '/terms'
+    | '/welcome'
     | '/analytics'
     | '/balance'
     | '/create'
+    | '/onboarding'
     | '/settings'
     | '/upgrades'
     | '/hubs/$slug'
@@ -344,9 +366,11 @@ export interface FileRouteTypes {
     | '/signup'
     | '/sitemap.xml'
     | '/terms'
+    | '/welcome'
     | '/_authenticated/analytics'
     | '/_authenticated/balance'
     | '/_authenticated/create'
+    | '/_authenticated/onboarding'
     | '/_authenticated/settings'
     | '/_authenticated/upgrades'
     | '/hubs/$slug'
@@ -375,6 +399,7 @@ export interface RootRouteChildren {
   SignupRoute: typeof SignupRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   TermsRoute: typeof TermsRoute
+  WelcomeRoute: typeof WelcomeRoute
   PIdRoute: typeof PIdRoute
   ApiPublicPingCardIdRoute: typeof ApiPublicPingCardIdRoute
 }
@@ -486,6 +511,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/welcome': {
+      id: '/welcome'
+      path: '/welcome'
+      fullPath: '/welcome'
+      preLoaderRoute: typeof WelcomeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/analytics': {
       id: '/_authenticated/analytics'
       path: '/analytics'
@@ -505,6 +537,13 @@ declare module '@tanstack/react-router' {
       path: '/create'
       fullPath: '/create'
       preLoaderRoute: typeof AuthenticatedCreateRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/onboarding': {
+      id: '/_authenticated/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof AuthenticatedOnboardingRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/settings': {
@@ -584,6 +623,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAnalyticsRoute: typeof AuthenticatedAnalyticsRoute
   AuthenticatedBalanceRoute: typeof AuthenticatedBalanceRoute
   AuthenticatedCreateRoute: typeof AuthenticatedCreateRoute
+  AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedUpgradesRoute: typeof AuthenticatedUpgradesRoute
   AuthenticatedEditIdRoute: typeof AuthenticatedEditIdRoute
@@ -593,6 +633,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAnalyticsRoute: AuthenticatedAnalyticsRoute,
   AuthenticatedBalanceRoute: AuthenticatedBalanceRoute,
   AuthenticatedCreateRoute: AuthenticatedCreateRoute,
+  AuthenticatedOnboardingRoute: AuthenticatedOnboardingRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedUpgradesRoute: AuthenticatedUpgradesRoute,
   AuthenticatedEditIdRoute: AuthenticatedEditIdRoute,
@@ -644,6 +685,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignupRoute: SignupRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   TermsRoute: TermsRoute,
+  WelcomeRoute: WelcomeRoute,
   PIdRoute: PIdRoute,
   ApiPublicPingCardIdRoute: ApiPublicPingCardIdRoute,
 }

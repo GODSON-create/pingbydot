@@ -88,7 +88,7 @@ export function NewDirectMessageDialog({
             <MessageSquare className="size-5 text-primary" /> New Direct Message
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
-            Search any founder on Ping to start a private 1-to-1 conversation.
+            Search anyone on Ping to start a private 1-to-1 conversation.
           </DialogDescription>
         </DialogHeader>
 
@@ -105,19 +105,19 @@ export function NewDirectMessageDialog({
 
         <div className="mt-3 space-y-2 max-h-72 overflow-y-auto pr-1">
           {isLoading ? (
-            <p className="py-6 text-center text-xs text-muted-foreground">Searching founders…</p>
+            <p className="py-6 text-center text-xs text-muted-foreground">Searching people…</p>
           ) : isError ? (
             <QueryErrorCard
               compact
-              title="Couldn't load founders"
+              title="Couldn't load people"
               error={error}
               onRetry={() => void refetch()}
             />
           ) : results.length === 0 ? (
             <p className="py-6 text-center text-xs text-muted-foreground">
               {deferredSearch
-                ? `No founders found matching "${deferredSearch}".`
-                : "No founders available yet."}
+                ? `No people found matching "${deferredSearch}".`
+                : "No profiles available yet."}
             </p>
           ) : (
             results.map((p) => (
@@ -325,8 +325,8 @@ export function MessagesWorkspace({
             Signal — 1-on-1 Chats &amp; Conversations
           </h1>
           <p className="mt-2 mx-auto max-w-md text-sm text-muted-foreground">
-            Private direct conversations with founders and builders on PING. Sign in to view your
-            chats or message anyone across the network.
+            Private direct conversations with anyone on PING. Sign in to view your chats or message
+            people across the network.
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <Button asChild variant="hero" className="rounded-full px-6">
@@ -335,7 +335,7 @@ export function MessagesWorkspace({
               </Link>
             </Button>
             <Button asChild variant="outline" className="rounded-full px-6">
-              <Link to="/explore">Explore Founders</Link>
+              <Link to="/explore">Explore Ping</Link>
             </Button>
           </div>
         </section>

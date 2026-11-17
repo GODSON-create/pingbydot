@@ -1,24 +1,34 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute, Link, useNavigate, type SearchSchemaInput } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { MailCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthShell, GoogleButton, OrDivider } from "@/components/AuthShell";
+import { useAuth } from "@/lib/auth";
+import { authDestination } from "@/lib/auth-return";
+import { markWelcomeSeen, needsOnboarding } from "@/lib/pathways";
 import { usernameSchema } from "@/lib/validation";
 
 export const Route = createFileRoute("/signup")({
   staticData: { sitemap: false },
+  validateSearch: (search: SearchSchemaInput & { next?: unknown }) => ({
+    next:
+      typeof search.next === "string" && search.next.trim() ? authDestination(search.next) : "/",
+  }),
   head: () => ({
     meta: [
       { name: "robots", content: "noindex, nofollow" },
       { title: "Sign up — Ping" },
-      { name: "description", content: "Create your Ping account and share your first Ping." },
+      {
+        name: "description",
+        content: "Create your Ping account to connect, communicate, discover, and share.",
+      },
       { property: "og:title", content: "Sign up — Ping" },
       {
         property: "og:description",
-        content: "Create your Ping account and start building in public.",
+        content: "Join Ping by DOT — open to everyone.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -29,10 +39,23 @@ export const Route = createFileRoute("/signup")({
 
 function Signup() {
   const navigate = useNavigate();
+  const { next } = Route.useSearch();
+  const { ready, user, profile, profileLoading } = useAuth();
   const [f, setF] = useState({ name: "", username: "", email: "", password: "" });
   const [err, setErr] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [sent, setSent] = useState(false);
+
+  // Restore existing authenticated sessions straight into Ping (or onboarding if new)
+  useEffect(() => {
+    if (!ready || !user || profileLoading) return;
+    markWelcomeSeen();
+    if (needsOnboarding(profile)) {
+      navigate({ to: "/onboarding", search: { next }, replace: true });
+    } else {
+      navigate({ to: next, replace: true });
+    }
+  }, [ready, user, profile, profileLoading, next, navigate]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,14 +81,15 @@ function Signup() {
         email: f.email.trim(),
         password: f.password,
         options: {
-          emailRedirectTo: window.location.origin + "/login?next=%2Fcreate",
+          emailRedirectTo: `${window.location.origin}/login?next=${encodeURIComponent("/onboarding")}`,
           data: { username: u.data, display_name: f.name.trim() },
         },
       });
       setPending(false);
       if (error) return setErr(error.message);
+      markWelcomeSeen();
       if (data.session) {
-        navigate({ to: "/create" });
+        navigate({ to: "/onboarding", search: { next }, replace: true });
         return;
       }
       setSent(true);
@@ -84,8 +108,8 @@ function Signup() {
             <MailCheck className="size-7" />
           </div>
           <p className="mt-5 text-sm text-muted-foreground">
-            Click the link to verify your email, then you can publish your first Ping. Can't find
-            it? Check spam.
+            Click the link to verify your email, then continue straight into Ping. Can't find it?
+            Check spam.
           </p>
           <Button asChild variant="outline" className="mt-6">
             <Link to="/login">Back to log in</Link>
@@ -96,11 +120,11 @@ function Signup() {
 
   return (
     <AuthShell
-      title="Start building in public"
-      subtitle="Free, and your first Ping takes a minute."
-      sticker="hi there 👋"
+      title="Join Ping by DOT"
+      subtitle="Free, open to everyone — sign in with Google or email in seconds."
+      sticker="welcome 👋"
     >
-      <GoogleButton label="Continue with Google" />
+      <GoogleButton label="Continue with Google" next={next} />
       <OrDivider />
       <form onSubmit={submit} className="grid gap-4">
         <div>
@@ -158,8 +182,8 @@ function Signup() {
             {err}
           </p>
         )}
-        <Button type="submit" variant="hero" size="lg" disabled={pending}>
-          {pending ? "Creating…" : "Create account"}
+        <Button type="submit" variant="outline" size="lg" disabled={pending}>
+          {pending ? "Creating account…" : "Continue with Email"}
         </Button>
       </form>
       <p className="mt-6 text-center text-sm text-muted-foreground">

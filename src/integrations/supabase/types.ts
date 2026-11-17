@@ -834,6 +834,8 @@ export type Database = {
           created_at: string;
           display_name: string;
           id: string;
+          onboarding_completed_at: string | null;
+          participation_pathways: string[];
           username: string;
         };
         Insert: {
@@ -842,6 +844,8 @@ export type Database = {
           created_at?: string;
           display_name?: string;
           id: string;
+          onboarding_completed_at?: string | null;
+          participation_pathways?: string[];
           username: string;
         };
         Update: {
@@ -850,6 +854,8 @@ export type Database = {
           created_at?: string;
           display_name?: string;
           id?: string;
+          onboarding_completed_at?: string | null;
+          participation_pathways?: string[];
           username?: string;
         };
         Relationships: [];
@@ -2326,6 +2332,17 @@ export type Database = {
       };
       ensure_my_profile: {
         Args: Record<PropertyKey, never>;
+        Returns: Database["public"]["Tables"]["profiles"]["Row"];
+      };
+      complete_my_onboarding: {
+        Args: {
+          _display_name?: string | null;
+          _username?: string | null;
+          _bio?: string | null;
+          _avatar_url?: string | null;
+          _participation_pathways?: string[] | null;
+          _skip?: boolean;
+        };
         Returns: Database["public"]["Tables"]["profiles"]["Row"];
       };
       get_my_conversations_summary: {

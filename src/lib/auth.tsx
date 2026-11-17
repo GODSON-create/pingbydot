@@ -9,12 +9,14 @@ type AuthCtx = {
   user: User | null;
   ready: boolean;
   profile: Profile | null;
+  profileLoading: boolean;
   refreshProfile: () => void;
 };
 const Ctx = createContext<AuthCtx>({
   user: null,
   ready: false,
   profile: null,
+  profileLoading: false,
   refreshProfile: () => {},
 });
 
@@ -51,7 +53,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq("id", user.id)
         .maybeSingle();
       if (error) throw error;
-      return data as Profile | null;
+      if (data) return data as Profile;
+
+      // Recover cleanly if a newly created OAuth/email user has not synced public.profiles yet
+      const { data: ensured, error: ensureErr } = await supabase.rpc("ensure_my_profile");
+      if (ensureErr) return null;
+      return (ensured as Profile | null) ?? null;
     },
   });
 
@@ -61,6 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         ready,
         profile: profileQ.data ?? null,
+        profileLoading: Boolean(user) && profileQ.isLoading,
         refreshProfile: () => profileQ.refetch(),
       }}
     >

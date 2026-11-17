@@ -11,6 +11,8 @@ export type Profile = {
   bio: string;
   avatar_url: string | null;
   created_at: string;
+  participation_pathways?: string[];
+  onboarding_completed_at?: string | null;
 };
 
 export type Ping = {

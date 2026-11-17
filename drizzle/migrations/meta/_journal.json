@@ -162,6 +162,13 @@
       "when": 1795500000000,
       "tag": "0022_stabilization_forums_signals_scale",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1795600000000,
+      "tag": "0023_onboarding_and_pathways",
+      "breakpoints": true
     }
   ]
 }

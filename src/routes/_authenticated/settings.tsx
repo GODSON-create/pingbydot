@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { profileSchema } from "@/lib/validation";
+import { PARTICIPATION_PATHWAYS, type ParticipationPathwayId } from "@/lib/pathways";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -60,7 +61,13 @@ export const Route = createFileRoute("/_authenticated/settings")({
 function Settings() {
   const { user, profile, refreshProfile } = useAuth();
   const signOut = useSignOut();
-  const [f, setF] = useState({ username: "", display_name: "", bio: "", avatar_url: "" });
+  const [f, setF] = useState({
+    username: "",
+    display_name: "",
+    bio: "",
+    avatar_url: "",
+    participation_pathways: [] as ParticipationPathwayId[],
+  });
   const [errs, setErrs] = useState<
     Partial<Record<"username" | "display_name" | "bio" | "avatar_url", string>>
   >({});
@@ -96,8 +103,20 @@ function Settings() {
         display_name: profile.display_name,
         bio: profile.bio,
         avatar_url: profile.avatar_url ?? "",
+        participation_pathways: (profile.participation_pathways ?? []).filter(
+          (id): id is ParticipationPathwayId => PARTICIPATION_PATHWAYS.some((p) => p.id === id),
+        ),
       });
   }, [profile]);
+
+  const togglePathway = (id: ParticipationPathwayId) => {
+    setF((prev) => ({
+      ...prev,
+      participation_pathways: prev.participation_pathways.includes(id)
+        ? prev.participation_pathways.filter((p) => p !== id)
+        : [...prev.participation_pathways, id],
+    }));
+  };
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,9 +133,20 @@ function Settings() {
     }
     setSaving(true);
     try {
+      const baseUpdate = {
+        username: r.data.username,
+        display_name: r.data.display_name,
+        bio: r.data.bio,
+        avatar_url: r.data.avatar_url || null,
+      };
+      const supportsPathways = Boolean(profile && "participation_pathways" in profile);
       const { error } = await supabase
         .from("profiles")
-        .update({ ...r.data, avatar_url: r.data.avatar_url || null })
+        .update(
+          supportsPathways
+            ? { ...baseUpdate, participation_pathways: f.participation_pathways }
+            : baseUpdate,
+        )
         .eq("id", user.id)
         .select("id")
         .single();
@@ -255,11 +285,40 @@ function Settings() {
             rows={3}
             value={f.bio}
             onChange={(e) => setF({ ...f, bio: e.target.value })}
-            placeholder="Building a tool for… Previously…"
+            placeholder="Share what you're into, what you're working on, or how people can connect…"
             className="mt-1.5 rounded-xl"
           />
           <p className="mt-1 text-right text-xs text-muted-foreground">{280 - f.bio.length}</p>
           {errs.bio && <p className="text-xs text-destructive">{errs.bio}</p>}
+        </div>
+        <div>
+          <Label>
+            Participation pathways{" "}
+            <span className="font-normal text-muted-foreground">(optional)</span>
+          </Label>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Choose any optional labels you want to highlight on your profile, or leave empty.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {PARTICIPATION_PATHWAYS.map((pathway) => {
+              const active = f.participation_pathways.includes(pathway.id);
+              return (
+                <button
+                  key={pathway.id}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => togglePathway(pathway.id)}
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+                    active
+                      ? "border-primary bg-primary/15 text-foreground"
+                      : "border-border bg-card text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  }`}
+                >
+                  {pathway.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
         <div>
           <Label htmlFor="av">Profile image link (optional)</Label>

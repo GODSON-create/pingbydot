@@ -8,17 +8,19 @@ import { AuthShell, GoogleButton, OrDivider } from "@/components/AuthShell";
 import { useAuth } from "@/lib/auth";
 import { authDestination } from "@/lib/auth-return";
 import { sanitizeErrorMessage } from "@/lib/error-diagnostics";
+import { markWelcomeSeen, needsOnboarding } from "@/lib/pathways";
 
 export const Route = createFileRoute("/login")({
   staticData: { sitemap: false },
   validateSearch: (search: SearchSchemaInput & { next?: unknown }) => ({
-    next: authDestination(search.next),
+    next:
+      typeof search.next === "string" && search.next.trim() ? authDestination(search.next) : "/",
   }),
   head: () => ({
     meta: [
       { name: "robots", content: "noindex, nofollow" },
       { title: "Log in — Ping" },
-      { name: "description", content: "Log in to Ping to share and like Pings." },
+      { name: "description", content: "Log in to Ping to connect, discover, and share." },
       { property: "og:title", content: "Log in — Ping" },
       { property: "og:description", content: "Log in to Ping." },
       { property: "og:type", content: "website" },
@@ -31,7 +33,7 @@ export const Route = createFileRoute("/login")({
 function Login() {
   const navigate = useNavigate();
   const { next } = Route.useSearch();
-  const { ready, user } = useAuth();
+  const { ready, user, profile, profileLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -72,8 +74,14 @@ function Login() {
   }, []);
 
   useEffect(() => {
-    if (ready && user) navigate({ to: next, replace: true });
-  }, [ready, user, next, navigate]);
+    if (!ready || !user || profileLoading) return;
+    markWelcomeSeen();
+    if (needsOnboarding(profile)) {
+      navigate({ to: "/onboarding", search: { next }, replace: true });
+    } else {
+      navigate({ to: next, replace: true });
+    }
+  }, [ready, user, profile, profileLoading, next, navigate]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,7 +95,7 @@ function Login() {
             ? "Please verify your email first — check your inbox."
             : "Couldn't log in. Check your email and password, then try again.",
         );
-      navigate({ to: next });
+      markWelcomeSeen();
     } catch {
       setErr("Couldn't connect. Please try again.");
     } finally {

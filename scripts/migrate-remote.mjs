@@ -257,6 +257,24 @@ async function runSchemaVerification(sql, releaseEntries) {
     throw new Error("Schema Verification FAILED — missing storage.buckets row 'media' (migration 0021)");
   }
 
+  const [{ pathways_col_present: pathwaysColPresent, onboarding_col_present: onboardingColPresent, anon_onb_exec: anonOnbExec }] = await sql`
+    SELECT
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'participation_pathways'
+      ) AS pathways_col_present,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'onboarding_completed_at'
+      ) AS onboarding_col_present,
+      has_function_privilege('anon', 'public.complete_my_onboarding(text, text, text, text, text[], boolean)', 'EXECUTE') AS anon_onb_exec
+  `;
+  if (!pathwaysColPresent || !onboardingColPresent || anonOnbExec) {
+    throw new Error(
+      `Schema Verification FAILED — onboarding schema/privilege mismatch (pathways=${pathwaysColPresent}, onboarding=${onboardingColPresent}, anon_onb_exec=${anonOnbExec})`,
+    );
+  }
+
   console.log(
     `[SCHEMA VERIFIED] Ledger ${minTag}–${maxTag}: ${releaseEntries.length}/${releaseEntries.length} recorded (total rows=${ledgerRows.length}); ${REQUIRED_TABLES_0011_0020.length}/${REQUIRED_TABLES_0011_0020.length} tables with RLS; storage 'media' bucket, hardened indexes & privileges intact.`,
   );
@@ -496,6 +514,35 @@ async function runFeatureAuthTests(sql) {
         throw new Error(`DOT Wallet check failed: start=${summary?.wallet?.balance}, end=${checkin?.wallet?.balance}, crossRead=${bReadsAWallet}/${bReadsATx}`);
       }
       results.push("DOT Wallet authorization & ledger integrity: PASS (50->60, direct writes blocked, cross-user reads=0/0, duplicate checkin rejected)");
+
+      // 6. PHASE 1 ONBOARDING & OPTIONAL PATHWAYS CHECK
+      await actAs(null);
+      await assertExpectThrow(tx, "anon calling complete_my_onboarding", async () => {
+        await tx`SELECT public.complete_my_onboarding(_skip := true)`;
+      });
+      await actAs(userC);
+      const [onboardedC] = await tx`
+        SELECT onboarding_completed_at, participation_pathways
+        FROM public.complete_my_onboarding(
+          _display_name := 'Verify Member C',
+          _participation_pathways := ARRAY['general', 'creator']::text[],
+          _skip := false
+        )
+      `;
+      await actAs(userA);
+      const [skippedA] = await tx`
+        SELECT onboarding_completed_at, participation_pathways
+        FROM public.complete_my_onboarding(_skip := true)
+      `;
+      if (
+        !onboardedC?.onboarding_completed_at ||
+        (onboardedC?.participation_pathways ?? []).length !== 2 ||
+        !skippedA?.onboarding_completed_at ||
+        (skippedA?.participation_pathways ?? []).length !== 0
+      ) {
+        throw new Error("Onboarding RPC check failed for pathway selection or skip flow");
+      }
+      results.push("Onboarding & Optional Pathways: PASS (anon blocked, pathways optional, skip supported)");
 
       throw new VerificationRollbackSignal(results);
     });

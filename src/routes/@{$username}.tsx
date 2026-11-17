@@ -68,6 +68,7 @@ import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
 import { useSignOut } from "@/components/layout/SiteHeader";
 import { useNavOverlay } from "@/lib/nav-overlay";
+import { formatPathwayLabel } from "@/lib/pathways";
 import { PingMark } from "@/components/BrandLogo";
 import { PublicConnections } from "@/components/connections/PublicConnections";
 import { ProfileHighlights } from "@/components/moments/ProfileHighlights";
@@ -627,6 +628,20 @@ function ProfileContent({
                   <p className="mt-3 max-w-xl whitespace-pre-line text-sm leading-relaxed text-foreground/90">
                     {profile.bio}
                   </p>
+                )}
+
+                {/* Optional Participation Pathways */}
+                {profile.participation_pathways && profile.participation_pathways.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Participation pathways">
+                    {profile.participation_pathways.map((id) => (
+                      <span
+                        key={id}
+                        className="rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-[11px] font-semibold text-foreground"
+                      >
+                        {formatPathwayLabel(id)}
+                      </span>
+                    ))}
+                  </div>
                 )}
 
                 {/* Relevant Skills / Interests */}
