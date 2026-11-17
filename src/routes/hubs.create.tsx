@@ -5,19 +5,13 @@ import { Plus, Trash2, Globe, Lock, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
-import {
-  slugify,
-  hubSchema,
-  HUB_CATEGORIES,
-  type HubCategory,
-  type HubResource,
-} from "@/lib/hubs";
+import { slugify, hubSchema, HUB_CATEGORIES, type HubCategory, type HubResource } from "@/lib/hubs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { pageHead } from "@/lib/site";
+import { pageHead, siteUrl } from "@/lib/site";
 import { hubError } from "@/lib/hub-queries";
 
 export const Route = createFileRoute("/hubs/create")({
@@ -67,9 +61,7 @@ function CreateHub() {
   };
 
   const updateResource = (idx: number, field: "label" | "url", val: string) => {
-    setResources(
-      resources.map((r, i) => (i === idx ? { ...r, [field]: val } : r)),
-    );
+    setResources(resources.map((r, i) => (i === idx ? { ...r, [field]: val } : r)));
   };
 
   const removeResource = (idx: number) => {
@@ -153,12 +145,24 @@ function CreateHub() {
           resources: parsed.data.resources,
           owner_id: user.id,
         })
-        .select("slug")
+        .select("id, slug")
         .single();
 
       if (insertError) {
         throw insertError;
       }
+
+      // ATOMIC OWNER MEMBERSHIP GUARANTEE:
+      // In case the DB trigger is pending, ensure owner membership is present immediately
+      await supabase.from("hub_members").upsert(
+        {
+          hub_id: newHub.id,
+          user_id: user.id,
+          role: "owner",
+          status: "active",
+        },
+        { onConflict: "hub_id,user_id" },
+      );
 
       return newHub.slug;
     },
@@ -169,7 +173,10 @@ function CreateHub() {
       navigate({ to: "/hubs/$slug", params: { slug: newSlug } });
     },
     onError: (err: any) => {
-      if (err.message !== "Slug taken." && err.message !== "Validation failed. Please correct the highlighted fields.") {
+      if (
+        err.message !== "Slug taken." &&
+        err.message !== "Validation failed. Please correct the highlighted fields."
+      ) {
         toast.error(hubError(err, "Couldn't create hub. Please try again."));
       }
     },
@@ -229,7 +236,7 @@ function CreateHub() {
           </Label>
           <div className="mt-1.5 flex items-center rounded-2xl border border-input bg-muted/50 px-3 py-2 text-sm">
             <span className="text-muted-foreground shrink-0 select-none">
-              pingbydot.lovable.app/hubs/
+              {siteUrl("/hubs/").replace(/^https?:\/\//, "")}
             </span>
             <input
               id="slug"
@@ -259,7 +266,9 @@ function CreateHub() {
             className="mt-1.5 h-12 rounded-2xl"
             maxLength={120}
           />
-          {errors["tagline"] && <p className="mt-1 text-xs text-destructive">{errors["tagline"]}</p>}
+          {errors["tagline"] && (
+            <p className="mt-1 text-xs text-destructive">{errors["tagline"]}</p>
+          )}
         </div>
 
         {/* Category */}
@@ -283,7 +292,9 @@ function CreateHub() {
               </button>
             ))}
           </div>
-          {errors["category"] && <p className="mt-1 text-xs text-destructive">{errors["category"]}</p>}
+          {errors["category"] && (
+            <p className="mt-1 text-xs text-destructive">{errors["category"]}</p>
+          )}
         </fieldset>
 
         {/* Access Type */}
@@ -293,7 +304,9 @@ function CreateHub() {
             <label
               className={cn(
                 "flex cursor-pointer items-start gap-3 rounded-2xl border p-4 text-sm transition-colors",
-                access === "public" ? "border-primary bg-accent/60" : "border-border hover:bg-secondary",
+                access === "public"
+                  ? "border-primary bg-accent/60"
+                  : "border-border hover:bg-secondary",
               )}
             >
               <input
@@ -317,7 +330,9 @@ function CreateHub() {
             <label
               className={cn(
                 "flex cursor-pointer items-start gap-3 rounded-2xl border p-4 text-sm transition-colors",
-                access === "private" ? "border-primary bg-accent/60" : "border-border hover:bg-secondary",
+                access === "private"
+                  ? "border-primary bg-accent/60"
+                  : "border-border hover:bg-secondary",
               )}
             >
               <input

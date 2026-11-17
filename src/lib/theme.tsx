@@ -38,8 +38,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() => {
     if (typeof window === "undefined") return "light";
-    const initialTheme =
-      (localStorage.getItem(THEME_STORAGE_KEY) as Theme) || "system";
+    const initialTheme = (localStorage.getItem(THEME_STORAGE_KEY) as Theme) || "system";
     return initialTheme === "system" ? getSystemTheme() : initialTheme;
   });
 
@@ -52,8 +51,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
       if (activeResolved === "dark") {
         root.classList.add("dark");
+        root.style.colorScheme = "dark";
       } else {
         root.classList.remove("dark");
+        root.style.colorScheme = "light";
+      }
+      const themeMeta = document.querySelector('meta[name="theme-color"]');
+      if (themeMeta) {
+        themeMeta.setAttribute("content", activeResolved === "dark" ? "#090b0a" : "#173C32");
       }
     };
 

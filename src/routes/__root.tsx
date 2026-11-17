@@ -13,25 +13,39 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { initializeNativeApp } from "@/lib/native";
+import { useNavigate } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth";
 import { ThemeProvider } from "@/lib/theme";
 import { SiteHeader } from "@/components/layout/SiteHeader";
+import { DesktopSidebar } from "@/components/layout/DesktopSidebar";
 import { SiteFooter } from "@/components/layout/SiteFooter";
 import { BottomNav } from "@/components/layout/BottomNav";
+import { BootSplashScreen } from "@/components/layout/BootSplashScreen";
 import { GestureLayer } from "@/components/layout/GestureLayer";
+import { PingMark } from "@/components/BrandLogo";
 import { Toaster } from "@/components/ui/sonner";
+import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Keyboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SITE_NAME, siteJsonLd } from "@/lib/site";
+import { SITE_NAME, siteJsonLd, siteUrl } from "@/lib/site";
 
 function NotFoundComponent() {
   return (
     <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center px-5 text-center">
-      <span className="sticker -rotate-3 bg-blush text-blush-foreground">404 · lost signal</span>
-      <h1 className="mt-6 font-display text-5xl font-extrabold">This Ping went quiet.</h1>
-      <p className="mt-3 text-muted-foreground">The page you're looking for doesn't exist, or the Ping was deleted.</p>
+      <PingMark variant="silver" size="xl" alt="PING Silver Mark" />
+      <h1 className="mt-5 font-display text-4xl font-extrabold">This Ping went quiet.</h1>
+      <p className="mt-3 text-muted-foreground">
+        The page you're looking for doesn't exist, or the Ping was deleted.
+      </p>
       <div className="mt-8 flex gap-3">
-        <Button asChild variant="hero"><Link to="/explore">Explore Pings</Link></Button>
-        <Button asChild variant="outline"><Link to="/">Go home</Link></Button>
+        <Button asChild variant="hero">
+          <Link to="/explore">Explore Pings</Link>
+        </Button>
+        <Button asChild variant="outline">
+          <Link to="/">Go home</Link>
+        </Button>
       </div>
     </div>
   );
@@ -47,10 +61,21 @@ export function ErrorComponent({ error, reset }: ErrorComponentProps) {
     <div className="flex min-h-[60vh] items-center justify-center px-4">
       <div className="max-w-md text-center">
         <h1 className="font-display text-2xl font-bold">This page didn't load</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Something went wrong on our end. Try again or head back home.</p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Something went wrong on our end. Try again or head back home.
+        </p>
         <div className="mt-6 flex justify-center gap-2">
-          <Button onClick={() => { router.invalidate(); reset(); }}>Try again</Button>
-          <Button asChild variant="outline"><a href="/">Go home</a></Button>
+          <Button
+            onClick={() => {
+              router.invalidate();
+              reset();
+            }}
+          >
+            Try again
+          </Button>
+          <Button asChild variant="outline">
+            <a href="/">Go home</a>
+          </Button>
         </div>
       </div>
     </div>
@@ -64,11 +89,20 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Ping — Build in public. Share your story." },
-      { name: "description", content: "Ping is where founders share progress, ideas, launches and milestones with a public link anyone can open." },
+      {
+        name: "description",
+        content:
+          "Ping is where founders share progress, ideas, launches and milestones with a public link anyone can open.",
+      },
       { property: "og:title", content: "Ping — Build in public. Share your story." },
-      { property: "og:description", content: "Share progress, ideas and milestones as Pings with public links." },
+      {
+        property: "og:description",
+        content: "Share progress, ideas and milestones as Pings with public links.",
+      },
       { property: "og:type", content: "website" },
       { property: "og:site_name", content: SITE_NAME },
+      { property: "og:image", content: siteUrl("/brand/ping-logo.svg") },
+      { name: "twitter:image", content: siteUrl("/brand/ping-logo.svg") },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "theme-color", content: "#173C32" },
     ],
@@ -80,8 +114,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         href: "https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap",
       },
       { rel: "stylesheet", href: appCss },
-      // PENDING OFFICIAL LOGO: swap to the official favicon/app icons once installed.
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", href: "/brand/ping-mark-lime.png", type: "image/png" },
+      { rel: "icon", href: "/brand/ping-icon.svg", type: "image/svg+xml" },
+      { rel: "apple-touch-icon", href: "/brand/ping-mark-lime.png" },
     ],
     scripts: [{ type: "application/ld+json", children: JSON.stringify(siteJsonLd()) }],
   }),
@@ -98,7 +133,8 @@ function RootShell({ children }: { children: ReactNode }) {
         <HeadContent />
         <script
           dangerouslySetInnerHTML={{
-            __html: "(function(){try{var t=localStorage.getItem('ping-theme');var d=t==='dark'||(!t||t==='system')&&window.matchMedia('(prefers-color-scheme: dark)').matches;if(d)document.documentElement.classList.add('dark');}catch(e){}})();",
+            __html:
+              "(function(){try{var t=localStorage.getItem('ping-theme');var d=t==='dark'||(!t||t==='system')&&window.matchMedia('(prefers-color-scheme: dark)').matches;if(d){document.documentElement.classList.add('dark');document.documentElement.style.colorScheme='dark';var m=document.querySelector('meta[name=\"theme-color\"]');if(m)m.setAttribute('content','#090b0a');}}catch(e){}})();",
           }}
         />
       </head>
@@ -111,22 +147,105 @@ function RootShell({ children }: { children: ReactNode }) {
 }
 
 function RootComponent() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    initializeNativeApp((path) => navigate({ to: path as any }));
+  }, [navigate]);
   const { queryClient } = Route.useRouteContext();
   const { pathname } = useLocation();
+  const { helpOpen, setHelpOpen } = useKeyboardShortcuts();
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <AuthProvider>
-        <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-full focus:bg-lime focus:px-4 focus:py-2">Skip to content</a>
-        <SiteHeader />
-        <main id="main" key={pathname} className="animate-page-in">
-          <Outlet />
-        </main>
-        <div className="pb-24 md:pb-0"><SiteFooter /></div>
-        <BottomNav />
-        <GestureLayer />
-        <Toaster position="bottom-center" />
-      </AuthProvider>
+          <BootSplashScreen />
+          <a
+            href="#main"
+            className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-full focus:bg-lime focus:px-4 focus:py-2"
+          >
+            Skip to content
+          </a>
+          <SiteHeader />
+          <div className="mx-auto w-full max-w-7xl flex flex-col lg:flex-row items-start min-h-screen">
+            <DesktopSidebar />
+            <div className="flex-1 min-w-0 w-full flex flex-col min-h-screen">
+              <main
+                id="main"
+                key={pathname}
+                className="animate-page-in flex-1 w-full min-w-0 overflow-x-clip"
+              >
+                <Outlet />
+              </main>
+              {!pathname.startsWith("/messages") && (
+                <div className="pb-24 lg:pb-0">
+                  <SiteFooter />
+                </div>
+              )}
+            </div>
+          </div>
+          <BottomNav />
+          <GestureLayer />
+
+          {/* Keyboard Shortcuts Overlay */}
+          <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
+            <DialogContent className="max-w-sm rounded-3xl p-6 bg-card text-card-foreground">
+              <DialogHeader>
+                <div className="flex items-center gap-2 text-primary font-bold text-sm">
+                  <Keyboard className="size-4" />
+                  <span>Keyboard Navigation</span>
+                </div>
+                <DialogTitle className="font-display text-lg">Shortcuts</DialogTitle>
+              </DialogHeader>
+
+              <div className="mt-4 space-y-2.5 text-xs">
+                <div className="flex items-center justify-between py-1 border-b border-border/40">
+                  <span className="text-muted-foreground">Post a new Ping</span>
+                  <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
+                    C
+                  </kbd>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-border/40">
+                  <span className="text-muted-foreground">Explore directory</span>
+                  <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
+                    /
+                  </kbd>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-border/40">
+                  <span className="text-muted-foreground">Go to Home</span>
+                  <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
+                    G H
+                  </kbd>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-border/40">
+                  <span className="text-muted-foreground">Go to Messages</span>
+                  <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
+                    G M
+                  </kbd>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-border/40">
+                  <span className="text-muted-foreground">Go to Hubs</span>
+                  <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
+                    G B
+                  </kbd>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-border/40">
+                  <span className="text-muted-foreground">Go to Signals</span>
+                  <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
+                    G S
+                  </kbd>
+                </div>
+                <div className="flex items-center justify-between py-1">
+                  <span className="text-muted-foreground">Toggle this help</span>
+                  <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
+                    ?
+                  </kbd>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <Toaster position="bottom-center" />
+        </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );

@@ -1,9 +1,7 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Camera,
   Upload,
-  Video,
-  X,
   Plus,
   Smile,
   MapPin,
@@ -13,9 +11,18 @@ import {
   Sparkles,
   ArrowRight,
   Trash2,
+  AtSign,
+  Clock,
+  Settings2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,7 +32,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { myHubsQuery } from "@/lib/hub-queries";
-import type { MomentAudience, MomentMediaType, MomentSticker } from "@/lib/moments";
+import {
+  closeCircleQuery,
+  type MomentAudience,
+  type MomentMediaType,
+  type MomentSticker,
+} from "@/lib/moments";
+import { checkShieldRateLimit, sanitizeUserText, validateMediaUpload } from "@/lib/shield";
+import { CloseCircleDialog } from "./CloseCircleDialog";
 
 interface MomentDraft {
   mediaFile: File | null;
@@ -34,8 +48,9 @@ interface MomentDraft {
   caption: string;
   overlayText: string;
   stickers: MomentSticker[];
-  mentions: string[];
+  mentionsText: string;
   location: string;
+  duration: number;
   audience: MomentAudience;
   hubId: string | null;
   isDiscoverable: boolean;
@@ -58,13 +73,25 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const { data: myHubs = [] } = useQuery(myHubsQuery(user?.id));
+  const { data: closeCircle = [] } = useQuery(closeCircleQuery(user?.id));
 
   const [drafts, setDrafts] = useState<MomentDraft[]>([]);
   const [activeDraftIdx, setActiveDraftIdx] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [closeCircleOpen, setCloseCircleOpen] = useState(false);
 
   const activeDraft: MomentDraft | undefined = drafts[activeDraftIdx];
+
+  useEffect(() => {
+    if (!open && drafts.length > 0) {
+      drafts.forEach((d) => {
+        if (d.mediaUrl.startsWith("blob:")) URL.revokeObjectURL(d.mediaUrl);
+      });
+      setDrafts([]);
+      setActiveDraftIdx(0);
+    }
+  }, [open]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -75,15 +102,20 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       if (!file) continue;
-      if (file.size > 25 * 1024 * 1024) {
-        toast.error(`File ${file.name} exceeds 25MB limit.`);
-        continue;
-      }
 
       const isVideo = file.type.startsWith("video/");
       const isImage = file.type.startsWith("image/");
       if (!isVideo && !isImage) {
-        toast.error(`Unsupported file type: ${file.type}`);
+        toast.error(`Unsupported file type: ${file.type || file.name}`);
+        continue;
+      }
+
+      const check = validateMediaUpload(
+        { type: file.type, size: file.size, name: file.name },
+        isVideo ? "video" : "image",
+      );
+      if (!check.valid) {
+        toast.error(check.error || "Invalid media file.");
         continue;
       }
 
@@ -95,8 +127,9 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
         caption: "",
         overlayText: "",
         stickers: [],
-        mentions: [],
+        mentionsText: "",
         location: "",
+        duration: isVideo ? 15 : 5,
         audience: "public",
         hubId: null,
         isDiscoverable: true,
@@ -107,27 +140,41 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
     }
 
     if (newDrafts.length > 0) {
-      setDrafts((prev) => [...prev, ...newDrafts]);
-      setActiveDraftIdx(drafts.length);
+      setDrafts((prev) => {
+        const next = [...prev, ...newDrafts];
+        setActiveDraftIdx(prev.length);
+        return next;
+      });
     }
+    e.target.value = "";
   };
 
   const updateActiveDraft = (patch: Partial<MomentDraft>) => {
-    setDrafts((prev) =>
-      prev.map((d, idx) => (idx === activeDraftIdx ? { ...d, ...patch } : d)),
-    );
+    setDrafts((prev) => prev.map((d, idx) => (idx === activeDraftIdx ? { ...d, ...patch } : d)));
   };
 
   const addSticker = (emoji: string) => {
     if (!activeDraft) return;
+    const offset = (activeDraft.stickers.length * 9) % 36;
     const newSticker: MomentSticker = {
-      id: Math.random().toString(),
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       emoji,
-      x: 50,
-      y: 50,
+      x: 24 + offset,
+      y: 35 + (offset % 25),
       scale: 1,
     };
     updateActiveDraft({ stickers: [...activeDraft.stickers, newSticker] });
+  };
+
+  const handleCanvasStickerPlace = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!activeDraft || activeDraft.stickers.length === 0) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = Math.max(8, Math.min(88, Math.round(((e.clientX - rect.left) / rect.width) * 100)));
+    const y = Math.max(10, Math.min(85, Math.round(((e.clientY - rect.top) / rect.height) * 100)));
+    const lastIdx = activeDraft.stickers.length - 1;
+    updateActiveDraft({
+      stickers: activeDraft.stickers.map((s, idx) => (idx === lastIdx ? { ...s, x, y } : s)),
+    });
   };
 
   const removeSticker = (id: string) => {
@@ -139,6 +186,10 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
 
   const removeDraft = (idx: number) => {
     setDrafts((prev) => {
+      const removed = prev[idx];
+      if (removed?.mediaUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(removed.mediaUrl);
+      }
       const next = prev.filter((_, i) => i !== idx);
       if (activeDraftIdx >= next.length) {
         setActiveDraftIdx(Math.max(0, next.length - 1));
@@ -157,6 +208,12 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
       return;
     }
 
+    const rateCheck = checkShieldRateLimit("create_moment", user.id);
+    if (!rateCheck.allowed) {
+      toast.error(rateCheck.reason || "Publishing too quickly. Please wait a moment.");
+      return;
+    }
+
     setIsUploading(true);
     setUploadProgress(10);
 
@@ -166,9 +223,10 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
         if (!d) continue;
         let uploadedUrl = d.mediaUrl;
 
-        // If it's a real file, upload to Supabase Storage
         if (d.mediaFile) {
-          const ext = d.mediaFile.name.split(".").pop() || (d.mediaType === "video" ? "mp4" : "jpg");
+          const ext =
+            d.mediaFile.name.split(".").pop()?.toLowerCase() ||
+            (d.mediaType === "video" ? "mp4" : "jpg");
           const path = `${user.id}/moments/${Date.now()}_${i}.${ext}`;
 
           const { data: uploadRes, error: uploadErr } = await supabase.storage
@@ -178,34 +236,55 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
               upsert: false,
             });
 
-          if (uploadErr) {
-            console.warn("Storage upload fallback:", uploadErr);
-          } else if (uploadRes) {
-            const { data: publicUrlData } = supabase.storage
-              .from("media")
-              .getPublicUrl(uploadRes.path);
-            uploadedUrl = publicUrlData.publicUrl;
+          if (uploadErr || !uploadRes) {
+            throw new Error(
+              uploadErr?.message ||
+                "Could not upload Moment media to storage. Check storage permissions and try again.",
+            );
           }
+
+          const { data: publicUrlData } = supabase.storage
+            .from("media")
+            .getPublicUrl(uploadRes.path);
+          uploadedUrl = publicUrlData.publicUrl;
         }
+
+        if (uploadedUrl.startsWith("blob:")) {
+          throw new Error("Media upload did not return a persistent URL.");
+        }
+
+        const parsedMentions = Array.from(
+          new Set(
+            d.mentionsText
+              .split(/[\s,]+/)
+              .map((m) => m.replace(/^@/, "").trim().toLowerCase())
+              .filter((m) => /^[a-z0-9_]{2,30}$/.test(m)),
+          ),
+        );
 
         setUploadProgress(Math.round(((i + 1) / drafts.length) * 80));
 
-        // Insert Moment record
+        const cleanCaption = sanitizeUserText(d.caption);
+        const cleanOverlay = sanitizeUserText(d.overlayText);
+        const cleanLocation = sanitizeUserText(d.location);
+
         const { error: insertErr } = await supabase.from("moments").insert({
           author_id: user.id,
           media_url: uploadedUrl,
           media_type: d.mediaType,
-          caption: d.caption.trim() || null,
-          overlay_text: d.overlayText.trim() || null,
+          caption: cleanCaption || null,
+          overlay_text: cleanOverlay || null,
           stickers: d.stickers as any,
-          mentions: d.mentions as any,
-          location: d.location.trim() || null,
+          mentions: parsedMentions as any,
+          location: cleanLocation || null,
+          duration: d.duration,
           audience: d.audience,
           hub_id: d.audience === "hub" ? d.hubId : null,
           is_discoverable: d.audience === "public" ? d.isDiscoverable : false,
           allow_comments: d.allowComments,
           allow_sharing: d.allowSharing,
-          allow_repings: d.allowRepings,
+          allow_repings:
+            d.audience === "public" || d.audience === "followers" ? d.allowRepings : false,
         });
 
         if (insertErr) throw insertErr;
@@ -222,6 +301,9 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
       qc.invalidateQueries({ queryKey: ["discoverable-moments"] });
       qc.invalidateQueries({ queryKey: ["user-active-moments"] });
 
+      drafts.forEach((d) => {
+        if (d.mediaUrl.startsWith("blob:")) URL.revokeObjectURL(d.mediaUrl);
+      });
       setDrafts([]);
       onOpenChange(false);
       onPublished?.();
@@ -235,317 +317,448 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl rounded-3xl p-6 max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <div className="flex items-center gap-2 text-primary font-bold text-sm">
-            <Sparkles className="size-4" />
-            <span>Moments Composer</span>
-          </div>
-          <DialogTitle className="font-display text-2xl">Share a Moment</DialogTitle>
-          <DialogDescription className="text-xs text-muted-foreground">
-            Fast, lightweight status updates that travel across your network for 24 hours.
-          </DialogDescription>
-        </DialogHeader>
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*,video/*"
-          multiple
-          className="hidden"
-          onChange={handleFileSelect}
-        />
-
-        {drafts.length === 0 ? (
-          /* Empty Initial State: Camera / Upload */
-          <div className="mt-6 flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-border/80 p-10 text-center bg-card/40">
-            <div className="flex size-16 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <Camera className="size-8" />
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-xl rounded-3xl p-6 max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center gap-2 text-primary font-bold text-sm">
+              <Sparkles className="size-4" />
+              <span>Moments Composer</span>
             </div>
-            <h3 className="mt-4 font-display text-lg font-bold">Capture or upload media</h3>
-            <p className="mt-1 text-xs text-muted-foreground max-w-xs">
-              Upload photos or short vertical videos up to 25MB. Add captions, overlays, stickers, and tags.
-            </p>
-            <div className="mt-6 flex gap-3">
-              <Button
-                type="button"
-                variant="hero"
-                onClick={() => fileInputRef.current?.click()}
-                className="rounded-2xl gap-2"
-              >
-                <Upload className="size-4" /> Choose from files
-              </Button>
-            </div>
-          </div>
-        ) : (
-          /* Active Draft Preview & Editor */
-          <div className="mt-4 space-y-5">
-            {/* Sequence Selector Pill Bar */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-              {drafts.map((d, idx) => (
-                <button
-                  key={idx}
+            <DialogTitle className="font-display text-2xl">Create a Moment</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Share what's happening around you with photos, video clips, captions, and audience
+              controls.
+            </DialogDescription>
+          </DialogHeader>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
+            multiple
+            className="hidden"
+            onChange={handleFileSelect}
+          />
+
+          {drafts.length === 0 ? (
+            <div className="mt-6 flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-border/80 p-10 text-center bg-card/40">
+              <div className="flex size-16 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <Camera className="size-8" />
+              </div>
+              <h3 className="mt-4 font-display text-lg font-bold">Capture or upload media</h3>
+              <p className="mt-1 text-xs text-muted-foreground max-w-xs">
+                Upload photos (up to 10MB) or short vertical videos (up to 50MB). Add captions,
+                overlays, stickers, locations, and audience controls.
+              </p>
+              <div className="mt-6 flex gap-3">
+                <Button
                   type="button"
-                  onClick={() => setActiveDraftIdx(idx)}
-                  className={`relative shrink-0 size-14 rounded-xl overflow-hidden border-2 transition-all ${
-                    idx === activeDraftIdx ? "border-primary ring-2 ring-primary/30" : "border-border opacity-70"
-                  }`}
+                  variant="hero"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="rounded-2xl gap-2"
                 >
-                  {d.mediaType === "video" ? (
-                    <video src={d.mediaUrl} className="h-full w-full object-cover" />
-                  ) : (
-                    <img src={d.mediaUrl} alt="Thumbnail" className="h-full w-full object-cover" />
-                  )}
-                  <span className="absolute bottom-0 inset-x-0 bg-black/60 text-[9px] text-white text-center font-bold">
-                    #{idx + 1}
-                  </span>
-                </button>
-              ))}
-
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="size-14 rounded-xl border border-dashed border-border flex items-center justify-center text-muted-foreground hover:bg-muted/40 transition-colors shrink-0"
-                title="Add another moment to sequence"
-              >
-                <Plus className="size-5" />
-              </button>
+                  <Upload className="size-4" /> Choose from files
+                </Button>
+              </div>
             </div>
-
-            {/* Media Canvas Preview */}
-            {activeDraft && (
-              <div className="relative aspect-[9/14] w-full max-h-72 rounded-2xl overflow-hidden bg-black flex items-center justify-center shadow-inner">
-                {activeDraft.mediaType === "video" ? (
-                  <video src={activeDraft.mediaUrl} controls className="h-full w-full object-contain" />
-                ) : (
-                  <img src={activeDraft.mediaUrl} alt="Preview" className="h-full w-full object-contain" />
-                )}
-
-                {activeDraft.overlayText && (
-                  <div className="absolute inset-x-4 top-1/3 text-center pointer-events-none">
-                    <span className="inline-block rounded-xl bg-black/70 px-3 py-1.5 font-display text-sm font-bold text-white backdrop-blur-sm">
-                      {activeDraft.overlayText}
-                    </span>
-                  </div>
-                )}
-
-                {activeDraft.stickers.map((s) => (
-                  <div
-                    key={s.id}
-                    className="absolute text-2xl cursor-pointer hover:scale-125 transition-transform"
-                    style={{ left: `${s.x}%`, top: `${s.y}%` }}
-                    onClick={() => removeSticker(s.id)}
-                    title="Tap to remove sticker"
+          ) : (
+            <div className="mt-4 space-y-5">
+              {/* Sequence Selector Pill Bar */}
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+                {drafts.map((d, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setActiveDraftIdx(idx)}
+                    className={`relative shrink-0 size-14 rounded-xl overflow-hidden border-2 transition-all ${
+                      idx === activeDraftIdx
+                        ? "border-primary ring-2 ring-primary/30"
+                        : "border-border opacity-70"
+                    }`}
                   >
-                    {s.emoji}
-                  </div>
+                    {d.mediaType === "video" ? (
+                      <video src={d.mediaUrl} className="h-full w-full object-cover" />
+                    ) : (
+                      <img
+                        src={d.mediaUrl}
+                        alt="Thumbnail"
+                        className="h-full w-full object-cover"
+                      />
+                    )}
+                    <span className="absolute bottom-0 inset-x-0 bg-black/60 text-[9px] text-white text-center font-bold">
+                      #{idx + 1}
+                    </span>
+                  </button>
                 ))}
 
                 <button
                   type="button"
-                  onClick={() => removeDraft(activeDraftIdx)}
-                  className="absolute top-2 right-2 rounded-full bg-black/60 p-1.5 text-white hover:bg-destructive transition-colors"
-                  title="Remove this draft"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="size-14 rounded-xl border border-dashed border-border flex items-center justify-center text-muted-foreground hover:bg-muted/40 transition-colors shrink-0"
+                  title="Add another moment to sequence"
                 >
-                  <Trash2 className="size-4" />
+                  <Plus className="size-5" />
                 </button>
               </div>
-            )}
 
-            {/* Editing Controls */}
-            {activeDraft && (
-              <div className="space-y-4">
-                {/* Text Overlay */}
-                <div>
-                  <Label className="text-xs font-semibold">Banner Overlay Text (Optional)</Label>
-                  <Input
-                    value={activeDraft.overlayText}
-                    onChange={(e) => updateActiveDraft({ overlayText: e.target.value })}
-                    placeholder="e.g. Day 1 of YC / Shipped v2.0"
-                    className="mt-1 rounded-xl h-10"
-                  />
+              {/* Media Canvas Preview */}
+              {activeDraft && (
+                <div
+                  onClick={handleCanvasStickerPlace}
+                  className="relative aspect-[9/14] w-full max-h-72 rounded-2xl overflow-hidden bg-black flex items-center justify-center shadow-inner cursor-crosshair"
+                  title={
+                    activeDraft.stickers.length > 0
+                      ? "Click anywhere on preview to move the latest sticker"
+                      : undefined
+                  }
+                >
+                  {activeDraft.mediaType === "video" ? (
+                    <video
+                      src={activeDraft.mediaUrl}
+                      controls
+                      className="h-full w-full object-contain"
+                    />
+                  ) : (
+                    <img
+                      src={activeDraft.mediaUrl}
+                      alt="Preview"
+                      className="h-full w-full object-contain"
+                    />
+                  )}
+
+                  {activeDraft.overlayText && (
+                    <div className="absolute inset-x-4 top-1/3 text-center pointer-events-none">
+                      <span className="inline-block rounded-xl bg-black/70 px-3 py-1.5 font-display text-sm font-bold text-white backdrop-blur-sm">
+                        {activeDraft.overlayText}
+                      </span>
+                    </div>
+                  )}
+
+                  {activeDraft.stickers.map((s) => (
+                    <button
+                      type="button"
+                      key={s.id}
+                      className="absolute text-2xl cursor-pointer hover:scale-125 transition-transform"
+                      style={{ left: `${s.x}%`, top: `${s.y}%` }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeSticker(s.id);
+                      }}
+                      title="Tap sticker to remove"
+                    >
+                      {s.emoji}
+                    </button>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeDraft(activeDraftIdx);
+                    }}
+                    className="absolute top-2 right-2 rounded-full bg-black/60 p-1.5 text-white hover:bg-destructive transition-colors"
+                    title="Remove this draft"
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
                 </div>
+              )}
 
-                {/* Stickers */}
-                <div>
-                  <Label className="text-xs font-semibold flex items-center gap-1.5">
-                    <Smile className="size-3.5" /> Stickers
-                  </Label>
-                  <div className="mt-1.5 flex items-center gap-2 overflow-x-auto pb-1">
-                    {EMOJI_STICKERS.map((emoji) => (
-                      <button
-                        key={emoji}
-                        type="button"
-                        onClick={() => addSticker(emoji)}
-                        className="flex size-8 items-center justify-center rounded-lg bg-secondary/80 text-lg hover:scale-110 transition-transform"
-                      >
-                        {emoji}
-                      </button>
-                    ))}
+              {/* Editing Controls */}
+              {activeDraft && (
+                <div className="space-y-4">
+                  {/* Text Overlay */}
+                  <div>
+                    <Label className="text-xs font-semibold">Banner Overlay Text (Optional)</Label>
+                    <Input
+                      value={activeDraft.overlayText}
+                      onChange={(e) => updateActiveDraft({ overlayText: e.target.value })}
+                      placeholder="e.g. Day 1 of Launch / Shipped v2.0"
+                      className="mt-1 rounded-xl h-10"
+                      maxLength={80}
+                    />
                   </div>
-                </div>
 
-                {/* Caption */}
-                <div>
-                  <Label className="text-xs font-semibold">Caption</Label>
-                  <Textarea
-                    value={activeDraft.caption}
-                    onChange={(e) => updateActiveDraft({ caption: e.target.value })}
-                    placeholder="Tell your founders network what's happening…"
-                    rows={2}
-                    className="mt-1 rounded-xl resize-none text-sm"
-                  />
-                </div>
+                  {/* Stickers */}
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-semibold flex items-center gap-1.5">
+                        <Smile className="size-3.5" /> Stickers
+                      </Label>
+                      {activeDraft.stickers.length > 0 && (
+                        <span className="text-[11px] text-muted-foreground">
+                          Tap preview to position · Tap sticker to remove
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-1.5 flex items-center gap-2 overflow-x-auto pb-1">
+                      {EMOJI_STICKERS.map((emoji) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => addSticker(emoji)}
+                          className="flex size-8 items-center justify-center rounded-lg bg-secondary/80 text-lg hover:scale-110 transition-transform shrink-0"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-                {/* Audience Selection */}
-                <div>
-                  <Label className="text-xs font-semibold">Audience & Privacy</Label>
-                  <div className="mt-1.5 grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => updateActiveDraft({ audience: "public" })}
-                      className={`rounded-xl border p-2 text-xs font-semibold flex items-center gap-2 ${
-                        activeDraft.audience === "public"
-                          ? "border-primary bg-primary/10 text-primary"
-                          : "border-border text-muted-foreground hover:bg-muted/50"
-                      }`}
-                    >
-                      <Globe className="size-3.5" /> Public Network
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => updateActiveDraft({ audience: "followers" })}
-                      className={`rounded-xl border p-2 text-xs font-semibold flex items-center gap-2 ${
-                        activeDraft.audience === "followers"
-                          ? "border-primary bg-primary/10 text-primary"
-                          : "border-border text-muted-foreground hover:bg-muted/50"
-                      }`}
-                    >
-                      <Users className="size-3.5" /> Followers Only
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => updateActiveDraft({ audience: "close_circle" })}
-                      className={`rounded-xl border p-2 text-xs font-semibold flex items-center gap-2 ${
-                        activeDraft.audience === "close_circle"
-                          ? "border-primary bg-primary/10 text-primary"
-                          : "border-border text-muted-foreground hover:bg-muted/50"
-                      }`}
-                    >
-                      <Lock className="size-3.5" /> Close Circle
-                    </button>
-                    {myHubs.length > 0 && (
+                  {/* Caption */}
+                  <div>
+                    <Label className="text-xs font-semibold">Caption</Label>
+                    <Textarea
+                      value={activeDraft.caption}
+                      onChange={(e) => updateActiveDraft({ caption: e.target.value })}
+                      placeholder="Tell your founders network what's happening…"
+                      rows={2}
+                      maxLength={400}
+                      className="mt-1 rounded-xl resize-none text-sm"
+                    />
+                  </div>
+
+                  {/* Location, Mentions & Duration */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <div>
+                      <Label className="text-xs font-semibold flex items-center gap-1">
+                        <MapPin className="size-3" /> Location
+                      </Label>
+                      <Input
+                        value={activeDraft.location}
+                        onChange={(e) => updateActiveDraft({ location: e.target.value })}
+                        placeholder="San Francisco"
+                        maxLength={60}
+                        className="mt-1 rounded-xl h-9 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-semibold flex items-center gap-1">
+                        <AtSign className="size-3" /> Mentions
+                      </Label>
+                      <Input
+                        value={activeDraft.mentionsText}
+                        onChange={(e) => updateActiveDraft({ mentionsText: e.target.value })}
+                        placeholder="@alice @bob"
+                        maxLength={120}
+                        className="mt-1 rounded-xl h-9 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-semibold flex items-center gap-1">
+                        <Clock className="size-3" /> Duration
+                      </Label>
+                      <select
+                        value={activeDraft.duration}
+                        onChange={(e) => updateActiveDraft({ duration: Number(e.target.value) })}
+                        className="mt-1 h-9 w-full rounded-xl border border-input bg-card px-2.5 text-xs"
+                      >
+                        <option value={5}>5 seconds</option>
+                        <option value={10}>10 seconds</option>
+                        <option value={15}>15 seconds</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Audience Selection */}
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-semibold">Audience &amp; Privacy</Label>
                       <button
                         type="button"
-                        onClick={() =>
-                          updateActiveDraft({
-                            audience: "hub",
-                            hubId: activeDraft.hubId ?? myHubs[0]?.hub.id ?? null,
-                          })
-                        }
+                        onClick={() => setCloseCircleOpen(true)}
+                        className="text-[11px] font-semibold text-primary hover:underline flex items-center gap-1"
+                      >
+                        <Settings2 className="size-3" /> Manage Close Circle ({closeCircle.length})
+                      </button>
+                    </div>
+                    <div className="mt-1.5 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => updateActiveDraft({ audience: "public" })}
                         className={`rounded-xl border p-2 text-xs font-semibold flex items-center gap-2 ${
-                          activeDraft.audience === "hub"
+                          activeDraft.audience === "public"
                             ? "border-primary bg-primary/10 text-primary"
                             : "border-border text-muted-foreground hover:bg-muted/50"
                         }`}
                       >
-                        <Users className="size-3.5" /> Specific Hub
+                        <Globe className="size-3.5" /> Public Network
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => updateActiveDraft({ audience: "followers" })}
+                        className={`rounded-xl border p-2 text-xs font-semibold flex items-center gap-2 ${
+                          activeDraft.audience === "followers"
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border text-muted-foreground hover:bg-muted/50"
+                        }`}
+                      >
+                        <Users className="size-3.5" /> Followers Only
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateActiveDraft({ audience: "close_circle" })}
+                        className={`rounded-xl border p-2 text-xs font-semibold flex items-center gap-2 ${
+                          activeDraft.audience === "close_circle"
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border text-muted-foreground hover:bg-muted/50"
+                        }`}
+                      >
+                        <Lock className="size-3.5" /> Close Circle ({closeCircle.length})
+                      </button>
+                      {myHubs.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateActiveDraft({
+                              audience: "hub",
+                              hubId: activeDraft.hubId ?? myHubs[0]?.hub.id ?? null,
+                            })
+                          }
+                          className={`rounded-xl border p-2 text-xs font-semibold flex items-center gap-2 ${
+                            activeDraft.audience === "hub"
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-border text-muted-foreground hover:bg-muted/50"
+                          }`}
+                        >
+                          <Users className="size-3.5" /> Specific Hub
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Hub Selection Dropdown if audience === 'hub' */}
+                  {activeDraft.audience === "hub" && myHubs.length > 0 && (
+                    <div>
+                      <Label className="text-xs font-semibold">Select Target Hub</Label>
+                      <select
+                        value={activeDraft.hubId || myHubs[0]?.hub.id}
+                        onChange={(e) => updateActiveDraft({ hubId: e.target.value })}
+                        className="mt-1 w-full rounded-xl border border-input bg-background p-2 text-xs"
+                      >
+                        {myHubs.map((h) => (
+                          <option key={h.hub.id} value={h.hub.id}>
+                            {h.hub.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Interaction Controls */}
+                  <div className="space-y-2">
+                    {activeDraft.audience === "public" && (
+                      <div className="flex items-center justify-between rounded-xl bg-secondary/50 p-3 border border-border/50">
+                        <div>
+                          <Label
+                            htmlFor="discoverable-toggle"
+                            className="text-xs font-semibold cursor-pointer"
+                          >
+                            Opt into "For You" Feed
+                          </Label>
+                          <p className="text-[11px] text-muted-foreground">
+                            Allow great moments to be discovered beyond your existing network.
+                          </p>
+                        </div>
+                        <Switch
+                          id="discoverable-toggle"
+                          checked={activeDraft.isDiscoverable}
+                          onCheckedChange={(c) => updateActiveDraft({ isDiscoverable: c })}
+                        />
+                      </div>
                     )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div className="flex items-center justify-between rounded-xl bg-secondary/40 p-2.5 border border-border/40">
+                        <Label
+                          htmlFor="allow-replies-toggle"
+                          className="text-xs font-medium cursor-pointer"
+                        >
+                          Allow private replies
+                        </Label>
+                        <Switch
+                          id="allow-replies-toggle"
+                          checked={activeDraft.allowComments}
+                          onCheckedChange={(c) => updateActiveDraft({ allowComments: c })}
+                        />
+                      </div>
+
+                      {(activeDraft.audience === "public" ||
+                        activeDraft.audience === "followers") && (
+                        <div className="flex items-center justify-between rounded-xl bg-secondary/40 p-2.5 border border-border/40">
+                          <Label
+                            htmlFor="allow-repings-toggle"
+                            className="text-xs font-medium cursor-pointer"
+                          >
+                            Allow Re-Pings
+                          </Label>
+                          <Switch
+                            id="allow-repings-toggle"
+                            checked={activeDraft.allowRepings}
+                            onCheckedChange={(c) => updateActiveDraft({ allowRepings: c })}
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
+              )}
 
-                {/* Hub Selection Dropdown if audience === 'hub' */}
-                {activeDraft.audience === "hub" && myHubs.length > 0 && (
-                  <div>
-                    <Label className="text-xs font-semibold">Select Target Hub</Label>
-                    <select
-                      value={activeDraft.hubId || myHubs[0]?.hub.id}
-                      onChange={(e) => updateActiveDraft({ hubId: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-input bg-background p-2 text-xs"
-                    >
-                      {myHubs.map((h) => (
-                        <option key={h.hub.id} value={h.hub.id}>
-                          {h.hub.name}
-                        </option>
-                      ))}
-                    </select>
+              {/* Publishing Progress Bar */}
+              {isUploading && (
+                <div className="mt-4 space-y-1">
+                  <div className="flex justify-between text-xs font-semibold text-primary">
+                    <span>Uploading Moments…</span>
+                    <span>{uploadProgress}%</span>
                   </div>
-                )}
-
-                {/* For You Discovery Opt-In (Only for public moments) */}
-                {activeDraft.audience === "public" && (
-                  <div className="flex items-center justify-between rounded-xl bg-secondary/50 p-3 border border-border/50">
-                    <div>
-                      <Label htmlFor="discoverable-toggle" className="text-xs font-semibold cursor-pointer">
-                        Opt into "For You" Feed
-                      </Label>
-                      <p className="text-[11px] text-muted-foreground">
-                        Allow great moments to be discovered beyond your existing network.
-                      </p>
-                    </div>
-                    <Switch
-                      id="discoverable-toggle"
-                      checked={activeDraft.isDiscoverable}
-                      onCheckedChange={(c) => updateActiveDraft({ isDiscoverable: c })}
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+                    <div
+                      className="h-full bg-primary transition-all duration-300"
+                      style={{ width: `${uploadProgress}%` }}
                     />
                   </div>
-                )}
-              </div>
-            )}
-
-            {/* Publishing Progress Bar */}
-            {isUploading && (
-              <div className="mt-4 space-y-1">
-                <div className="flex justify-between text-xs font-semibold text-primary">
-                  <span>Uploading Moments…</span>
-                  <span>{uploadProgress}%</span>
                 </div>
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
-                  <div
-                    className="h-full bg-primary transition-all duration-300"
-                    style={{ width: `${uploadProgress}%` }}
-                  />
-                </div>
-              </div>
-            )}
+              )}
 
-            {/* Action Bar */}
-            <div className="pt-3 border-t border-border flex items-center justify-between">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => fileInputRef.current?.click()}
-                className="rounded-xl text-xs"
-              >
-                + Add another
-              </Button>
-
-              <div className="flex gap-2">
+              {/* Action Bar */}
+              <div className="pt-3 border-t border-border flex items-center justify-between">
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => onOpenChange(false)}
+                  onClick={() => fileInputRef.current?.click()}
                   className="rounded-xl text-xs"
                 >
-                  Cancel
+                  + Add another
                 </Button>
-                <Button
-                  type="button"
-                  variant="hero"
-                  disabled={isUploading}
-                  onClick={handlePublishAll}
-                  className="rounded-xl text-xs gap-1.5"
-                >
-                  {isUploading ? "Publishing…" : `Publish Moment (${drafts.length})`}
-                  <ArrowRight className="size-3.5" />
-                </Button>
+
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => onOpenChange(false)}
+                    className="rounded-xl text-xs"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="hero"
+                    disabled={isUploading}
+                    onClick={handlePublishAll}
+                    className="rounded-xl text-xs gap-1.5"
+                  >
+                    {isUploading ? "Publishing…" : `Publish Moment (${drafts.length})`}
+                    <ArrowRight className="size-3.5" />
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <CloseCircleDialog open={closeCircleOpen} onOpenChange={setCloseCircleOpen} />
+    </>
   );
 }

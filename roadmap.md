@@ -1,4 +1,5 @@
 # Launch repair
+
 - [ ] Admin first: locked roles, manual owner bootstrap, verified admin dashboard, moderation audit and paginated management.
 - [ ] Produce owner/admin/non-admin QA report with verified checks and explicit blockers.
 - [x] Official logo preparation: inspect assets, connect reusable navigation/artwork slots with text fallback, verify sharing without publishing.
@@ -10,7 +11,9 @@
 - [ ] Repair Explore, Ping details, public share rendering and error handling.
 - [ ] Repair signup/login and verify authenticated publishing.
 - [ ] Run tests, browser checks, schema/security checks and report unverified launch risks.
+
 # Ping V2 (Connections and mobile navigation resumed; other modules out of scope)
+
 - [x] Day 1: SEO metadata, JSON-LD, sitemap.xml, robots.txt, logo integration points (official logo still pending).
 - [ ] Official logo install: blocked until the approved PNG/SVG is uploaded.
 - [ ] Finish Connections editor and public links: four independent platforms, public visibility, one primary, validation and destination previews; preserve private numbers under RLS. No tracking or bookmarks.

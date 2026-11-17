@@ -16,7 +16,17 @@ import { replyCount } from "@/lib/pings";
 import { socialImageUrl } from "@/lib/sharing/card";
 
 function MissingPing() {
-  return <div className="mx-auto max-w-md px-5 py-20 text-center"><h1 className="font-display text-4xl font-extrabold">This Ping isn't here</h1><p className="mt-2 text-muted-foreground">It may have been deleted, or the link is mistyped.</p><Button asChild variant="hero" className="mt-6"><Link to="/explore">Explore Pings</Link></Button></div>;
+  return (
+    <div className="mx-auto max-w-md px-5 py-20 text-center">
+      <h1 className="font-display text-4xl font-extrabold">This Ping isn't here</h1>
+      <p className="mt-2 text-muted-foreground">
+        It may have been deleted, or the link is mistyped.
+      </p>
+      <Button asChild variant="hero" className="mt-6">
+        <Link to="/explore">Explore Pings</Link>
+      </Button>
+    </div>
+  );
 }
 
 export const Route = createFileRoute("/p/$id")({
@@ -30,23 +40,36 @@ export const Route = createFileRoute("/p/$id")({
   notFoundComponent: MissingPing,
   head: ({ loaderData: ping }) => ({
     meta: [
-      { title: `${ping?.author?.display_name || ping?.author?.username || "A founder"}'s Ping — Ping` },
+      {
+        title: `${ping?.author?.display_name || ping?.author?.username || "A founder"}'s Ping — Ping`,
+      },
       { name: "description", content: ping?.content.slice(0, 200) || "Read a public Ping." },
-      { property: "og:title", content: `${ping?.author?.display_name || ping?.author?.username || "A founder"}'s Ping` },
+      {
+        property: "og:title",
+        content: `${ping?.author?.display_name || ping?.author?.username || "A founder"}'s Ping`,
+      },
       { property: "og:description", content: ping?.content.slice(0, 200) || "Read a public Ping." },
       { property: "og:type", content: "article" },
       { name: "twitter:card", content: "summary_large_image" },
       ...(!ping ? [{ name: "robots", content: "noindex, nofollow" }] : []),
-      ...(ping ? [
-        { property: "og:url", content: pingUrl(ping.id) },
-        { name: "twitter:title", content: `${ping.author?.display_name || ping.author?.username || "A founder"}'s Ping` },
-        { name: "twitter:description", content: ping.content.slice(0, 200) },
-        { property: "og:image", content: socialImageUrl(ping) },
-        { name: "twitter:image", content: socialImageUrl(ping) },
-        { property: "og:image:width", content: "1200" },
-        { property: "og:image:height", content: "630" },
-        { property: "og:image:alt", content: `A Ping by ${ping.author?.display_name || "a founder"}` },
-      ] : []),
+      ...(ping
+        ? [
+            { property: "og:url", content: pingUrl(ping.id) },
+            {
+              name: "twitter:title",
+              content: `${ping.author?.display_name || ping.author?.username || "A founder"}'s Ping`,
+            },
+            { name: "twitter:description", content: ping.content.slice(0, 200) },
+            { property: "og:image", content: socialImageUrl(ping) },
+            { name: "twitter:image", content: socialImageUrl(ping) },
+            { property: "og:image:width", content: "1200" },
+            { property: "og:image:height", content: "630" },
+            {
+              property: "og:image:alt",
+              content: `A Ping by ${ping.author?.display_name || "a founder"}`,
+            },
+          ]
+        : []),
     ],
     links: ping ? [{ rel: "canonical", href: pingUrl(ping.id) }] : [],
   }),
@@ -66,29 +89,53 @@ function PingDetail() {
   return (
     <div className="bg-hero">
       <div className="mx-auto max-w-2xl px-5 py-10 sm:py-14">
-        <Link to="/explore" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" /> Explore</Link>
+        <Link
+          to="/explore"
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" /> Explore
+        </Link>
         <article className="surface-card mt-5 rounded-[2rem] p-6 sm:p-9">
           <header className="flex items-center gap-3">
             {ping.author && (
-              <Link to="/@{$username}" params={{ username: ping.author.username }} className="flex flex-1 items-center gap-3">
+              <Link
+                to="/@{$username}"
+                params={{ username: ping.author.username }}
+                className="flex flex-1 items-center gap-3"
+              >
                 <FounderAvatar name={name} src={ping.author.avatar_url} size="lg" />
                 <span>
-                  <span className="block font-display text-lg font-bold hover:underline">{name}</span>
-                  <span className="block text-sm text-muted-foreground">@{ping.author.username}</span>
+                  <span className="block font-display text-lg font-bold hover:underline">
+                    {name}
+                  </span>
+                  <span className="block text-sm text-muted-foreground">
+                    @{ping.author.username}
+                  </span>
                 </span>
               </Link>
             )}
             <CategoryTag value={ping.category} />
           </header>
-          <p className="mt-6 whitespace-pre-line break-words text-lg leading-relaxed sm:text-xl">{ping.content}</p>
+          <p className="mt-6 whitespace-pre-line break-words text-lg leading-relaxed sm:text-xl">
+            {ping.content}
+          </p>
           <RepingAttribution ping={ping} />
           <CtaLink ping={ping} />
           <p className="mt-6 text-sm text-muted-foreground">
-            <time dateTime={ping.created_at}>{format(new Date(ping.created_at), "MMM d, yyyy · h:mm a")}</time>
-            {ping.updated_at !== ping.created_at && new Date(ping.updated_at).getTime() - new Date(ping.created_at).getTime() > 5000 && " · edited"}
+            <time dateTime={ping.created_at}>
+              {format(new Date(ping.created_at), "MMM d, yyyy · h:mm a")}
+            </time>
+            {ping.updated_at !== ping.created_at &&
+              new Date(ping.updated_at).getTime() - new Date(ping.created_at).getTime() > 5000 &&
+              " · edited"}
           </p>
           <footer className="mt-4 flex items-center justify-between border-t border-border pt-4">
-            <span className="flex items-center gap-2"><LikeButton ping={ping} /><a href="#replies-title" className="text-sm text-muted-foreground hover:underline">{replyCount(ping)} {replyCount(ping) === 1 ? "reply" : "replies"}</a></span>
+            <span className="flex items-center gap-2">
+              <LikeButton ping={ping} />
+              <a href="#replies-title" className="text-sm text-muted-foreground hover:underline">
+                {replyCount(ping)} {replyCount(ping) === 1 ? "reply" : "replies"}
+              </a>
+            </span>
             <div className="flex items-center gap-1">
               <ShareMenu ping={ping} variant="outline" />
               <PingMenu ping={ping} onDeleted={() => navigate({ to: "/explore" })} />
@@ -99,7 +146,9 @@ function PingDetail() {
         <CommentsSection ping={ping} />
 
         <div className="glass mt-5 flex items-center gap-3 rounded-2xl p-3 pl-5">
-          <span className="min-w-0 flex-1 truncate font-mono text-sm text-muted-foreground">{url}</span>
+          <span className="min-w-0 flex-1 truncate font-mono text-sm text-muted-foreground">
+            {url}
+          </span>
           <Button
             size="sm"
             variant="secondary"
@@ -107,7 +156,9 @@ function PingDetail() {
               try {
                 await navigator.clipboard.writeText(url);
                 toast.success("Link copied");
-              } catch { toast.error("Couldn't copy. Copy the link shown here instead."); }
+              } catch {
+                toast.error("Couldn't copy. Copy the link shown here instead.");
+              }
             }}
           >
             <Copy /> Copy link
@@ -117,8 +168,12 @@ function PingDetail() {
         {!user && (
           <div className="mt-8 rounded-3xl border border-dashed border-primary/40 p-6 text-center">
             <p className="font-display text-xl font-bold">Building something too?</p>
-            <p className="mt-1 text-sm text-muted-foreground">Join Ping to like this and share your own story.</p>
-            <Button asChild variant="hero" className="mt-4"><Link to="/signup">Create your first Ping</Link></Button>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Join Ping to like this and share your own story.
+            </p>
+            <Button asChild variant="hero" className="mt-4">
+              <Link to="/signup">Create your first Ping</Link>
+            </Button>
           </div>
         )}
       </div>

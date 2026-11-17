@@ -5,8 +5,18 @@ import { useRouter } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import type { Profile } from "@/lib/pings";
 
-type AuthCtx = { user: User | null; ready: boolean; profile: Profile | null; refreshProfile: () => void };
-const Ctx = createContext<AuthCtx>({ user: null, ready: false, profile: null, refreshProfile: () => {} });
+type AuthCtx = {
+  user: User | null;
+  ready: boolean;
+  profile: Profile | null;
+  refreshProfile: () => void;
+};
+const Ctx = createContext<AuthCtx>({
+  user: null,
+  ready: false,
+  profile: null,
+  refreshProfile: () => {},
+});
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -35,14 +45,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     enabled: !!user,
     queryFn: async () => {
       if (!user) return null;
-      const { data, error } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .maybeSingle();
       if (error) throw error;
       return data as Profile | null;
     },
   });
 
   return (
-    <Ctx.Provider value={{ user, ready, profile: profileQ.data ?? null, refreshProfile: () => profileQ.refetch() }}>
+    <Ctx.Provider
+      value={{
+        user,
+        ready,
+        profile: profileQ.data ?? null,
+        refreshProfile: () => profileQ.refetch(),
+      }}
+    >
       {children}
     </Ctx.Provider>
   );

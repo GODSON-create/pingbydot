@@ -90,14 +90,16 @@ export function activeMomentsTrayQuery(currentUserId?: string) {
       // Fetch active moments
       const { data: rawMoments, error } = await supabase
         .from("moments")
-        .select(`
+        .select(
+          `
           id, author_id, media_url, media_type, caption, overlay_text, stickers, mentions,
           location, duration, audience, hub_id, is_discoverable, allow_comments, allow_sharing,
           allow_repings, expires_at, is_archived, deleted_at, view_count, like_count,
           reping_count, reply_count, created_at, updated_at,
           author:profiles!moments_author_id_fkey(id, username, display_name, avatar_url, bio, created_at),
           hub:hubs!moments_hub_id_fkey(id, name, slug)
-        `)
+        `,
+        )
         .is("deleted_at", null)
         .gt("expires_at", nowIso)
         .order("created_at", { ascending: true });
@@ -128,10 +130,7 @@ export function activeMomentsTrayQuery(currentUserId?: string) {
             .select("moment_id")
             .eq("user_id", currentUserId)
             .in("moment_id", momentIds),
-          supabase
-            .from("follows")
-            .select("following_id")
-            .eq("follower_id", currentUserId),
+          supabase.from("follows").select("following_id").eq("follower_id", currentUserId),
         ]);
 
         if (viewsRes.data) {
@@ -177,7 +176,8 @@ export function activeMomentsTrayQuery(currentUserId?: string) {
       const sequences: CreatorMomentsSequence[] = Array.from(creatorMap.values()).map(
         ({ author, moments }) => {
           const hasUnseen = moments.some((m) => !m.has_viewed && m.author_id !== currentUserId);
-          const latestCreatedAt = moments[moments.length - 1]?.created_at || new Date().toISOString();
+          const latestCreatedAt =
+            moments[moments.length - 1]?.created_at || new Date().toISOString();
           return {
             author,
             moments,
@@ -224,14 +224,16 @@ export function userActiveMomentsQuery(userId: string, currentUserId?: string) {
 
       const { data, error } = await supabase
         .from("moments")
-        .select(`
+        .select(
+          `
           id, author_id, media_url, media_type, caption, overlay_text, stickers, mentions,
           location, duration, audience, hub_id, is_discoverable, allow_comments, allow_sharing,
           allow_repings, expires_at, is_archived, deleted_at, view_count, like_count,
           reping_count, reply_count, created_at, updated_at,
           author:profiles!moments_author_id_fkey(id, username, display_name, avatar_url, bio, created_at),
           hub:hubs!moments_hub_id_fkey(id, name, slug)
-        `)
+        `,
+        )
         .eq("author_id", userId)
         .is("deleted_at", null)
         .gt("expires_at", nowIso)
@@ -287,9 +289,11 @@ export function userHighlightsQuery(userId: string) {
     queryFn: async (): Promise<Highlight[]> => {
       const { data: highlights, error } = await supabase
         .from("highlights")
-        .select(`
+        .select(
+          `
           id, user_id, title, cover_url, display_order, is_private, created_at, updated_at
-        `)
+        `,
+        )
         .eq("user_id", userId)
         .order("display_order", { ascending: true })
         .order("created_at", { ascending: false });
@@ -333,7 +337,8 @@ export function highlightMomentsQuery(highlightId: string, currentUserId?: strin
     queryFn: async (): Promise<Moment[]> => {
       const { data: items, error } = await supabase
         .from("highlight_items")
-        .select(`
+        .select(
+          `
           display_order,
           moment:moments!highlight_items_moment_id_fkey(
             id, author_id, media_url, media_type, caption, overlay_text, stickers, mentions,
@@ -342,7 +347,8 @@ export function highlightMomentsQuery(highlightId: string, currentUserId?: strin
             reping_count, reply_count, created_at, updated_at,
             author:profiles!moments_author_id_fkey(id, username, display_name, avatar_url, bio, created_at)
           )
-        `)
+        `,
+        )
         .eq("highlight_id", highlightId)
         .order("display_order", { ascending: true });
 
@@ -350,7 +356,9 @@ export function highlightMomentsQuery(highlightId: string, currentUserId?: strin
       if (!items) return [];
 
       return items
-        .filter((it) => it.moment && !(it.moment as unknown as { deleted_at: string | null }).deleted_at)
+        .filter(
+          (it) => it.moment && !(it.moment as unknown as { deleted_at: string | null }).deleted_at,
+        )
         .map((it) => {
           const m = it.moment as unknown as Moment;
           return {
@@ -375,13 +383,15 @@ export function discoverableMomentsQuery(currentUserId?: string) {
     queryFn: async (): Promise<Moment[]> => {
       const { data, error } = await supabase
         .from("moments")
-        .select(`
+        .select(
+          `
           id, author_id, media_url, media_type, caption, overlay_text, stickers, mentions,
           location, duration, audience, hub_id, is_discoverable, allow_comments, allow_sharing,
           allow_repings, expires_at, is_archived, deleted_at, view_count, like_count,
           reping_count, reply_count, created_at, updated_at,
           author:profiles!moments_author_id_fkey(id, username, display_name, avatar_url, bio, created_at)
-        `)
+        `,
+        )
         .eq("is_discoverable", true)
         .eq("audience", "public") // STRICT: Only public discoverable moments appear on For You!
         .is("deleted_at", null)
@@ -402,7 +412,10 @@ export function discoverableMomentsQuery(currentUserId?: string) {
           .from("moment_likes")
           .select("moment_id")
           .eq("user_id", currentUserId)
-          .in("moment_id", data.map((m) => m.id));
+          .in(
+            "moment_id",
+            data.map((m) => m.id),
+          );
 
         if (likes) {
           likedIds = new Set(likes.map((l) => l.moment_id));
@@ -633,15 +646,185 @@ export function useDeleteHighlight() {
 
   return useMutation({
     mutationFn: async (highlightId: string) => {
-      const { error } = await supabase
-        .from("highlights")
-        .delete()
-        .eq("id", highlightId);
+      const { error } = await supabase.from("highlights").delete().eq("id", highlightId);
 
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["user-highlights"] });
+    },
+  });
+}
+
+export function useUpdateHighlight() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: {
+      highlightId: string;
+      title: string;
+      cover_url?: string;
+      is_private?: boolean;
+    }) => {
+      const { error } = await supabase.rpc("update_highlight", {
+        _highlight_id: payload.highlightId,
+        _title: payload.title.trim(),
+        ...(payload.cover_url !== undefined
+          ? { _cover_url: payload.cover_url.trim() || null }
+          : {}),
+        ...(payload.is_private !== undefined ? { _is_private: payload.is_private } : {}),
+      });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["user-highlights"] });
+    },
+  });
+}
+
+export function useRemoveMomentFromHighlight() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ highlightId, momentId }: { highlightId: string; momentId: string }) => {
+      const { error } = await supabase.rpc("remove_moment_from_highlight", {
+        _highlight_id: highlightId,
+        _moment_id: momentId,
+      });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["user-highlights"] });
+      qc.invalidateQueries({ queryKey: ["highlight-moments"] });
+    },
+  });
+}
+
+export interface MomentActivityView {
+  id: string;
+  viewer_id: string;
+  viewed_at: string;
+  viewer?: Profile;
+}
+
+export interface MomentActivityReply {
+  id: string;
+  sender_id: string;
+  message: string;
+  created_at: string;
+  sender?: Profile;
+}
+
+/**
+ * Fetch Moment viewers & private replies for the Moment creator.
+ */
+export function momentActivityQuery(momentId: string | undefined, enabled: boolean) {
+  return {
+    queryKey: ["moment-activity", momentId],
+    enabled: Boolean(momentId && enabled),
+    queryFn: async (): Promise<{
+      views: MomentActivityView[];
+      replies: MomentActivityReply[];
+    }> => {
+      if (!momentId) return { views: [], replies: [] };
+      const [viewsRes, repliesRes] = await Promise.all([
+        supabase
+          .from("moment_views")
+          .select(
+            "id, viewer_id, viewed_at, viewer:profiles!moment_views_viewer_id_fkey(id, username, display_name, avatar_url, bio, created_at)",
+          )
+          .eq("moment_id", momentId)
+          .order("viewed_at", { ascending: false })
+          .limit(50),
+        supabase
+          .from("moment_replies")
+          .select(
+            "id, sender_id, message, created_at, sender:profiles!moment_replies_sender_id_fkey(id, username, display_name, avatar_url, bio, created_at)",
+          )
+          .eq("moment_id", momentId)
+          .order("created_at", { ascending: false })
+          .limit(50),
+      ]);
+
+      return {
+        views: (viewsRes.data ?? []) as unknown as MomentActivityView[],
+        replies: (repliesRes.data ?? []) as unknown as MomentActivityReply[],
+      };
+    },
+  };
+}
+
+export interface CloseCircleEntry {
+  id: string;
+  member_id: string;
+  created_at: string;
+  member?: Profile | undefined;
+}
+
+export function closeCircleQuery(userId?: string) {
+  return {
+    queryKey: ["close-circle", userId],
+    enabled: Boolean(userId),
+    queryFn: async (): Promise<CloseCircleEntry[]> => {
+      if (!userId) return [];
+      const { data, error } = await supabase
+        .from("user_close_circle")
+        .select("id, member_id, created_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+
+      if (error || !data || data.length === 0) return [];
+      const memberIds = data.map((d) => d.member_id);
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, username, display_name, avatar_url, bio, created_at")
+        .in("id", memberIds);
+
+      const profileMap = new Map((profiles ?? []).map((p) => [p.id, p as Profile]));
+      return data.map((row) => ({
+        ...row,
+        member: profileMap.get(row.member_id),
+      }));
+    },
+  };
+}
+
+export function useAddCloseCircleMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (memberId: string) => {
+      const { data: u } = await supabase.auth.getUser();
+      if (!u.user) throw new Error("Sign in first.");
+      if (u.user.id === memberId) throw new Error("You cannot add yourself.");
+      const { error } = await supabase.from("user_close_circle").insert({
+        user_id: u.user.id,
+        member_id: memberId,
+      });
+      if (error && error.code !== "23505") throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["close-circle"] });
+    },
+  });
+}
+
+export function useRemoveCloseCircleMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (memberId: string) => {
+      const { data: u } = await supabase.auth.getUser();
+      if (!u.user) throw new Error("Sign in first.");
+      const { error } = await supabase
+        .from("user_close_circle")
+        .delete()
+        .eq("user_id", u.user.id)
+        .eq("member_id", memberId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["close-circle"] });
     },
   });
 }

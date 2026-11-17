@@ -17,12 +17,18 @@ import { Route as ExploreRouteImport } from './routes/explore'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as HubsRouteImport } from './routes/hubs'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as MessagesRouteImport } from './routes/messages'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SignalsRouteImport } from './routes/signals'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as TermsRouteImport } from './routes/terms'
+import { Route as AuthenticatedAnalyticsRouteImport } from './routes/_authenticated/analytics'
+import { Route as AuthenticatedBalanceRouteImport } from './routes/_authenticated/balance'
 import { Route as AuthenticatedCreateRouteImport } from './routes/_authenticated/create'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedUpgradesRouteImport } from './routes/_authenticated/upgrades'
 import { Route as HubsSlugRouteImport } from './routes/hubs.$slug'
 import { Route as HubsCreateRouteImport } from './routes/hubs.create'
 import { Route as PIdRouteImport } from './routes/p.$id'
@@ -71,6 +77,16 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MessagesRoute = MessagesRouteImport.update({
+  id: '/messages',
+  path: '/messages',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
@@ -91,6 +107,21 @@ const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedAnalyticsRoute = AuthenticatedAnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedBalanceRoute = AuthenticatedBalanceRouteImport.update({
+  id: '/balance',
+  path: '/balance',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedCreateRoute = AuthenticatedCreateRouteImport.update({
   id: '/create',
   path: '/create',
@@ -99,6 +130,11 @@ const AuthenticatedCreateRoute = AuthenticatedCreateRouteImport.update({
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedUpgradesRoute = AuthenticatedUpgradesRouteImport.update({
+  id: '/upgrades',
+  path: '/upgrades',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const HubsSlugRoute = HubsSlugRouteImport.update({
@@ -145,12 +181,18 @@ export interface FileRoutesByFullPath {
   '/forgot-password': typeof ForgotPasswordRoute
   '/hubs': typeof HubsRouteWithChildren
   '/login': typeof LoginRoute
+  '/messages': typeof MessagesRoute
+  '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signals': typeof SignalsRouteWithChildren
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/terms': typeof TermsRoute
+  '/analytics': typeof AuthenticatedAnalyticsRoute
+  '/balance': typeof AuthenticatedBalanceRoute
   '/create': typeof AuthenticatedCreateRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/upgrades': typeof AuthenticatedUpgradesRoute
   '/hubs/$slug': typeof HubsSlugRoute
   '/hubs/create': typeof HubsCreateRoute
   '/p/$id': typeof PIdRoute
@@ -167,12 +209,18 @@ export interface FileRoutesByTo {
   '/forgot-password': typeof ForgotPasswordRoute
   '/hubs': typeof HubsRouteWithChildren
   '/login': typeof LoginRoute
+  '/messages': typeof MessagesRoute
+  '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signals': typeof SignalsRouteWithChildren
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/terms': typeof TermsRoute
+  '/analytics': typeof AuthenticatedAnalyticsRoute
+  '/balance': typeof AuthenticatedBalanceRoute
   '/create': typeof AuthenticatedCreateRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/upgrades': typeof AuthenticatedUpgradesRoute
   '/hubs/$slug': typeof HubsSlugRoute
   '/hubs/create': typeof HubsCreateRoute
   '/p/$id': typeof PIdRoute
@@ -191,12 +239,18 @@ export interface FileRoutesById {
   '/forgot-password': typeof ForgotPasswordRoute
   '/hubs': typeof HubsRouteWithChildren
   '/login': typeof LoginRoute
+  '/messages': typeof MessagesRoute
+  '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signals': typeof SignalsRouteWithChildren
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/terms': typeof TermsRoute
+  '/_authenticated/analytics': typeof AuthenticatedAnalyticsRoute
+  '/_authenticated/balance': typeof AuthenticatedBalanceRoute
   '/_authenticated/create': typeof AuthenticatedCreateRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_authenticated/upgrades': typeof AuthenticatedUpgradesRoute
   '/hubs/$slug': typeof HubsSlugRoute
   '/hubs/create': typeof HubsCreateRoute
   '/p/$id': typeof PIdRoute
@@ -215,12 +269,18 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/hubs'
     | '/login'
+    | '/messages'
+    | '/privacy'
     | '/reset-password'
     | '/signals'
     | '/signup'
     | '/sitemap.xml'
+    | '/terms'
+    | '/analytics'
+    | '/balance'
     | '/create'
     | '/settings'
+    | '/upgrades'
     | '/hubs/$slug'
     | '/hubs/create'
     | '/p/$id'
@@ -237,12 +297,18 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/hubs'
     | '/login'
+    | '/messages'
+    | '/privacy'
     | '/reset-password'
     | '/signals'
     | '/signup'
     | '/sitemap.xml'
+    | '/terms'
+    | '/analytics'
+    | '/balance'
     | '/create'
     | '/settings'
+    | '/upgrades'
     | '/hubs/$slug'
     | '/hubs/create'
     | '/p/$id'
@@ -260,12 +326,18 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/hubs'
     | '/login'
+    | '/messages'
+    | '/privacy'
     | '/reset-password'
     | '/signals'
     | '/signup'
     | '/sitemap.xml'
+    | '/terms'
+    | '/_authenticated/analytics'
+    | '/_authenticated/balance'
     | '/_authenticated/create'
     | '/_authenticated/settings'
+    | '/_authenticated/upgrades'
     | '/hubs/$slug'
     | '/hubs/create'
     | '/p/$id'
@@ -284,10 +356,13 @@ export interface RootRouteChildren {
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   HubsRoute: typeof HubsRouteWithChildren
   LoginRoute: typeof LoginRoute
+  MessagesRoute: typeof MessagesRoute
+  PrivacyRoute: typeof PrivacyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SignalsRoute: typeof SignalsRouteWithChildren
   SignupRoute: typeof SignupRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  TermsRoute: typeof TermsRoute
   PIdRoute: typeof PIdRoute
   ApiPublicPingCardIdRoute: typeof ApiPublicPingCardIdRoute
 }
@@ -350,6 +425,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/messages': {
+      id: '/messages'
+      path: '/messages'
+      fullPath: '/messages'
+      preLoaderRoute: typeof MessagesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/reset-password': {
       id: '/reset-password'
       path: '/reset-password'
@@ -378,6 +467,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/analytics': {
+      id: '/_authenticated/analytics'
+      path: '/analytics'
+      fullPath: '/analytics'
+      preLoaderRoute: typeof AuthenticatedAnalyticsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/balance': {
+      id: '/_authenticated/balance'
+      path: '/balance'
+      fullPath: '/balance'
+      preLoaderRoute: typeof AuthenticatedBalanceRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/create': {
       id: '/_authenticated/create'
       path: '/create'
@@ -390,6 +500,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/upgrades': {
+      id: '/_authenticated/upgrades'
+      path: '/upgrades'
+      fullPath: '/upgrades'
+      preLoaderRoute: typeof AuthenticatedUpgradesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/hubs/$slug': {
@@ -445,14 +562,20 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAnalyticsRoute: typeof AuthenticatedAnalyticsRoute
+  AuthenticatedBalanceRoute: typeof AuthenticatedBalanceRoute
   AuthenticatedCreateRoute: typeof AuthenticatedCreateRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedUpgradesRoute: typeof AuthenticatedUpgradesRoute
   AuthenticatedEditIdRoute: typeof AuthenticatedEditIdRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAnalyticsRoute: AuthenticatedAnalyticsRoute,
+  AuthenticatedBalanceRoute: AuthenticatedBalanceRoute,
   AuthenticatedCreateRoute: AuthenticatedCreateRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedUpgradesRoute: AuthenticatedUpgradesRoute,
   AuthenticatedEditIdRoute: AuthenticatedEditIdRoute,
 }
 
@@ -493,10 +616,13 @@ const rootRouteChildren: RootRouteChildren = {
   ForgotPasswordRoute: ForgotPasswordRoute,
   HubsRoute: HubsRouteWithChildren,
   LoginRoute: LoginRoute,
+  MessagesRoute: MessagesRoute,
+  PrivacyRoute: PrivacyRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SignalsRoute: SignalsRouteWithChildren,
   SignupRoute: SignupRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  TermsRoute: TermsRoute,
   PIdRoute: PIdRoute,
   ApiPublicPingCardIdRoute: ApiPublicPingCardIdRoute,
 }

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 120 120" role="img" aria-label="PING Official Gold Logo">
+  <defs>
+    <radialGradient id="bg-gold" cx="25%" cy="15%" r="85%">
+      <stop offset="0%" stop-color="#2c1f14"/>
+      <stop offset="55%" stop-color="#14110d"/>
+      <stop offset="100%" stop-color="#090a08"/>
+    </radialGradient>
+    <linearGradient id="fg-gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ebcba8"/>
+      <stop offset="50%" stop-color="#d8a878"/>
+      <stop offset="100%" stop-color="#b57e4c"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="112" height="112" rx="28" fill="url(#bg-gold)"/>
+  <path d="M 29 32 Q 31.5 45.5 44 48 Q 31.5 50.5 29 64 Q 26.5 50.5 14 48 Q 26.5 45.5 29 32 Z" fill="url(#fg-gold)"/>
+  <circle cx="51.5" cy="54" r="3.8" fill="url(#fg-gold)"/>
+  <circle cx="63" cy="54" r="3.8" fill="url(#fg-gold)"/>
+  <circle cx="74.5" cy="54" r="3.8" fill="url(#fg-gold)"/>
+  <path d="M 39.5 22 H 74 A 32 32 0 0 1 74 86 H 65 Q 59 86 59 92 V 102 H 40 V 88 Q 40 66 62 66 H 74 A 12 12 0 0 0 74 42 H 56 Q 39.5 42 39.5 22 Z" fill="url(#fg-gold)"/>
+</svg>

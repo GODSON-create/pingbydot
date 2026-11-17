@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -13,6 +14,32 @@ import { useSignOut } from "@/components/layout/SiteHeader";
 import { ConnectionsEditor } from "@/components/connections/ConnectionsEditor";
 import { PingActivityPrivacy } from "@/components/settings/PingActivityPrivacy";
 import { AppearanceSettings } from "@/components/settings/AppearanceSettings";
+import { CloseCircleDialog } from "@/components/moments/CloseCircleDialog";
+import { blockedUsersQuery, useUnblockUser } from "@/lib/messages";
+import { dotSummaryQuery } from "@/lib/economy";
+import { closeCircleQuery } from "@/lib/moments";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+  ShieldAlert,
+  FileText,
+  Shield,
+  Trash2,
+  Coins,
+  BarChart3,
+  Crown,
+  Users,
+  ShieldBan,
+} from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   staticData: { sitemap: false },
@@ -38,6 +65,28 @@ function Settings() {
     Partial<Record<"username" | "display_name" | "bio" | "avatar_url", string>>
   >({});
   const [saving, setSaving] = useState(false);
+
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [closeCircleOpen, setCloseCircleOpen] = useState(false);
+  const { data: dotSummary } = useQuery(dotSummaryQuery(user?.id));
+  const { data: closeCircleMembers = [] } = useQuery(closeCircleQuery(user?.id));
+  const { data: blockedUsers = [] } = useQuery(blockedUsersQuery(user?.id));
+  const unblockUser = useUnblockUser();
+
+  const handleDeleteAccount = async () => {
+    try {
+      setIsDeletingAccount(true);
+      const { error } = await supabase.rpc("delete_user_account");
+      if (error) throw error;
+      toast.success("Your account and data have been permanently deleted.");
+      signOut();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete account. Please try again.");
+    } finally {
+      setIsDeletingAccount(false);
+    }
+  };
+
   const [pw, setPw] = useState({ current: "", next: "" });
 
   useEffect(() => {
@@ -112,9 +161,53 @@ function Settings() {
   return (
     <div className="mx-auto max-w-2xl px-5 py-12">
       <h1 className="font-display text-4xl font-extrabold">Settings</h1>
+
+      {/* Builder Tools & Account Shortcuts */}
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Link
+          to="/balance"
+          className="surface-card rounded-2xl p-4 transition-transform hover:-translate-y-0.5 hover:border-primary"
+        >
+          <Coins className="size-4 text-primary" />
+          <p className="mt-2 text-xs text-muted-foreground">DOT Balance</p>
+          <p className="font-display text-lg font-bold tabular-nums">
+            {(dotSummary?.wallet.balance ?? 0).toLocaleString()} DOT
+          </p>
+        </Link>
+        <Link
+          to="/analytics"
+          className="surface-card rounded-2xl p-4 transition-transform hover:-translate-y-0.5 hover:border-primary"
+        >
+          <BarChart3 className="size-4 text-primary" />
+          <p className="mt-2 text-xs text-muted-foreground">Creator Telemetry</p>
+          <p className="font-display text-lg font-bold">Analytics</p>
+        </Link>
+        <Link
+          to="/upgrades"
+          className="surface-card rounded-2xl p-4 transition-transform hover:-translate-y-0.5 hover:border-primary"
+        >
+          <Crown className="size-4 text-gold" />
+          <p className="mt-2 text-xs text-muted-foreground">Current Tier</p>
+          <p className="font-display text-lg font-bold capitalize">
+            {dotSummary?.subscription.tier ?? "free"}
+          </p>
+        </Link>
+        <button
+          type="button"
+          onClick={() => setCloseCircleOpen(true)}
+          className="surface-card rounded-2xl p-4 text-left transition-transform hover:-translate-y-0.5 hover:border-primary"
+        >
+          <Users className="size-4 text-primary" />
+          <p className="mt-2 text-xs text-muted-foreground">Close Circle</p>
+          <p className="font-display text-lg font-bold tabular-nums">
+            {closeCircleMembers.length} members
+          </p>
+        </button>
+      </div>
+
       <form
         onSubmit={save}
-        className="surface-card mt-8 grid gap-5 rounded-3xl p-6 sm:p-8"
+        className="surface-card mt-6 grid gap-5 rounded-3xl p-6 sm:p-8"
         noValidate
       >
         <div className="flex items-center gap-4">
@@ -190,6 +283,67 @@ function Settings() {
 
       <AppearanceSettings />
 
+      {/* Blocked Users Manager */}
+      <section className="surface-card mt-6 rounded-3xl p-6 space-y-4">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="font-display text-base font-bold flex items-center gap-2">
+              <ShieldBan className="size-4 text-primary" /> Blocked Users
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Blocked builders cannot message you or interact across your private threads.
+            </p>
+          </div>
+          <span className="text-xs font-semibold text-muted-foreground">{blockedUsers.length}</span>
+        </div>
+
+        {blockedUsers.length === 0 ? (
+          <p className="text-xs text-muted-foreground">You haven't blocked anyone.</p>
+        ) : (
+          <div className="divide-y divide-border/60">
+            {blockedUsers.map((entry) => {
+              const pName =
+                entry.profile?.display_name || entry.profile?.username || "Blocked user";
+              return (
+                <div
+                  key={entry.blocked_id}
+                  className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <FounderAvatar name={pName} src={entry.profile?.avatar_url} size="sm" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold truncate">{pName}</p>
+                      {entry.profile?.username && (
+                        <p className="text-xs text-muted-foreground truncate">
+                          @{entry.profile.username}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={unblockUser.isPending}
+                    onClick={() =>
+                      unblockUser.mutate(entry.blocked_id, {
+                        onSuccess: () => toast.success(`Unblocked ${pName}`),
+                        onError: (e: any) => toast.error(e?.message || "Could not unblock user."),
+                      })
+                    }
+                    className="rounded-xl shrink-0"
+                  >
+                    Unblock
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      <CloseCircleDialog open={closeCircleOpen} onOpenChange={setCloseCircleOpen} />
+
       {user?.app_metadata?.provider === "email" && (
         <form onSubmit={changePw} className="surface-card mt-6 grid gap-4 rounded-3xl p-6 sm:p-8">
           <p className="font-display text-lg font-bold">Password</p>
@@ -220,6 +374,75 @@ function Settings() {
           </Button>
         </form>
       )}
+
+      {/* Legal & Compliance Disclosures (App Store & Google Play) */}
+      <div className="surface-card mt-6 rounded-3xl p-6 space-y-3">
+        <p className="font-display text-sm font-bold flex items-center gap-2">
+          <FileText className="size-4 text-primary" /> Legal & Terms
+        </p>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Review Ping by DOT community standards, user-generated content policies, and data handling
+          practices.
+        </p>
+        <div className="flex flex-wrap gap-4 pt-1 text-xs">
+          <Link
+            to="/privacy"
+            className="text-primary hover:underline font-semibold flex items-center gap-1"
+          >
+            <Shield className="size-3.5" /> Privacy Policy
+          </Link>
+          <span className="text-muted-foreground">•</span>
+          <Link
+            to="/terms"
+            className="text-primary hover:underline font-semibold flex items-center gap-1"
+          >
+            <FileText className="size-3.5" /> Terms of Service & EULA
+          </Link>
+        </div>
+      </div>
+
+      {/* Danger Zone: Account Deletion (Apple App Store Guideline 5.1.1(v)) */}
+      <div className="surface-card mt-6 rounded-3xl p-6 border border-destructive/30 bg-destructive/5 space-y-4">
+        <div>
+          <p className="font-display text-base font-bold text-destructive flex items-center gap-2">
+            <ShieldAlert className="size-5" /> Danger Zone
+          </p>
+          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+            Permanently delete your Ping account, profile, all published Pings, comments, private
+            conversations, and uploaded media. This action is irreversible.
+          </p>
+        </div>
+
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="destructive" size="sm" className="rounded-xl font-bold">
+              <Trash2 className="size-4 mr-1.5" /> Delete Account
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent className="rounded-3xl border border-destructive/30 bg-card">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="font-display text-lg font-bold text-destructive flex items-center gap-2">
+                <ShieldAlert className="size-5" /> Permanently Delete Account?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-xs text-muted-foreground leading-relaxed">
+                Are you absolutely sure? This will instantly and permanently erase your account
+                credentials, username, profile details, pings, comments, private direct messages,
+                and storage assets. There is no recovery.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="mt-4">
+              <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteAccount}
+                disabled={isDeletingAccount}
+                className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90 font-bold"
+              >
+                {isDeletingAccount ? "Deleting..." : "Yes, Delete Everything"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
 
       <div className="surface-card mt-6 flex items-center justify-between rounded-3xl p-6">
         <div>

@@ -14,7 +14,14 @@ function palette(): CardPalette {
     const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
     return `rgb(${r},${g},${b})`;
   };
-  return { paper: color("--share-paper"), ink: color("--share-ink"), forest: color("--share-forest"), lime: color("--share-lime"), muted: color("--share-muted"), border: color("--share-border") };
+  return {
+    paper: color("--share-paper"),
+    ink: color("--share-ink"),
+    forest: color("--share-forest"),
+    lime: color("--share-lime"),
+    muted: color("--share-muted"),
+    border: color("--share-border"),
+  };
 }
 
 async function loadImage(src: string) {
@@ -23,8 +30,15 @@ async function loadImage(src: string) {
   img.src = src;
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    await Promise.race([img.decode(), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Image timed out")), 8000); })]);
-  } finally { clearTimeout(timer); }
+    await Promise.race([
+      img.decode(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("Image timed out")), 8000);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
   return img;
 }
 
@@ -43,7 +57,9 @@ export async function createCardPng(ping: SharePing) {
       if (!ctx) throw new Error("Canvas unavailable");
       ctx.drawImage(original, 0, 0, canvas.width, canvas.height);
       image = { src: canvas.toDataURL("image/png"), width: canvas.width, height: canvas.height };
-    } catch { imageOmitted = true; }
+    } catch {
+      imageOmitted = true;
+    }
   }
   const svg = await renderCardSvg(ping, palette(), image);
   const svgUrl = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
@@ -55,9 +71,16 @@ export async function createCardPng(ping: SharePing) {
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("Image creation is unavailable in this browser.");
     ctx.drawImage(img, 0, 0);
-    const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((b) => b ? resolve(b) : reject(new Error("Couldn't create the image.")), "image/png"));
+    const blob = await new Promise<Blob>((resolve, reject) =>
+      canvas.toBlob(
+        (b) => (b ? resolve(b) : reject(new Error("Couldn't create the image."))),
+        "image/png",
+      ),
+    );
     return { blob, imageOmitted };
-  } finally { URL.revokeObjectURL(svgUrl); }
+  } finally {
+    URL.revokeObjectURL(svgUrl);
+  }
 }
 
 export function downloadCard(file: File) {

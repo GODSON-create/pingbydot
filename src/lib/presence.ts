@@ -141,7 +141,7 @@ export function useHubPresence(hubId: string | undefined) {
     (userId: string) => {
       return Boolean(activeMembers[userId]);
     },
-    [activeMembers]
+    [activeMembers],
   );
 
   return {

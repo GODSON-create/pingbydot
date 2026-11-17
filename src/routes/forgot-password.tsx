@@ -30,7 +30,9 @@ function Forgot() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setPending(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/reset-password` });
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
     setPending(false);
     if (error) return setErr(error.message);
     setSent(true);
@@ -38,15 +40,37 @@ function Forgot() {
   return (
     <AuthShell title="Forgot your password?" subtitle="We'll email you a link to set a new one.">
       {sent ? (
-        <p className="rounded-2xl bg-accent p-4 text-sm">If an account exists for {email}, a reset link is on its way.</p>
+        <p className="rounded-2xl bg-accent p-4 text-sm">
+          If an account exists for {email}, a reset link is on its way.
+        </p>
       ) : (
         <form onSubmit={submit} className="grid gap-4">
-          <div><Label htmlFor="email">Email</Label><Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1.5 rounded-xl" /></div>
-          {err && <p role="alert" className="text-sm text-destructive">{err}</p>}
-          <Button type="submit" variant="hero" disabled={pending}>{pending ? "Sending…" : "Send reset link"}</Button>
+          <div>
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="mt-1.5 rounded-xl"
+            />
+          </div>
+          {err && (
+            <p role="alert" className="text-sm text-destructive">
+              {err}
+            </p>
+          )}
+          <Button type="submit" variant="hero" disabled={pending}>
+            {pending ? "Sending…" : "Send reset link"}
+          </Button>
         </form>
       )}
-      <p className="mt-6 text-center text-sm"><Link to="/login" className="underline">Back to log in</Link></p>
+      <p className="mt-6 text-center text-sm">
+        <Link to="/login" className="underline">
+          Back to log in
+        </Link>
+      </p>
     </AuthShell>
   );
 }

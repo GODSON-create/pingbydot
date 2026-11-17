@@ -1,13 +1,20 @@
 import { useState, useEffect } from "react";
-import { Copy, Check, Share2, UserPlus, QrCode, Key, Sparkles } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Copy, Check, Share2, UserPlus, QrCode, Key, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { siteUrl } from "@/lib/site";
 import type { Hub } from "@/lib/hubs";
-import { hubError } from "@/lib/hub-queries";
+import { hubError, hubInvitesQuery } from "@/lib/hub-queries";
 
 export function HubShareModal({
   hub,
@@ -20,12 +27,15 @@ export function HubShareModal({
   onClose: () => void;
   isStaff?: boolean;
 }) {
+  const qc = useQueryClient();
   const [copied, setCopied] = useState(false);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [generatingToken, setGeneratingToken] = useState(false);
   const [inviteUsername, setInviteUsername] = useState("");
   const [inviting, setInviting] = useState(false);
   const [showQr, setShowQr] = useState(false);
+
+  const { data: activeInvites = [] } = useQuery(hubInvitesQuery(hub.id, open && isStaff));
 
   // Generate secure invite token on open if staff
   useEffect(() => {
@@ -132,7 +142,7 @@ export function HubShareModal({
                 <span>{inviteToken ? "Secure Tokenized Invite" : "Hub Link"}</span>
               </label>
               {inviteToken && (
-                <span className="text-[11px] font-medium text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
                   Valid 14 days
                 </span>
               )}
@@ -218,6 +228,46 @@ export function HubShareModal({
               </div>
             )}
           </div>
+
+          {/* Active invites management for Hub staff */}
+          {isStaff && activeInvites.length > 0 && (
+            <div className="space-y-2 border-t border-border/60 pt-3">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Active Invite Tokens ({activeInvites.length})
+              </p>
+              <div className="max-h-32 space-y-1.5 overflow-y-auto pr-1">
+                {activeInvites.map((inv) => (
+                  <div
+                    key={inv.id}
+                    className="flex items-center justify-between gap-2 rounded-xl bg-secondary/40 px-3 py-1.5 text-xs border border-border/50"
+                  >
+                    <span className="font-mono truncate text-foreground">
+                      …{inv.token.slice(-8)} · {inv.uses} uses
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-xs text-destructive hover:bg-destructive/10"
+                      onClick={async () => {
+                        const { error } = await supabase.rpc("revoke_hub_invite", {
+                          _invite: inv.id,
+                        });
+                        if (error) {
+                          toast.error("Could not revoke invite.");
+                        } else {
+                          toast.success("Invite token revoked");
+                          qc.invalidateQueries({ queryKey: ["hub-invites", hub.id] });
+                        }
+                      }}
+                    >
+                      <Trash2 className="size-3 mr-1" /> Revoke
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>

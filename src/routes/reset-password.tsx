@@ -41,9 +41,25 @@ function Reset() {
   return (
     <AuthShell title="Set a new password" subtitle="Pick something you haven't used before.">
       <form onSubmit={submit} className="grid gap-4">
-        <div><Label htmlFor="pw">New password</Label><Input id="pw" type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} className="mt-1.5 rounded-xl" /></div>
-        {err && <p role="alert" className="text-sm text-destructive">{err}</p>}
-        <Button type="submit" variant="hero" disabled={pending}>{pending ? "Saving…" : "Save password"}</Button>
+        <div>
+          <Label htmlFor="pw">New password</Label>
+          <Input
+            id="pw"
+            type="password"
+            autoComplete="new-password"
+            value={pw}
+            onChange={(e) => setPw(e.target.value)}
+            className="mt-1.5 rounded-xl"
+          />
+        </div>
+        {err && (
+          <p role="alert" className="text-sm text-destructive">
+            {err}
+          </p>
+        )}
+        <Button type="submit" variant="hero" disabled={pending}>
+          {pending ? "Saving…" : "Save password"}
+        </Button>
       </form>
     </AuthShell>
   );

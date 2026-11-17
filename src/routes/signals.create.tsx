@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { pageHead } from "@/lib/site";
+import { pageHead, siteUrl } from "@/lib/site";
 import type { SignalInstitutionType } from "@/lib/signals";
 
 export const Route = createFileRoute("/signals/create")({
@@ -83,6 +83,8 @@ function CreateSignalPage() {
 
     setIsSubmitting(true);
     try {
+      let createdSlug: string | undefined;
+
       const { data, error } = await supabase.rpc("create_signal", {
         _name: name.trim(),
         _slug: slug.trim(),
@@ -91,17 +93,50 @@ function CreateSignalPage() {
         ...(websiteUrl.trim() ? { _website_url: websiteUrl.trim() } : {}),
       });
 
-      if (error) {
-        if (error.message.includes("unique") || error.code === "23505") {
-          setErrors({ slug: "This channel slug is already claimed. Please choose another." });
-          return;
+      if (!error && data) {
+        createdSlug = slug.trim();
+      } else {
+        // Fallback direct insert
+        const { data: directSignal, error: directErr } = await supabase
+          .from("signals")
+          .insert({
+            name: name.trim(),
+            slug: slug.trim(),
+            institution_type: category,
+            description: description.trim(),
+            website_url: websiteUrl.trim() || null,
+            avatar_url: avatarUrl.trim() || null,
+            created_by: user.id,
+            verified: false,
+            verification_status: "unverified",
+          })
+          .select("id, slug")
+          .single();
+
+        if (directErr) {
+          if (directErr.message.includes("unique") || directErr.code === "23505") {
+            setErrors({ slug: "This channel slug is already claimed. Please choose another." });
+            return;
+          }
+          throw directErr;
         }
-        throw error;
+
+        // Ensure creator is registered as admin publisher
+        await supabase.from("signal_publishers").upsert(
+          {
+            signal_id: directSignal.id,
+            user_id: user.id,
+            role: "admin",
+            assigned_by: user.id,
+          },
+          { onConflict: "signal_id,user_id" },
+        );
+
+        createdSlug = directSignal.slug;
       }
 
       toast.success("Signal channel successfully registered!");
-      const targetSlug = slug.trim();
-      navigate({ to: "/signals/$slug", params: { slug: targetSlug } });
+      navigate({ to: "/signals/$slug", params: { slug: createdSlug || slug.trim() } });
     } catch (err: unknown) {
       console.error("Create signal error:", err);
       toast.error(err instanceof Error ? err.message : "Failed to create Signal channel.");
@@ -150,7 +185,9 @@ function CreateSignalPage() {
           <Radio className="size-6" />
         </div>
         <div>
-          <h1 className="font-display text-2xl font-extrabold sm:text-3xl">Register Signal Channel</h1>
+          <h1 className="font-display text-2xl font-extrabold sm:text-3xl">
+            Register Signal Channel
+          </h1>
           <p className="text-xs sm:text-sm text-muted-foreground">
             Establish an official broadcast frequency for announcements, releases, and alerts.
           </p>
@@ -177,7 +214,9 @@ function CreateSignalPage() {
             Signal URL Slug <span className="text-destructive">*</span>
           </Label>
           <div className="mt-1.5 flex items-center rounded-2xl border border-input bg-background/50 px-3 h-11 focus-within:ring-2 focus-within:ring-ring">
-            <span className="text-xs text-muted-foreground select-none shrink-0">pingbydot.lovable.app/signals/</span>
+            <span className="text-xs text-muted-foreground select-none shrink-0">
+              {siteUrl("/signals/").replace(/^https?:\/\//, "")}
+            </span>
             <input
               id={slugId}
               value={slug}
@@ -262,7 +301,9 @@ function CreateSignalPage() {
         <div className="rounded-2xl bg-secondary/50 p-4 border border-border/60 flex items-start gap-3">
           <Sparkles className="size-5 text-primary shrink-0 mt-0.5" />
           <div className="text-xs text-muted-foreground">
-            <strong className="text-foreground">Official Verification:</strong> Signal channels are designated for authorized institutional broadcasts. You will initially be granted the Publisher role to post immediate broadcasts.
+            <strong className="text-foreground">Official Verification:</strong> Signal channels are
+            designated for authorized institutional broadcasts. You will initially be granted the
+            Publisher role to post immediate broadcasts.
           </div>
         </div>
 

@@ -1,80 +1,616 @@
+import { useDeferredValue, useState } from "react";
 import { pageHead } from "@/lib/site";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import {
+  ArrowRight,
+  Building2,
+  Compass,
+  Flame,
+  MessageSquare,
+  Search,
+  Sparkles,
+  UserPlus,
+  Users,
+  X,
+} from "lucide-react";
 import { z } from "zod";
-import { feedQuery } from "@/lib/pings";
-import { CATEGORIES } from "@/lib/validation";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { PingCard } from "@/components/ping/PingCard";
+import { FounderAvatar } from "@/components/ping/Avatar";
 import { MomentsTray } from "@/components/moments/MomentsTray";
 import { DiscoverableMomentsFeed } from "@/components/moments/DiscoverableMomentsFeed";
-import { ErrorComponent } from "@/routes/__root";
-import { Button } from "@/components/ui/button";
 import { AriseCallout } from "@/components/AriseCallout";
+import { feedQuery, likeCount, replyCount, type Ping, type Profile } from "@/lib/pings";
+import { hubsQuery } from "@/lib/hub-queries";
+import { parseStructuredPing } from "@/lib/validation";
+import { useAuth } from "@/lib/auth";
+import { useGetOrCreateDirectConversation } from "@/lib/messages";
+import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+
+const DISCOVERY_FILTERS = [
+  { id: "all", label: "All" },
+  { id: "pings", label: "PINGs" },
+  { id: "people", label: "People" },
+  { id: "moments", label: "Moments" },
+  { id: "communities", label: "Communities" },
+  { id: "opportunities", label: "Opportunities" },
+] as const;
+
+type DiscoveryFilter = (typeof DISCOVERY_FILTERS)[number]["id"];
 
 export const Route = createFileRoute("/explore")({
   staticData: { sitemap: true },
-  validateSearch: z.object({ c: z.enum(["progress", "idea", "launch", "milestone", "question", "opportunity"]).optional().catch(undefined), page: z.coerce.number().int().min(0).max(100000).catch(0).default(0) }),
-  loaderDeps: ({ search }) => ({ c: search.c, page: search.page }),
-  loader: ({ context, deps }) => context.queryClient.ensureQueryData(feedQuery(deps.c ?? null, deps.page)),
-  errorComponent: ErrorComponent,
-  notFoundComponent: () => <p className="px-5 py-12">No Pings found.</p>,
-  head: () => pageHead({
-    title: "Explore Pings — Ping by DOT",
-    description: "Browse the latest Pings: progress, ideas, launches, milestones and opportunities from people building in public.",
-    path: "/explore",
+  validateSearch: z.object({
+    c: z
+      .enum([
+        "progress",
+        "need",
+        "offer",
+        "opportunity",
+        "idea",
+        "question",
+        "collaboration",
+        "update",
+        "launch",
+        "milestone",
+      ])
+      .optional(),
+    filter: z
+      .enum(["all", "pings", "people", "moments", "communities", "opportunities"])
+      .optional(),
+    q: z.string().trim().max(120).optional(),
+    page: z.coerce.number().int().min(0).max(10000).catch(0).default(0),
   }),
+  loaderDeps: ({ search: { c, page } }) => ({ cat: c ?? null, page }),
+  loader: ({ context, deps }) =>
+    context.queryClient.ensureQueryData(feedQuery(deps.cat, deps.page)),
+  head: () =>
+    pageHead({
+      title: "Explore — PING Network Discovery",
+      description:
+        "Discover people, intentions, opportunities, communities, projects, and Moments on PING.",
+      path: "/explore",
+    }),
   component: Explore,
 });
 
+function PeopleDiscoveryCard({
+  person,
+  currentUserId,
+}: {
+  person: Profile;
+  currentUserId?: string | undefined;
+}) {
+  const navigate = useNavigate();
+  const startChat = useGetOrCreateDirectConversation();
+  const [followed, setFollowed] = useState(false);
+  const name = person.display_name || person.username;
+
+  const handleFollow = async () => {
+    if (!currentUserId) {
+      navigate({ to: "/login", search: { next: `/@${person.username}` } });
+      return;
+    }
+    try {
+      if (followed) {
+        await supabase
+          .from("follows")
+          .delete()
+          .eq("follower_id", currentUserId)
+          .eq("following_id", person.id);
+        setFollowed(false);
+      } else {
+        await supabase
+          .from("follows")
+          .insert({ follower_id: currentUserId, following_id: person.id });
+        setFollowed(true);
+        toast.success(`Following @${person.username}`);
+      }
+    } catch {
+      toast.error("Could not update follow status.");
+    }
+  };
+
+  return (
+    <article className="surface-card flex flex-col justify-between rounded-3xl p-5 transition-all hover:border-primary/50">
+      <div>
+        <div className="flex items-start justify-between gap-3">
+          <Link
+            to="/@{$username}"
+            params={{ username: person.username }}
+            className="flex min-w-0 items-center gap-3"
+          >
+            <FounderAvatar name={name} src={person.avatar_url} size="md" />
+            <div className="min-w-0">
+              <p className="truncate font-display text-sm font-bold text-foreground hover:underline">
+                {name}
+              </p>
+              <p className="truncate text-xs text-muted-foreground">@{person.username}</p>
+            </div>
+          </Link>
+        </div>
+        {person.bio ? (
+          <p className="mt-3 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+            {person.bio}
+          </p>
+        ) : (
+          <p className="mt-3 text-xs text-muted-foreground">
+            Coordinating projects and intentions on PING.
+          </p>
+        )}
+      </div>
+
+      <div className="mt-4 flex items-center gap-2 pt-3 border-t border-border/60">
+        <Button
+          type="button"
+          size="sm"
+          variant={followed ? "outline" : "hero"}
+          onClick={handleFollow}
+          className="h-8 flex-1 rounded-full text-xs font-semibold"
+        >
+          <UserPlus className="size-3.5" />
+          {followed ? "Following" : "Follow"}
+        </Button>
+        {currentUserId && currentUserId !== person.id && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={startChat.isPending}
+            onClick={async () => {
+              try {
+                const convId = await startChat.mutateAsync(person.id);
+                navigate({ to: "/messages", search: { conversationId: convId } });
+              } catch {
+                navigate({ to: "/@{$username}", params: { username: person.username } });
+              }
+            }}
+            className="h-8 rounded-full px-3 text-xs"
+            aria-label={`Message ${name}`}
+          >
+            <MessageSquare className="size-3.5" />
+          </Button>
+        )}
+      </div>
+    </article>
+  );
+}
+
 function Explore() {
-  const { c, page } = Route.useSearch();
+  const { user } = useAuth();
+  const { c, filter: filterParam, q, page } = Route.useSearch();
   const cat = c ?? null;
   const { data } = useSuspenseQuery(feedQuery(cat, page));
 
+  const [activeFilter, setActiveFilter] = useState<DiscoveryFilter>(
+    filterParam ?? (cat === "opportunity" ? "opportunities" : "all"),
+  );
+  const [searchQuery, setSearchQuery] = useState(q ?? "");
+  const deferredQuery = useDeferredValue(searchQuery.trim().toLowerCase());
+
+  // Fetch real People & Communities for network discovery
+  const { data: people = [] } = useQuery({
+    queryKey: ["explore-people", deferredQuery, user?.id],
+    queryFn: async (): Promise<Profile[]> => {
+      let query = supabase
+        .from("profiles")
+        .select("id, username, display_name, bio, avatar_url, created_at")
+        .order("created_at", { ascending: false })
+        .limit(12);
+      if (user?.id) {
+        query = query.neq("id", user.id);
+      }
+      if (deferredQuery) {
+        const clean = deferredQuery.replace(/[%_,()*@]/g, "");
+        if (clean) {
+          query = query.or(
+            `username.ilike.%${clean}%,display_name.ilike.%${clean}%,bio.ilike.%${clean}%`,
+          );
+        }
+      }
+      const { data: rows, error } = await query;
+      if (error || !rows) return [];
+      return rows as Profile[];
+    },
+  });
+
+  const { data: communities = [] } = useQuery(hubsQuery(deferredQuery, null, 0));
+
+  const allPings: Ping[] = data ?? [];
+  const filteredPings = deferredQuery
+    ? allPings.filter((p) => {
+        const text = p.content.toLowerCase();
+        const username = p.author?.username?.toLowerCase() ?? "";
+        const displayName = p.author?.display_name?.toLowerCase() ?? "";
+        const meta = parseStructuredPing(p);
+        const headline = (meta.headline ?? "").toLowerCase();
+        const needs = meta.needs.join(" ").toLowerCase();
+        const offers = meta.offers.join(" ").toLowerCase();
+        return (
+          text.includes(deferredQuery) ||
+          username.includes(deferredQuery) ||
+          displayName.includes(deferredQuery) ||
+          headline.includes(deferredQuery) ||
+          needs.includes(deferredQuery) ||
+          offers.includes(deferredQuery)
+        );
+      })
+    : allPings;
+
+  // Categorize Pings into discovery buckets
+  const opportunityPings = filteredPings.filter((p) => {
+    const fmt = parseStructuredPing(p).intentFormat;
+    return (
+      fmt === "opportunity" ||
+      fmt === "need" ||
+      fmt === "offer" ||
+      fmt === "collaboration" ||
+      p.category === "opportunity"
+    );
+  });
+
+  const matchingIntentPings = filteredPings.filter((p) => {
+    const meta = parseStructuredPing(p);
+    return (
+      meta.needs.length > 0 ||
+      meta.offers.length > 0 ||
+      meta.intentFormat === "collaboration" ||
+      meta.intentFormat === "idea" ||
+      meta.intentFormat === "question"
+    );
+  });
+
+  const projectPings = filteredPings.filter((p) => {
+    const fmt = parseStructuredPing(p).intentFormat;
+    return fmt === "progress" || fmt === "building" || fmt === "launch" || fmt === "milestone";
+  });
+
+  const popularPings = [...filteredPings]
+    .sort((a, b) => likeCount(b) + replyCount(b) - (likeCount(a) + replyCount(a)))
+    .slice(0, 6);
+
+  const newPings = filteredPings.slice(0, 6);
+
   return (
-    <div className="mx-auto max-w-6xl px-5 py-12">
-      <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+    <div className="mx-auto max-w-6xl w-full min-w-0 px-4 sm:px-6 py-8 pb-24 overflow-x-clip">
+      {/* Header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <span className="sticker rotate-[-2deg] bg-lime text-lime-foreground">fresh Pings</span>
-          <h1 className="mt-4 font-display text-4xl font-extrabold sm:text-6xl">Explore</h1>
-          <p className="mt-2 max-w-lg text-muted-foreground">The latest from people building in public, newest first.</p>
+          <h1 className="font-display text-3xl font-extrabold tracking-tight sm:text-5xl">
+            Explore
+          </h1>
+          <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+            Discover people, intentions, open opportunities, communities, and projects across PING.
+          </p>
         </div>
-        <Button asChild variant="hero"><Link to="/create">Share a Ping</Link></Button>
       </div>
 
-      <MomentsTray className="mt-6" />
-
-      <nav className="-mx-5 mt-8 flex gap-2 overflow-x-auto px-5 pb-2" aria-label="Filter by type">
-        <Link to="/explore" search={{}} className={cn("shrink-0 rounded-full border px-4 py-2 text-sm font-medium transition-colors", !cat ? "border-foreground bg-foreground text-background" : "bg-card hover:bg-secondary")}>All</Link>
-        {CATEGORIES.map((x) => (
-          <Link key={x.value} to="/explore" search={{ c: x.value }} className={cn("shrink-0 rounded-full border px-4 py-2 text-sm font-medium transition-colors", cat === x.value ? "border-foreground bg-foreground text-background" : "bg-card hover:bg-secondary")}>
-            <span aria-hidden>{x.emoji}</span> {x.label}
-          </Link>
-        ))}
-      </nav>
-
-      <div className="mt-8 columns-1 gap-5 md:columns-2 lg:columns-3 [&>*]:mb-5 [&>*]:break-inside-avoid">
-        {data?.map((p) => <PingCard key={p.id} ping={p} />)}
+      {/* A. Search Bar */}
+      <div className="relative mt-5">
+        <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+        <Input
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Find people, intentions, opportunities and more..."
+          aria-label="Search people, intentions, opportunities, communities, projects, and Moments"
+          className="h-12 rounded-2xl pl-11 pr-10 bg-card border-border text-sm shadow-soft"
+        />
+        {searchQuery && (
+          <button
+            type="button"
+            onClick={() => setSearchQuery("")}
+            aria-label="Clear search"
+            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-secondary hover:text-foreground"
+          >
+            <X className="size-4" />
+          </button>
+        )}
       </div>
 
-      <nav aria-label="Feed pages" className="mt-8 flex justify-center gap-3">
-        {page > 0 && <Button asChild variant="outline"><Link to="/explore" search={{ c, page: page - 1 }}>Newer Pings</Link></Button>}
-        {data.length === 60 && <Button asChild variant="outline"><Link to="/explore" search={{ c, page: page + 1 }}>Older Pings</Link></Button>}
+      {/* B. Horizontal Discovery Filters */}
+      <nav
+        className="mt-4 flex max-w-full min-w-0 gap-2 overflow-x-auto pb-2 scrollbar-none"
+        aria-label="Discovery filters"
+      >
+        {DISCOVERY_FILTERS.map((f) => {
+          const isSelected = activeFilter === f.id;
+          return (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => setActiveFilter(f.id)}
+              aria-pressed={isSelected}
+              className={cn(
+                "shrink-0 rounded-full border px-4 py-2 text-xs font-semibold transition-colors",
+                isSelected
+                  ? "border-foreground bg-foreground text-background shadow-sm"
+                  : "border-border bg-card text-foreground hover:bg-secondary",
+              )}
+            >
+              {f.label}
+            </button>
+          );
+        })}
       </nav>
 
-      {data && data.length === 0 && (
-        <div className="surface-card mx-auto max-w-lg rounded-3xl p-10 text-center">
-          <div className="mx-auto size-14 rounded-full border-[1.5px] border-foreground bg-lime animate-float-a" />
-          <h2 className="mt-5 font-display text-2xl font-bold">{cat ? "No Pings of this type yet" : "It's quiet in here — for now"}</h2>
-          <p className="mt-2 text-muted-foreground">Be the first to share what you're building. Your Ping gets its own public link.</p>
-          <Button asChild variant="hero" className="mt-6"><Link to="/create">Create the first Ping</Link></Button>
-        </div>
+      {/* C. Moments Discovery Rail (Always accessible on All & Moments) */}
+      {(activeFilter === "all" || activeFilter === "moments") && (
+        <section className="mt-6 surface-card rounded-3xl p-4 sm:p-5 border border-border/80">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="font-display text-sm font-bold text-foreground flex items-center gap-2">
+              <Sparkles className="size-4 text-primary" />
+              Moments Discovery
+            </h2>
+            <span className="text-xs text-muted-foreground">
+              Tap any circle for full-screen view
+            </span>
+          </div>
+          <MomentsTray />
+          <DiscoverableMomentsFeed />
+        </section>
       )}
 
-      <DiscoverableMomentsFeed />
+      {/* D1. People You Should Know */}
+      {(activeFilter === "all" || activeFilter === "people") && people.length > 0 && (
+        <section className="mt-8" aria-labelledby="explore-people-heading">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2
+                id="explore-people-heading"
+                className="font-display text-xl font-bold tracking-tight flex items-center gap-2"
+              >
+                <Users className="size-5 text-primary" />
+                People you should know
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Builders, operators, and collaborators active on PING.
+              </p>
+            </div>
+            {activeFilter === "all" && people.length > 4 && (
+              <button
+                type="button"
+                onClick={() => setActiveFilter("people")}
+                className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
+              >
+                See all <ArrowRight className="size-3.5" />
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {(activeFilter === "people" ? people : people.slice(0, 4)).map((person) => (
+              <PeopleDiscoveryCard key={person.id} person={person} currentUserId={user?.id} />
+            ))}
+          </div>
+        </section>
+      )}
 
-      <div className="mt-16"><AriseCallout /></div>
+      {/* D2. Open Opportunities & Intentions Matching Yours */}
+      {(activeFilter === "all" || activeFilter === "opportunities") && (
+        <section className="mt-10" aria-labelledby="explore-opportunities-heading">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2
+                id="explore-opportunities-heading"
+                className="font-display text-xl font-bold tracking-tight flex items-center gap-2"
+              >
+                <Compass className="size-5 text-gold" />
+                {activeFilter === "opportunities"
+                  ? "Open Opportunities & Needs"
+                  : "Intentions matching yours & Open opportunities"}
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Actionable needs, offers, roles, and collaboration requests you can respond to now.
+              </p>
+            </div>
+            {activeFilter === "all" && opportunityPings.length > 3 && (
+              <button
+                type="button"
+                onClick={() => setActiveFilter("opportunities")}
+                className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
+              >
+                View all <ArrowRight className="size-3.5" />
+              </button>
+            )}
+          </div>
+
+          {opportunityPings.length === 0 && matchingIntentPings.length === 0 ? (
+            <div className="surface-card rounded-3xl p-8 text-center">
+              <p className="font-display text-base font-bold">No open opportunity Pings yet</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Share a Need, Offer, or Opportunity to coordinate with the network.
+              </p>
+              <Button asChild variant="hero" size="sm" className="mt-4 rounded-full">
+                <Link to="/create">Share an Opportunity</Link>
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3 items-start min-w-0 [&>*]:min-w-0">
+              {(activeFilter === "opportunities"
+                ? opportunityPings.length > 0
+                  ? opportunityPings
+                  : matchingIntentPings
+                : (opportunityPings.length > 0 ? opportunityPings : matchingIntentPings).slice(0, 3)
+              ).map((p) => (
+                <PingCard key={p.id} ping={p} />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* D3. Recommended Communities (Hubs) */}
+      {(activeFilter === "all" || activeFilter === "communities") && (
+        <section className="mt-10" aria-labelledby="explore-communities-heading">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2
+                id="explore-communities-heading"
+                className="font-display text-xl font-bold tracking-tight flex items-center gap-2"
+              >
+                <Building2 className="size-5 text-primary" />
+                Recommended communities
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Organizational Hubs, universities, incubators, and topic Forums.
+              </p>
+            </div>
+            <Link
+              to="/hubs"
+              className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
+            >
+              Open Community Hub <ArrowRight className="size-3.5" />
+            </Link>
+          </div>
+
+          {communities.length === 0 ? (
+            <div className="surface-card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-3xl p-6">
+              <div>
+                <p className="font-display text-base font-bold">Launch the first Community Hub</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Create a dedicated space with topic Forums and institutional broadcasts.
+                </p>
+              </div>
+              <Button asChild variant="hero" size="sm" className="rounded-full shrink-0">
+                <Link to="/hubs/create">Create a Hub</Link>
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {(activeFilter === "communities" ? communities : communities.slice(0, 3)).map(
+                (hub) => (
+                  <Link
+                    key={hub.id}
+                    to="/hubs/$slug"
+                    params={{ slug: hub.slug }}
+                    className="surface-card lift flex flex-col justify-between rounded-3xl p-5 transition-all"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-display text-base font-bold text-foreground truncate">
+                          {hub.name}
+                        </span>
+                        <span className="rounded-full bg-secondary px-2.5 py-0.5 text-[11px] font-semibold capitalize">
+                          {hub.category}
+                        </span>
+                      </div>
+                      {hub.tagline && (
+                        <p className="mt-1.5 line-clamp-2 text-xs text-muted-foreground">
+                          {hub.tagline}
+                        </p>
+                      )}
+                    </div>
+                    <div className="mt-4 flex items-center justify-between border-t border-border/60 pt-3 text-xs">
+                      <span className="text-muted-foreground tabular-nums">
+                        {(hub.member_count ?? 0).toLocaleString()} members
+                      </span>
+                      <span className="font-semibold text-primary">Explore Hub →</span>
+                    </div>
+                  </Link>
+                ),
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* D4. Popular PINGs, Relevant Projects & New PINGs */}
+      {(activeFilter === "all" || activeFilter === "pings") && (
+        <>
+          {activeFilter === "all" && popularPings.length > 0 && (
+            <section className="mt-10" aria-labelledby="explore-popular-heading">
+              <div className="mb-4">
+                <h2
+                  id="explore-popular-heading"
+                  className="font-display text-xl font-bold tracking-tight flex items-center gap-2"
+                >
+                  <Flame className="size-5 text-primary" />
+                  Popular PINGs & Relevant projects
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  High-signal intentions and active builds gaining traction across the network.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3 items-start min-w-0 [&>*]:min-w-0">
+                {(projectPings.length >= 3 ? projectPings.slice(0, 6) : popularPings).map((p) => (
+                  <PingCard key={p.id} ping={p} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          <section className="mt-10" aria-labelledby="explore-new-heading">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2
+                  id="explore-new-heading"
+                  className="font-display text-xl font-bold tracking-tight"
+                >
+                  {activeFilter === "pings" ? "All Matching PINGs" : "New PINGs"}
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Fresh intentions and updates published by the community.
+                </p>
+              </div>
+            </div>
+
+            {filteredPings.length === 0 ? (
+              <div className="surface-card mx-auto mt-4 max-w-lg rounded-3xl p-10 text-center">
+                <h3 className="font-display text-xl font-bold">
+                  {deferredQuery
+                    ? `No results match "${searchQuery.trim()}"`
+                    : "No Pings in this view yet"}
+                </h3>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {deferredQuery
+                    ? "Try searching for another skill, person, intention, or opportunity."
+                    : "Be the first to share an intention with the network."}
+                </p>
+                <div className="mt-5 flex justify-center gap-2">
+                  {deferredQuery && (
+                    <Button variant="outline" size="sm" onClick={() => setSearchQuery("")}>
+                      Clear search
+                    </Button>
+                  )}
+                  <Button asChild variant="hero" size="sm">
+                    <Link to="/create">Create a Ping</Link>
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3 items-start min-w-0 [&>*]:min-w-0">
+                {(activeFilter === "pings" ? filteredPings : newPings).map((p) => (
+                  <PingCard key={p.id} ping={p} />
+                ))}
+              </div>
+            )}
+          </section>
+        </>
+      )}
+
+      <nav aria-label="Feed pages" className="mt-8 flex justify-center gap-3">
+        {page > 0 && (
+          <Button asChild variant="outline">
+            <Link to="/explore" search={{ c, page: page - 1 }}>
+              Newer Pings
+            </Link>
+          </Button>
+        )}
+        {allPings.length === 60 && (
+          <Button asChild variant="outline">
+            <Link to="/explore" search={{ c, page: page + 1 }}>
+              Older Pings
+            </Link>
+          </Button>
+        )}
+      </nav>
+
+      <div className="mt-14">
+        <AriseCallout />
+      </div>
     </div>
   );
 }
