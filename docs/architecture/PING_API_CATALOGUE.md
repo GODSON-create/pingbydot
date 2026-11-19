@@ -49,6 +49,11 @@
 | `record_verified_economic_outcome(...)` | `0025` | `service_role` ONLY | Server-only settlement ledger writer (`currency <> 'DOT'`) |
 | `submit_verification_request(...)` / `review_verification_request(...)` / `get_public_verification_badges(...)` | `0026` | `authenticated` / `admin` / `anon+auth` | Optional identity & professional verification workflow with anti-self-approval guard |
 | `get_monetization_foundation()` | `0026` | `anon`, `authenticated` | Returns non-compulsory offering catalog (`live_fiat_payments_enabled = false`) |
+| `toggle_ping_reaction(...)` / `vote_ping_poll(...)` | `0029` | `authenticated` | Multi-reaction toggle and single-vote-per-user poll voting with expiry enforcement |
+| `edit_private_message(...)` / `toggle_pin_private_message(...)` / `toggle_private_message_reaction(...)` / `update_conversation_member_prefs(...)` | `0029` | `authenticated` | Sender-verified message editing, member-verified pinning/reactions, and mute/archive preferences |
+| `create_group_conversation(...)` / `add_group_member(...)` / `remove_group_member(...)` / `update_group_conversation(...)` | `0029` | `authenticated` | Group conversation creation, announcement-mode governance, and owner/admin member management |
+| `submit_signal_application(...)` / `update_signal_application_status(...)` | `0029` | `authenticated` | Structured opportunity applications with publisher-only review transitions & applicant withdraw |
+| `mark_notifications_read(...)` | `0029` | `authenticated` | Owner-scoped read-state update for central `public.notifications` inbox |
 
 ---
 

@@ -28,7 +28,10 @@ import { feedQuery, likeCount, replyCount, type Ping, type Profile } from "@/lib
 import { hubsQuery } from "@/lib/hub-queries";
 import { parseStructuredPing } from "@/lib/validation";
 import { useAuth } from "@/lib/auth";
-import { useGetOrCreateDirectConversation } from "@/lib/messages";
+import { blockedUsersQuery, useGetOrCreateDirectConversation } from "@/lib/messages";
+import { mutedUsersQuery } from "@/lib/mutes";
+import { extractTrendingTopics } from "@/lib/feed-engine";
+import { followedTopicsQuery, useToggleFollowTopic } from "@/lib/social";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -216,8 +219,18 @@ function Explore() {
   const [activeFilter, setActiveFilter] = useState<DiscoveryFilter>(
     filterParam ?? (cat === "opportunity" ? "opportunities" : "all"),
   );
+  const [sortBy, setSortBy] = useState<"relevant" | "recent" | "popular">("relevant");
   const [searchQuery, setSearchQuery] = useState(q ?? "");
   const deferredQuery = useDeferredValue(searchQuery.trim().toLowerCase());
+
+  const { data: mutedUsers = [] } = useQuery(mutedUsersQuery(user?.id));
+  const { data: blockedUsers = [] } = useQuery(blockedUsersQuery(user?.id));
+  const { data: followedTopics = [] } = useQuery(followedTopicsQuery(user?.id));
+  const toggleFollowTopic = useToggleFollowTopic(user?.id);
+  const hiddenAuthorIds = new Set([
+    ...mutedUsers.map((m) => m.muted_id),
+    ...blockedUsers.map((b) => b.blocked_id),
+  ]);
 
   // Fetch real People & Communities for network discovery
   const {
@@ -272,8 +285,8 @@ function Explore() {
     refetch: refetchCommunities,
   } = useQuery(hubsQuery(deferredQuery, null, 0));
 
-  const allPings: Ping[] = data ?? [];
-  const filteredPings = deferredQuery
+  const allPings: Ping[] = (data ?? []).filter((p) => !hiddenAuthorIds.has(p.user_id));
+  const matchedPings = deferredQuery
     ? allPings.filter((p) => {
         const text = p.content.toLowerCase();
         const username = p.author?.username?.toLowerCase() ?? "";
@@ -282,16 +295,34 @@ function Explore() {
         const headline = (meta.headline ?? "").toLowerCase();
         const needs = meta.needs.join(" ").toLowerCase();
         const offers = meta.offers.join(" ").toLowerCase();
+        const cleanQuery = deferredQuery.replace(/^#/, "");
         return (
           text.includes(deferredQuery) ||
-          username.includes(deferredQuery) ||
-          displayName.includes(deferredQuery) ||
-          headline.includes(deferredQuery) ||
-          needs.includes(deferredQuery) ||
-          offers.includes(deferredQuery)
+          text.includes(cleanQuery) ||
+          username.includes(cleanQuery) ||
+          displayName.includes(cleanQuery) ||
+          headline.includes(cleanQuery) ||
+          needs.includes(cleanQuery) ||
+          offers.includes(cleanQuery)
         );
       })
     : allPings;
+
+  const filteredPings = [...matchedPings].sort((a, b) => {
+    if (sortBy === "popular") {
+      return likeCount(b) + replyCount(b) * 2 - (likeCount(a) + replyCount(a) * 2);
+    }
+    if (sortBy === "recent") {
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    }
+    // relevant: boost followed topics slightly while respecting recency
+    const aScore = followedTopics.some((t) => a.content.toLowerCase().includes(t)) ? 1 : 0;
+    const bScore = followedTopics.some((t) => b.content.toLowerCase().includes(t)) ? 1 : 0;
+    if (bScore !== aScore) return bScore - aScore;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+
+  const trendingTopics = extractTrendingTopics(allPings, 8);
 
   // Categorize Pings into discovery buckets
   const opportunityPings = filteredPings.filter((p) => {
@@ -363,31 +394,111 @@ function Explore() {
         )}
       </div>
 
-      {/* B. Horizontal Discovery Filters */}
-      <nav
-        className="mt-4 flex max-w-full min-w-0 gap-2 overflow-x-auto pb-2 scrollbar-none"
-        aria-label="Discovery filters"
-      >
-        {DISCOVERY_FILTERS.map((f) => {
-          const isSelected = activeFilter === f.id;
-          return (
-            <button
-              key={f.id}
-              type="button"
-              onClick={() => setActiveFilter(f.id)}
-              aria-pressed={isSelected}
-              className={cn(
-                "shrink-0 rounded-full border px-4 py-2 text-xs font-semibold transition-colors",
-                isSelected
-                  ? "border-foreground bg-foreground text-background shadow-sm"
-                  : "border-border bg-card text-foreground hover:bg-secondary",
-              )}
-            >
-              {f.label}
-            </button>
-          );
-        })}
-      </nav>
+      {/* B. Horizontal Discovery Filters + Sort Controls + Signals Opportunities Shortcut */}
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <nav
+          className="flex max-w-full min-w-0 gap-2 overflow-x-auto pb-1 scrollbar-none"
+          aria-label="Discovery filters"
+        >
+          {DISCOVERY_FILTERS.map((f) => {
+            const isSelected = activeFilter === f.id;
+            return (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setActiveFilter(f.id)}
+                aria-pressed={isSelected}
+                className={cn(
+                  "shrink-0 rounded-full border px-4 py-2 text-xs font-semibold transition-colors",
+                  isSelected
+                    ? "border-foreground bg-foreground text-background shadow-sm"
+                    : "border-border bg-card text-foreground hover:bg-secondary",
+                )}
+              >
+                {f.label}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <div
+            className="inline-flex items-center rounded-full border border-border bg-card p-0.5 text-[11px]"
+            role="group"
+            aria-label="Sort results"
+          >
+            {(["relevant", "recent", "popular"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setSortBy(mode)}
+                className={cn(
+                  "rounded-full px-2.5 py-1 font-semibold capitalize transition-colors",
+                  sortBy === mode
+                    ? "bg-foreground text-background"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
+          <Button asChild size="sm" variant="outline" className="rounded-full text-xs h-8">
+            <Link to="/signals/opportunities">Opportunities Hub</Link>
+          </Button>
+        </div>
+      </div>
+
+      {/* Trending Topics & Hashtag Follow Chips */}
+      {trendingTopics.length > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-1.5" aria-label="Trending topics">
+          <span className="text-[11px] font-semibold text-muted-foreground mr-1">
+            Trending topics:
+          </span>
+          {trendingTopics.map((topic) => {
+            const followed = followedTopics.includes(topic.slug);
+            return (
+              <div
+                key={topic.slug}
+                className="inline-flex items-center rounded-full border border-border/70 bg-card text-[11px] overflow-hidden"
+              >
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery(`#${topic.slug}`)}
+                  className="px-2.5 py-1 font-medium text-foreground hover:bg-secondary"
+                >
+                  #{topic.slug}
+                </button>
+                {user && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      toggleFollowTopic.mutate(
+                        { topicSlug: topic.slug, currentlyFollowing: followed },
+                        {
+                          onSuccess: (now) =>
+                            toast.success(
+                              now ? `Following #${topic.slug}` : `Unfollowed #${topic.slug}`,
+                            ),
+                        },
+                      )
+                    }
+                    className={cn(
+                      "px-2 py-1 border-l border-border/60 font-semibold transition-colors",
+                      followed
+                        ? "bg-primary/15 text-primary"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                    aria-label={followed ? `Unfollow ${topic.slug}` : `Follow ${topic.slug}`}
+                  >
+                    {followed ? "✓" : "+"}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* C. Moments Discovery Rail (Always accessible on All & Moments) */}
       {(activeFilter === "all" || activeFilter === "moments") && (

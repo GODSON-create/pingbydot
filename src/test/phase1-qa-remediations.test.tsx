@@ -95,6 +95,7 @@ vi.mock("@/lib/hub-queries", () => ({
 
 vi.mock("@/lib/messages", () => ({
   userConversationsQuery: () => ({ queryKey: ["conversations"], queryFn: async () => [] }),
+  blockedUsersQuery: () => ({ queryKey: ["blocked-users"], queryFn: async () => [] }),
 }));
 
 const sonnerPropsSpy = vi.fn();

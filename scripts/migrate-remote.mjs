@@ -338,6 +338,29 @@ async function runSchemaVerification(sql, releaseEntries) {
     );
   }
 
+  const [{ p2_rls_count, anon_group_exec, anon_opp_exec }] = await sql`
+    SELECT
+      (
+        SELECT count(*)::int FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relrowsecurity = true
+          AND c.relname = ANY(ARRAY[
+            'user_saved_accounts', 'user_topic_follows', 'ping_reactions',
+            'ping_polls', 'ping_poll_options', 'ping_poll_votes',
+            'private_message_reactions', 'saved_messages',
+            'hub_events', 'hub_event_rsvps',
+            'signal_opportunities', 'signal_applications', 'notifications'
+          ])
+      ) AS p2_rls_count,
+      has_function_privilege('anon', 'public.create_group_conversation(text, text, uuid[], boolean)', 'EXECUTE') AS anon_group_exec,
+      has_function_privilege('anon', 'public.submit_signal_application(uuid, text, text)', 'EXECUTE') AS anon_opp_exec
+  `;
+  if (p2_rls_count < 13 || anon_group_exec || anon_opp_exec) {
+    throw new Error(
+      `Schema Verification FAILED — Phase 2 schema/privilege mismatch (rls_count=${p2_rls_count}/13, anon_group=${anon_group_exec}, anon_opp=${anon_opp_exec})`,
+    );
+  }
+
   console.log(
     `[SCHEMA VERIFIED] Ledger ${minTag}–${maxTag}: ${releaseEntries.length}/${releaseEntries.length} recorded (total rows=${ledgerRows.length}); ${REQUIRED_TABLES_0011_0020.length}/${REQUIRED_TABLES_0011_0020.length} tables with RLS; storage 'media' bucket, hardened indexes & privileges intact.`,
   );

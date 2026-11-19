@@ -87,11 +87,18 @@ function SignalChannelsDirectory() {
           </Link>
         </div>
 
-        <Button asChild variant="hero" size="sm" className="rounded-full gap-1.5 lg:ml-auto">
-          <Link to="/signals/create">
-            <Plus className="size-4" /> Register Signal Channel
-          </Link>
-        </Button>
+        <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
+          <Button asChild variant="outline" size="sm" className="rounded-full gap-1.5">
+            <Link to="/signals/opportunities">
+              <Sparkles className="size-4 text-primary" /> Opportunities
+            </Link>
+          </Button>
+          <Button asChild variant="hero" size="sm" className="rounded-full gap-1.5">
+            <Link to="/signals/create">
+              <Plus className="size-4" /> Register Signal Channel
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {/* Hero Intro */}

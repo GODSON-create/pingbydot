@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "@tanstack/react-router";
-import { ArrowUpRight, Building2, Radio } from "lucide-react";
+import { ArrowUpRight, Briefcase, Building2, Radio } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -139,7 +139,35 @@ export function CreateStackModal({ open, onOpenChange }: CreateStackModalProps) 
               </div>
             </button>
 
-            {/* CARD 4 — CREATE A HUB */}
+            {/* CARD 4 — PUBLISH AN OPPORTUNITY */}
+            <button
+              type="button"
+              role="listitem"
+              onClick={() =>
+                requireAuthOrRun("/signals/opportunities", () => {
+                  onOpenChange(false);
+                  navigate({ to: "/signals/opportunities" });
+                })
+              }
+              className="group relative flex w-full items-start gap-4 rounded-3xl border border-border bg-secondary/40 p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/60 hover:bg-secondary/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+                <Briefcase className="size-6" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-display text-base font-extrabold text-foreground">
+                    Publish an Opportunity
+                  </span>
+                  <ArrowUpRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-foreground" />
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  Post funding, jobs, grants, mentorship, partnerships, or requests.
+                </p>
+              </div>
+            </button>
+
+            {/* CARD 5 — CREATE A HUB */}
             <button
               type="button"
               role="listitem"

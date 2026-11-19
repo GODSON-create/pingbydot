@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { formatDistanceToNowStrict } from "date-fns";
-import { ArrowUpRight, Bookmark, MessageCircle, MessageSquare } from "lucide-react";
+import { ArrowUpRight, Bookmark, MessageCircle, MessageSquare, Repeat2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { mySavedPingsQuery, replyCount, useToggleSavePing, type Ping } from "@/lib/pings";
@@ -10,6 +10,9 @@ import { LEAD_ELIGIBLE_PING_CATEGORIES, recordNetworkEvent } from "@/lib/economi
 import { useGetOrCreateDirectConversation } from "@/lib/messages";
 import { FounderAvatar } from "./Avatar";
 import { LikeButton, PingMenu, ShareMenu } from "./PingActions";
+import { PingPollCard } from "./PingPollCard";
+import { PingReactionBar } from "./PingReactionBar";
+import { RichPingText } from "./RichPingText";
 import { cn } from "@/lib/utils";
 import { RepingAttribution } from "./Comments";
 import { useState } from "react";
@@ -243,11 +246,15 @@ export function PingCard({
             params={{ id: ping.id }}
             className="block whitespace-pre-line break-words text-[15px] leading-relaxed text-foreground/95 after:absolute after:inset-0 after:content-[''] focus-visible:ring-2 focus-visible:ring-ring"
           >
-            {structured.body.length > 420 ? structured.body.slice(0, 420) + "…" : structured.body}
+            <RichPingText
+              text={
+                structured.body.length > 420 ? structured.body.slice(0, 420) + "…" : structured.body
+              }
+            />
           </Link>
         ) : (
           <p className="whitespace-pre-line break-words text-base sm:text-lg leading-relaxed text-foreground">
-            {structured.body}
+            <RichPingText text={structured.body} />
           </p>
         )}
 
@@ -337,13 +344,15 @@ export function PingCard({
           </div>
         )}
 
+        <PingPollCard pingId={ping.id} />
         <RepingAttribution ping={ping} />
         <div className="relative z-10">
           <CtaLink ping={ping} />
         </div>
+        <PingReactionBar pingId={ping.id} />
       </div>
 
-      {/* Card Footer: Likes, Comments, Re-Pings/Share, Save, Respond/Connect, Menu */}
+      {/* Card Footer: Likes, Comments, Quote/Re-Ping, Share, Save, Respond/Connect, Menu */}
       <footer className="relative z-10 mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-3">
         <div className="flex items-center gap-1 tabular-nums">
           <LikeButton ping={ping} />
@@ -356,6 +365,18 @@ export function PingCard({
           >
             <MessageCircle className="size-4" />
             <span>{replyCount(ping)}</span>
+          </Link>
+          <Link
+            to="/create"
+            search={{
+              quote: `@${ping.author?.username ?? "member"}: "${structured.body.slice(0, 120)}"`,
+            }}
+            onClick={(e) => e.stopPropagation()}
+            aria-label="Quote Ping"
+            title="Quote & Re-Ping"
+            className="inline-flex items-center justify-center rounded-full p-1.5 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          >
+            <Repeat2 className="size-4" />
           </Link>
           <ShareMenu ping={ping} />
           <button

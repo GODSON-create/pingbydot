@@ -1,7 +1,7 @@
 # PING Bug Register & System Audit Log
 
 **Project:** Ping by DOT (`GODSON-create/pingbydot`)  
-**Branch:** `fix/full-system-audit-repair`  
+**Branch:** `feat/phase-2-social-communication-community` (branched from `fix/full-system-audit-repair`)  
 **Last Updated:** 2026-11-19  
 **Classification Standard:** `VERIFIED WORKING` | `BROKEN` | `PARTIALLY WORKING` | `UI ONLY` | `BLOCKED BY EXTERNAL DEPENDENCY` | `NOT TESTED`
 
@@ -20,6 +20,8 @@
 | **BUG-007** | Parallel Vitest Timeout Flake (`src/test/phase1-qa-remediations.test.tsx`) | Low | `PARTIALLY WORKING` → `VERIFIED WORKING` | Dynamic `import("@/routes/index")` test hit its 15s timeout when 36 jsdom suites ran simultaneously on Windows CPU contention. | Increased test timeout to 30s; verified passing solo and in full suite runs. |
 | **BUG-008** | TanStack Start Deprecation Warning (`inputValidator()`) | Low | `PARTIALLY WORKING` | `vite build` logs deprecation notices for `createServerFn().inputValidator()` in `admin.functions.ts`, `public-pings.functions.ts`, `public-hubs.functions.ts`, `public-comments.functions.ts`. | Logged in backlog for safe API migration in Phase 2 once TanStack Start version pin is audited. |
 | **BUG-009** | Android Emulator / Physical Device Verification & iOS Xcode Signing | Medium | `BLOCKED BY EXTERNAL DEPENDENCY` | Local Windows host lacks Android SDK/ADB/JDK and macOS/Xcode; pre-built `android/app/build/outputs/apk/debug/app-debug.apk` exists from 2026-11-18. | Documented as `BLOCKED BY EXTERNAL DEPENDENCY`; Android device testing requires Android SDK/emulator or USB device, and iOS release readiness requires macOS + Xcode + Apple signing. |
+| **BUG-010** | Remote Database Migration `0029` (Phase 2 Tables & RPCs) | High | `BLOCKED BY EXTERNAL DEPENDENCY` | `0029_phase2_social_messaging_hubs_signals_notifications.sql` defines 13 new RLS-enabled tables and 11 authenticated RPCs; cannot apply remotely without operator approval + `LOVABLE_DB_MIGRATION_URL`. | All Phase 2 client queries/mutations degrade cleanly with local/fallback paths until `0022`–`0029` are applied remotely. |
+| **BUG-011** | Live Voice & Video Calling (Phase 2.5) | Medium | `BLOCKED BY EXTERNAL DEPENDENCY` | No WebRTC/SFU provider (LiveKit, Daily, Agora, or Twilio) credentials or signaling infrastructure provisioned; blueprint forbids fake call buttons without a real media connection. | Intentionally omitted fake call buttons; ready to integrate once RTC provider credentials & signaling token endpoint are provisioned. |
 
 ---
 

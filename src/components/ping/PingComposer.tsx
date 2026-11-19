@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  BarChart2,
   Building2,
+  CalendarClock,
   ChevronDown,
   ChevronUp,
   Image as ImageIcon,
   Link2,
   Loader2,
+  Plus,
   Sparkles,
   Upload,
   X,
@@ -47,6 +50,12 @@ export type PingDraft = {
   desired_outcome?: string | null;
   hub_id?: string | null;
   hub_intent?: HubIntent | null;
+  scheduled_for?: string | null;
+  poll?: {
+    question: string;
+    options: string[];
+    expires_at?: string | null;
+  } | null;
 };
 
 export function PingComposer({
@@ -201,6 +210,14 @@ export function PingComposer({
 
   const [errors, setErrors] = useState<Partial<Record<keyof PingDraft, string>>>({});
   const [showCta, setShowCta] = useState(Boolean(initial?.cta_url || storedDraft?.cta_url));
+  const [showPoll, setShowPoll] = useState(Boolean(initial?.poll));
+  const [pollQuestion, setPollQuestion] = useState(initial?.poll?.question ?? "");
+  const [pollOptions, setPollOptions] = useState<string[]>(
+    initial?.poll?.options && initial.poll.options.length >= 2 ? initial.poll.options : ["", ""],
+  );
+  const [pollDurationHours, setPollDurationHours] = useState<number>(24);
+  const [showSchedule, setShowSchedule] = useState(Boolean(initial?.scheduled_for));
+  const [scheduledFor, setScheduledFor] = useState(initial?.scheduled_for ?? "");
 
   const { data: myHubs } = useQuery(myHubsQuery(user?.id));
 
@@ -263,6 +280,16 @@ export function PingComposer({
       return;
     }
     setErrors({});
+    const cleanPollOptions = pollOptions.map((o) => o.trim()).filter(Boolean);
+    const pollPayload =
+      showPoll && pollQuestion.trim().length >= 3 && cleanPollOptions.length >= 2
+        ? {
+            question: pollQuestion.trim(),
+            options: cleanPollOptions.slice(0, 4),
+            expires_at: new Date(Date.now() + pollDurationHours * 3_600_000).toISOString(),
+          }
+        : null;
+
     onSubmit({
       ...(r.data as PingDraft),
       headline: headline.trim() || null,
@@ -272,6 +299,8 @@ export function PingComposer({
       image_url: mediaUrl.trim() || null,
       hub_id: d.hub_id || null,
       hub_intent: d.hub_id ? d.hub_intent || null : null,
+      scheduled_for: showSchedule && scheduledFor ? new Date(scheduledFor).toISOString() : null,
+      poll: pollPayload,
     });
   };
 
@@ -547,7 +576,124 @@ export function PingComposer({
         </div>
       )}
 
-      {/* 6. Optional CTA Link */}
+      {/* 6. Optional Poll, Schedule & CTA Link */}
+      {showPoll && (
+        <div className="mt-4 space-y-3 rounded-2xl border border-border/70 bg-secondary/45 p-4">
+          <div className="flex items-center justify-between gap-2">
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground">
+              <BarChart2 className="size-4 text-primary" /> Interactive Poll
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setShowPoll(false);
+                setPollQuestion("");
+                setPollOptions(["", ""]);
+              }}
+              className="text-xs text-muted-foreground hover:text-foreground underline"
+            >
+              Remove poll
+            </button>
+          </div>
+          <div>
+            <Label htmlFor="poll-question" className="text-xs">
+              Poll question
+            </Label>
+            <Input
+              id="poll-question"
+              value={pollQuestion}
+              onChange={(e) => setPollQuestion(e.target.value)}
+              placeholder="What should we build or prioritise next?"
+              maxLength={240}
+              className="mt-1 rounded-xl bg-card"
+            />
+          </div>
+          <div className="space-y-2">
+            {pollOptions.map((opt, idx) => (
+              <div key={idx} className="flex items-center gap-2">
+                <Input
+                  value={opt}
+                  onChange={(e) => {
+                    const next = [...pollOptions];
+                    next[idx] = e.target.value;
+                    setPollOptions(next);
+                  }}
+                  placeholder={`Option ${idx + 1}`}
+                  maxLength={120}
+                  className="rounded-xl bg-card text-sm"
+                />
+                {pollOptions.length > 2 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 rounded-xl shrink-0"
+                    onClick={() => setPollOptions(pollOptions.filter((_, i) => i !== idx))}
+                    aria-label={`Remove option ${idx + 1}`}
+                  >
+                    <X className="size-3.5" />
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {pollOptions.length < 4 ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="rounded-full text-xs gap-1"
+                onClick={() => setPollOptions([...pollOptions, ""])}
+              >
+                <Plus className="size-3.5" /> Add option
+              </Button>
+            ) : (
+              <span className="text-[11px] text-muted-foreground">Max 4 options</span>
+            )}
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              Duration:
+              <select
+                value={pollDurationHours}
+                onChange={(e) => setPollDurationHours(Number(e.target.value))}
+                className="rounded-lg border border-border bg-card px-2 py-1 text-xs text-foreground"
+              >
+                <option value={24}>24 hours</option>
+                <option value={72}>3 days</option>
+                <option value={168}>7 days</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      )}
+
+      {showSchedule && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/45 p-4">
+          <div className="flex-1 min-w-[200px]">
+            <Label htmlFor="schedule-for" className="text-xs flex items-center gap-1.5">
+              <CalendarClock className="size-3.5 text-primary" /> Schedule publication time
+            </Label>
+            <Input
+              id="schedule-for"
+              type="datetime-local"
+              value={scheduledFor}
+              onChange={(e) => setScheduledFor(e.target.value)}
+              className="mt-1.5 rounded-xl bg-card"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setShowSchedule(false);
+              setScheduledFor("");
+            }}
+            className="text-xs text-muted-foreground underline"
+          >
+            Publish immediately
+          </button>
+        </div>
+      )}
+
       {showCta ? (
         <div className="mt-4 grid gap-4 rounded-2xl bg-secondary/50 p-4 sm:grid-cols-[2fr_1fr]">
           <div>
@@ -589,17 +735,43 @@ export function PingComposer({
             Remove link
           </button>
         </div>
-      ) : (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="mt-3 rounded-full"
-          onClick={() => setShowCta(true)}
-        >
-          <Link2 className="size-4" /> Add a link (website, waitlist, repo, calendar)
-        </Button>
-      )}
+      ) : null}
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {!showCta && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="rounded-full text-xs gap-1.5"
+            onClick={() => setShowCta(true)}
+          >
+            <Link2 className="size-3.5" /> Add link
+          </Button>
+        )}
+        {!showPoll && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="rounded-full text-xs gap-1.5"
+            onClick={() => setShowPoll(true)}
+          >
+            <BarChart2 className="size-3.5" /> Add poll
+          </Button>
+        )}
+        {!showSchedule && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="rounded-full text-xs gap-1.5"
+            onClick={() => setShowSchedule(true)}
+          >
+            <CalendarClock className="size-3.5" /> Schedule
+          </Button>
+        )}
+      </div>
 
       <div className="mt-6 flex items-center justify-end gap-3">
         <Button type="submit" variant="hero" size="lg" disabled={pending} className="rounded-full">

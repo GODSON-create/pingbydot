@@ -42,7 +42,10 @@ import {
 } from "@/lib/pathways";
 import { hubsQuery, myHubsQuery, myPendingHubsQuery, hubError } from "@/lib/hub-queries";
 import { HUB_CATEGORIES, type Hub, type HubCategory } from "@/lib/hubs";
-import { userConversationsQuery } from "@/lib/messages";
+import { blockedUsersQuery, userConversationsQuery } from "@/lib/messages";
+import { mutedUsersQuery } from "@/lib/mutes";
+import { extractTrendingTopics, rankFeedPings, type FeedMode } from "@/lib/feed-engine";
+import { followedTopicsQuery, useToggleFollowTopic } from "@/lib/social";
 import { INTENT_FORMATS, parseStructuredPing, type Category } from "@/lib/validation";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -50,7 +53,7 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/")({
   staticData: { sitemap: true },
   validateSearch: z.object({
-    tab: z.enum(["foryou", "following"]).optional(),
+    tab: z.enum(["foryou", "following", "latest", "trending", "opportunities"]).optional(),
     c: z
       .enum([
         "progress",
@@ -273,7 +276,7 @@ function HomeFeedContent() {
   const { user, profile } = useAuth();
   const search = Route.useSearch();
   const initialForYouPings = Route.useLoaderData();
-  const activeTab = search.tab || "foryou";
+  const activeTab: FeedMode = search.tab || "foryou";
   const categoryFilter = search.c ?? null;
   const page = search.page || 0;
   const [welcomeModalOpen, setWelcomeModalOpen] = useState(false);
@@ -297,6 +300,10 @@ function HomeFeedContent() {
     error: followingError,
     refetch: refetchFollowing,
   } = useQuery(followingFeedQuery(user?.id, page));
+  const { data: mutedUsers = [] } = useQuery(mutedUsersQuery(user?.id));
+  const { data: blockedUsers = [] } = useQuery(blockedUsersQuery(user?.id));
+  const { data: followedTopics = [] } = useQuery(followedTopicsQuery(user?.id));
+  const toggleFollowTopic = useToggleFollowTopic(user?.id);
   const {
     data: hubs = [],
     isLoading: hubsLoading,
@@ -310,13 +317,27 @@ function HomeFeedContent() {
   const { data: conversations = [] } = useQuery(userConversationsQuery(user?.id));
   const unreadSignalCount = conversations.reduce((sum, c) => sum + (c.unread_count ?? 0), 0);
 
+  const mutedIds = new Set(mutedUsers.map((m) => m.muted_id));
+  const blockedIds = new Set(blockedUsers.map((b) => b.blocked_id));
+  const followedAuthorIds = new Set(followingPings.map((p) => p.user_id));
+
   const rawPings = activeTab === "following" ? followingPings : forYouPings;
-  const displayedPings = categoryFilter
+  const categoryMatched = categoryFilter
     ? rawPings.filter((p) => {
         const meta = parseStructuredPing(p);
         return meta.intentFormat === categoryFilter || p.category === categoryFilter;
       })
     : rawPings;
+  const displayedPings = rankFeedPings(categoryMatched, {
+    mode: activeTab,
+    viewerId: user?.id ?? null,
+    interests: profile?.interests ?? [],
+    followedTopics,
+    followedAuthorIds,
+    mutedUserIds: mutedIds,
+    blockedUserIds: blockedIds,
+  });
+  const trendingTopics = extractTrendingTopics(forYouPings, 6);
   const isPingsLoading = activeTab === "following" ? followingLoading : pingsLoading;
   const isPingsError = activeTab === "following" ? isFollowingError : isForYouError;
   const activeFeedError = activeTab === "following" ? followingError : forYouError;
@@ -441,40 +462,79 @@ function HomeFeedContent() {
         {/* LEFT COLUMN: PINGS FEED                                             */}
         {/* =================================================================== */}
         <div className="min-w-0 space-y-6">
-          {/* Feed Header Tabs: For You vs Following */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-border/60 pb-3">
-            <div className="flex items-center gap-2">
-              <Link
-                to="/"
-                search={{ tab: "foryou", c: categoryFilter ?? undefined, page: 0 }}
-                className={cn(
-                  "rounded-full px-4 py-1.5 text-sm font-semibold transition-all",
-                  activeTab === "foryou"
-                    ? "bg-foreground text-background shadow-sm"
-                    : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-                )}
-              >
-                For You
-              </Link>
-              <Link
-                to="/"
-                search={{ tab: "following", c: categoryFilter ?? undefined, page: 0 }}
-                className={cn(
-                  "rounded-full px-4 py-1.5 text-sm font-semibold transition-all flex items-center gap-1.5",
-                  activeTab === "following"
-                    ? "bg-foreground text-background shadow-sm"
-                    : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-                )}
-              >
-                Following
-                {!user && <Lock className="size-3 text-muted-foreground" />}
-              </Link>
+          {/* Feed Header Tabs: For You, Following, Latest, Trending, Opportunities */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-border/60 pb-3">
+            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-0.5">
+              {(
+                [
+                  { id: "foryou", label: "For You" },
+                  { id: "following", label: "Following", locked: !user },
+                  { id: "latest", label: "Latest" },
+                  { id: "trending", label: "Trending" },
+                  { id: "opportunities", label: "Opportunities" },
+                ] as Array<{ id: FeedMode; label: string; locked?: boolean }>
+              ).map((t) => (
+                <Link
+                  key={t.id}
+                  to="/"
+                  search={{ tab: t.id, c: categoryFilter ?? undefined, page: 0 }}
+                  className={cn(
+                    "shrink-0 rounded-full px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all inline-flex items-center gap-1.5",
+                    activeTab === t.id
+                      ? "bg-foreground text-background shadow-sm"
+                      : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                  )}
+                >
+                  {t.label}
+                  {t.locked && <Lock className="size-3 text-muted-foreground" />}
+                </Link>
+              ))}
             </div>
 
-            <span className="text-xs text-muted-foreground font-medium">
-              {categoryFilter ? `Filtering by #${categoryFilter}` : "Showing all categories"}
+            <span className="text-xs text-muted-foreground font-medium shrink-0">
+              {categoryFilter ? `Filtering by #${categoryFilter}` : "Ranked for relevance"}
             </span>
           </div>
+
+          {trendingTopics.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5" aria-label="Topics to follow">
+              <span className="text-[11px] font-semibold text-muted-foreground mr-1">Topics:</span>
+              {trendingTopics.map((topic) => {
+                const isFollowingTopic = followedTopics.includes(topic.slug);
+                return (
+                  <button
+                    key={topic.slug}
+                    type="button"
+                    onClick={() => {
+                      if (!user) {
+                        toast.info("Sign in to follow topics and personalise your feed");
+                        return;
+                      }
+                      toggleFollowTopic.mutate(
+                        { topicSlug: topic.slug, currentlyFollowing: isFollowingTopic },
+                        {
+                          onSuccess: (nowFollowing) =>
+                            toast.success(
+                              nowFollowing
+                                ? `Following #${topic.slug}`
+                                : `Unfollowed #${topic.slug}`,
+                            ),
+                        },
+                      );
+                    }}
+                    className={cn(
+                      "rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors",
+                      isFollowingTopic
+                        ? "border-primary bg-primary/15 text-primary font-semibold"
+                        : "border-border/70 bg-card text-muted-foreground hover:border-border hover:text-foreground",
+                    )}
+                  >
+                    #{topic.slug} {isFollowingTopic ? "✓" : "+"}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {/* Intent Category Filter Bar */}
           <nav

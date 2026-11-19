@@ -20,7 +20,7 @@
 | Phase | Name | Overall Status | Key Gate / Dependency |
 | --- | --- | --- | --- |
 | **Phase 1** | Foundation, Reliability and Experience | **Code Complete & Verified Locally** (Remote DB migrations `0022`–`0028` & physical Android/iOS device QA pending external credentials/hardware) | Operator approval + `LOVABLE_DB_MIGRATION_URL` for `0022`–`0028`; Android SDK/emulator for device run; macOS/Xcode for iOS |
-| **Phase 2** | Social Network, Communication and Community | **In Progress (Foundations Built)** — Follows, Pings, Moments, DMs, Hub Forums/Chat, Signal Channels, Notifications, Explore exist; group chat, voice/video calls, polls, scheduled posts, rich reactions, and opportunity applications scheduled next | Phase 1 sign-off + remote DB migrations `0022`–`0028` |
+| **Phase 2** | Social Network, Communication and Community | **Code Complete & Verified Locally** (Remote DB migrations `0022`–`0029` & RTC voice/video provider credentials pending) | Operator approval + `LOVABLE_DB_MIGRATION_URL` for `0022`–`0029`; RTC provider (LiveKit/Daily/Agora) before activating live voice/video calls |
 | **Phase 3** | Multimedia, Music and Universal Distribution | **Planned (Foundations Built)** — Satori Share Cards, Web/Native Share API, deep links, and image/video uploads exist; dedicated Video/Image/Text feeds, external video transcoding, licensed music catalog, and OS share-intent imports planned | Video transcoding provider selection & licensed music catalog rights |
 | **Phase 4** | Business, Opportunities and Economic Infrastructure | **Planned (Foundations Built)** — `economic_events`, `verified_economic_outcomes`, `account_verifications`, `monetization_offerings`, and `dot_topup_intents` schemas prepared; Business profiles, storefronts, multi-agent business inboxes, Paystack webhook settlement, and ads engine planned | Paystack sandbox/live keys, commercial & tax policy approval, Meta WhatsApp Business Platform approval (optional) |
 | **Phase 5** | AI, Developer Ecosystem, Native Applications and Scale | **Planned (Foundations Built)** — Feature flags, 1M readiness indexes (`0022`), staging load-test harness, and Capacitor native shell prepared; GRIOT AI, Developer Portal, OAuth, Webhooks, Business Messaging API, SDKs, offline queues, and continental localisation planned | AI provider credentials, OAuth security review, CDN/search infrastructure, Google Play & App Store signing |
@@ -40,10 +40,27 @@
 
 ---
 
+## Detailed Phase 2 Status Checklist
+
+- [x] **2.1 Social graph** — Mutual connections indicator (`mutualConnectionsQuery`), Save Account bookmark toggle (`user_saved_accounts`), and Follow Topics (`user_topic_follows`) with pre-`0029` graceful fallback.
+- [x] **2.2 Ping content and interactions** — Clickable `@mentions` and `#hashtags` (`RichPingText`), multi-reactions (`PingReactionBar` + `ping_reactions`), interactive Polls (`PingPollCard` + `ping_polls`/`ping_poll_options`/`ping_poll_votes`), Quote & Re-Ping flow (`/create?quote=...`), and Content Scheduling (`scheduled_for`).
+- [x] **2.3 Personalised Home feed** — Anti-engagement-bait relevance ranking engine (`src/lib/feed-engine.ts`), 5 feed tabs (`For You`, `Following`, `Latest`, `Trending`, `Opportunities`), followed-topic chips, and muted/blocked filtering.
+- [x] **2.4 Moments & Highlights** — Multi-slide photo/video composer with retry preservation, 24h expiry, Close Circle privacy, Highlights, and profile Moments viewer.
+- [x] **2.5 Direct messaging** — Message editing, quoted reply, forwarding dialog, per-message reactions, pinned messages banner, saved messages, in-conversation search, and conversation Mute / Archive controls. *(Voice/Video calls intentionally NOT faked — documented as `BLOCKED BY EXTERNAL DEPENDENCY` pending RTC provider credentials.)*
+- [x] **2.6 Group communication** — Group conversation creation (`NewGroupChatDialog` + `create_group_conversation` RPC), group title/description, announcement-only admin posting mode, and member directory with admin removal/self-leave controls.
+- [x] **2.7 Hubs community infrastructure** — Forums, Broadcasts, Group Room, Feed, Members, Governance, plus Phase 2 Hub Events & RSVPs (`HubEventsSection`, `hub_events`, `hub_event_rsvps`) and extensible `membership_model` column (paid community checkout kept disabled).
+- [x] **2.8 Signals opportunity infrastructure** — Dedicated `/signals/opportunities` portal supporting all 14 blueprint categories, structured publishing, Apply/Express Interest workflow, 1-click DM follow-up, My Applications tracker, and Publisher Review Dashboard (`signal_opportunities`, `signal_applications`).
+- [x] **2.9 Central notification centre** — Grouped notifications (`groupNotifications`), central `notifications` table (`0029`) merged with live network activity, Mark All Read, and per-category Notification Preferences in Settings.
+- [x] **2.10 Global search & Explore** — Sort controls (`Relevant`, `Recent`, `Popular`), trending hashtag follow chips, muted/blocked filtering, and Opportunities Hub integration.
+- [ ] **2.11 Production remote DB migration `0029` & Voice/Video RTC provider** — *Blocked awaiting operator approval + `LOVABLE_DB_MIGRATION_URL` (for `0022`–`0029`) and RTC provider credentials (for live calls).*
+
+---
+
 ## Backlog Discovered During Audit (Mandatory Follow-Up Rule)
 
-1. Migrate TanStack Start server functions from deprecated `.inputValidator()` to `.validator()` (Phase 2 maintenance).
-2. Filter muted accounts from Home feed, Explore feed, and Notification sheet queries once `0028` is live (Phase 2).
-3. Enforce `profile_visibility` (`followers` / `private`) server-side in `fetchPublicPings` and profile RLS policies after `0028` is live (Phase 2).
-4. Add server-side rate limiting via Supabase RPC / edge layer to complement client-side `PING SHIELD` limits (Phase 2).
-5. Build persistent `notifications` table + push dispatch pipeline to replace client-side notification fan-out queries (Phase 2).
+1. Migrate TanStack Start server functions from deprecated `.inputValidator()` to `.validator()` (maintenance).
+2. ~~Filter muted accounts from Home feed and Explore feed~~ — **Completed in Phase 2** (`src/routes/index.tsx`, `src/routes/explore.tsx`, `src/lib/feed-engine.ts`).
+3. Enforce `profile_visibility` (`followers` / `private`) server-side in `fetchPublicPings` and profile RLS policies after `0028` is live.
+4. Add server-side rate limiting via Supabase RPC / edge layer to complement client-side `PING SHIELD` limits.
+5. ~~Build persistent `notifications` table~~ — **Schema & client integration completed in Phase 2 (`0029`)**; push dispatch worker + DB triggers scheduled after `0029` is applied remotely.
+6. Select & configure WebRTC/SFU provider (e.g., LiveKit / Daily / Agora) for real voice/video calls (never ship fake call buttons).

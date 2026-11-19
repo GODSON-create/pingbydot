@@ -173,7 +173,9 @@ describe("Full-System Audit Repairs: Navigation, Creation Flows, Media & Privacy
 
     const workspaceSrc = readRel("src/components/messages/MessagesWorkspace.tsx");
     expect(workspaceSrc).toContain('isOpen("chat-peer-profile")');
-    expect(workspaceSrc).toContain("peerProfileOpen && activeConversation && otherUser");
+    expect(workspaceSrc).toMatch(
+      /peerProfileOpen\s*&&\s*activeConversation\s*&&\s*activeConversation\.type !== "group"\s*&&\s*otherUser/,
+    );
     expect(workspaceSrc).toContain("setFocusedWorkspaceActive");
 
     const dmSrc = readRel("src/components/messages/DirectMessageChat.tsx");

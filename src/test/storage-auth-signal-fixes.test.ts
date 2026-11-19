@@ -91,7 +91,9 @@ describe("Media storage, auth redirect safety, hub error mapping, and Signal 1-o
     expect(rootSrc).toContain('<html lang="en" suppressHydrationWarning>');
     expect(themeSrc).toContain("const [hydrated, setHydrated] = useState(false)");
 
-    expect(indexSrc).toContain('tab: z.enum(["foryou", "following"]).optional()');
+    expect(indexSrc).toContain(
+      'tab: z.enum(["foryou", "following", "latest", "trending", "opportunities"]).optional()',
+    );
     expect(indexSrc).toContain(
       "context.queryClient.ensureQueryData(feedQuery(deps.cat, deps.page))",
     );

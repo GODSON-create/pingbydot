@@ -18,13 +18,17 @@ export interface PrivateMessage {
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
+  reply_to_id?: string | null;
+  forwarded_from_id?: string | null;
+  is_pinned?: boolean;
+  edited_at?: string | null;
   sender?: Profile;
 }
 
 export interface ConversationMember {
   conversation_id: string;
   user_id: string;
-  role: "member" | "admin";
+  role: "owner" | "member" | "admin";
   joined_at: string;
   last_read_at: string;
   is_muted: boolean;
@@ -36,6 +40,10 @@ export interface ConversationMember {
 export interface Conversation {
   id: string;
   type: "direct" | "group";
+  title?: string | null;
+  description?: string | null;
+  avatar_url?: string | null;
+  only_admins_can_post?: boolean;
   created_by: string | null;
   last_message_at: string;
   last_message_preview: string | null;
@@ -268,11 +276,12 @@ export function conversationMessagesQuery(
     queryFn: async (): Promise<PrivateMessage[]> => {
       if (!conversationId || !currentUserId) return [];
 
-      const { data, error } = await supabase
+      let { data, error } = await (supabase as any)
         .from("private_messages")
         .select(
           `
           id, conversation_id, sender_id, content, media_url, media_type, status, deleted_at, created_at, updated_at,
+          reply_to_id, forwarded_from_id, is_pinned, edited_at,
           sender:profiles!private_messages_sender_id_fkey(id, username, display_name, avatar_url, bio, created_at)
         `,
         )
@@ -281,11 +290,35 @@ export function conversationMessagesQuery(
         .order("created_at", { ascending: false })
         .limit(limit);
 
+      if (
+        error &&
+        (error.code === "PGRST204" ||
+          error.code === "42703" ||
+          String(error.message ?? "")
+            .toLowerCase()
+            .includes("column"))
+      ) {
+        const fallback = await supabase
+          .from("private_messages")
+          .select(
+            `
+            id, conversation_id, sender_id, content, media_url, media_type, status, deleted_at, created_at, updated_at,
+            sender:profiles!private_messages_sender_id_fkey(id, username, display_name, avatar_url, bio, created_at)
+          `,
+          )
+          .eq("conversation_id", conversationId)
+          .is("deleted_at", null)
+          .order("created_at", { ascending: false })
+          .limit(limit);
+        data = fallback.data;
+        error = fallback.error;
+      }
+
       if (error) {
         throw error;
       }
 
-      return (data || [])
+      return ((data || []) as any[])
         .map((msg) => ({
           ...msg,
           media_type: msg.media_type as MessageMediaType | null,
@@ -673,4 +706,347 @@ export function useConversationPresence(
   );
 
   return { otherOnline, otherTyping, notifyTyping };
+}
+
+/* -------------------------------------------------------------------------- */
+/*     PHASE 2.5 & 2.6: EDIT, PIN, REACT, SAVE, MUTE/ARCHIVE, GROUP CHATS     */
+/* -------------------------------------------------------------------------- */
+
+function isMissingPhase2Messaging(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { code?: string; message?: string; status?: number };
+  const msg = (e.message ?? "").toLowerCase();
+  return (
+    e.code === "PGRST202" ||
+    e.code === "PGRST205" ||
+    e.code === "42883" ||
+    e.code === "42P01" ||
+    e.code === "42703" ||
+    e.status === 404 ||
+    msg.includes("does not exist") ||
+    msg.includes("could not find the")
+  );
+}
+
+const LOCAL_SAVED_MSGS_PREFIX = "ping:saved-messages:";
+const LOCAL_MSG_REACTIONS_PREFIX = "ping:msg-reactions:";
+
+export function conversationMembersQuery(conversationId?: string) {
+  return {
+    queryKey: ["conversation-members", conversationId],
+    enabled: Boolean(conversationId),
+    queryFn: async (): Promise<ConversationMember[]> => {
+      if (!conversationId) return [];
+      const { data, error } = await supabase
+        .from("conversation_members")
+        .select(
+          `
+          conversation_id, user_id, role, joined_at, last_read_at, is_muted, is_archived, hidden_at,
+          profile:profiles!conversation_members_user_id_fkey(id, username, display_name, avatar_url, bio, created_at)
+        `,
+        )
+        .eq("conversation_id", conversationId)
+        .is("hidden_at", null);
+      if (error) throw error;
+      return ((data ?? []) as any[]).map((row) => ({
+        ...row,
+        profile: row.profile as Profile | undefined,
+      }));
+    },
+  };
+}
+
+export function useEditPrivateMessage(conversationId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ messageId, content }: { messageId: string; content: string }) => {
+      const trimmed = content.trim();
+      if (!trimmed) throw new Error("Message cannot be empty.");
+      const { error } = await (supabase as any).rpc("edit_private_message", {
+        p_message_id: messageId,
+        p_content: trimmed,
+      });
+      if (error) {
+        if (!isMissingPhase2Messaging(error)) throw error;
+        const { error: directErr } = await supabase
+          .from("private_messages")
+          .update({ content: trimmed, updated_at: new Date().toISOString() })
+          .eq("id", messageId);
+        if (directErr) throw directErr;
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["conversation-messages", conversationId] });
+      qc.invalidateQueries({ queryKey: ["user-conversations"] });
+    },
+  });
+}
+
+export function useTogglePinPrivateMessage(conversationId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (messageId: string) => {
+      const { data, error } = await (supabase as any).rpc("toggle_pin_private_message", {
+        p_message_id: messageId,
+      });
+      if (error) {
+        if (isMissingPhase2Messaging(error)) {
+          throw new Error("Message pinning requires database migration 0029.");
+        }
+        throw error;
+      }
+      return data as { message_id: string; is_pinned: boolean };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["conversation-messages", conversationId] });
+    },
+  });
+}
+
+export function conversationReactionsQuery(conversationId?: string, messageIds: string[] = []) {
+  return {
+    queryKey: ["conversation-message-reactions", conversationId, messageIds.join(",")],
+    enabled: Boolean(conversationId && messageIds.length > 0),
+    queryFn: async (): Promise<Record<string, Array<{ emoji: string; user_id: string }>>> => {
+      if (!conversationId || messageIds.length === 0) return {};
+      const { data, error } = await (supabase as any)
+        .from("private_message_reactions")
+        .select("message_id, emoji, user_id")
+        .in("message_id", messageIds);
+
+      if (error) {
+        if (!isMissingPhase2Messaging(error)) throw error;
+        if (typeof window === "undefined") return {};
+        try {
+          const raw = window.localStorage.getItem(`${LOCAL_MSG_REACTIONS_PREFIX}${conversationId}`);
+          return raw ? JSON.parse(raw) : {};
+        } catch {
+          return {};
+        }
+      }
+
+      const map: Record<string, Array<{ emoji: string; user_id: string }>> = {};
+      for (const row of (data ?? []) as Array<{
+        message_id: string;
+        emoji: string;
+        user_id: string;
+      }>) {
+        (map[row.message_id] ??= []).push({ emoji: row.emoji, user_id: row.user_id });
+      }
+      return map;
+    },
+  };
+}
+
+export function useToggleMessageReaction(conversationId: string, userId?: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ messageId, emoji }: { messageId: string; emoji: string }) => {
+      if (!userId) throw new Error("Sign in to react.");
+      const { error } = await (supabase as any).rpc("toggle_private_message_reaction", {
+        p_message_id: messageId,
+        p_emoji: emoji,
+      });
+      if (error) {
+        if (!isMissingPhase2Messaging(error)) throw error;
+        if (typeof window !== "undefined") {
+          const key = `${LOCAL_MSG_REACTIONS_PREFIX}${conversationId}`;
+          const curr: Record<string, Array<{ emoji: string; user_id: string }>> = (() => {
+            try {
+              const raw = window.localStorage.getItem(key);
+              return raw ? JSON.parse(raw) : {};
+            } catch {
+              return {};
+            }
+          })();
+          const list = curr[messageId] ?? [];
+          const exists = list.some((r) => r.emoji === emoji && r.user_id === userId);
+          curr[messageId] = exists
+            ? list.filter((r) => !(r.emoji === emoji && r.user_id === userId))
+            : [...list, { emoji, user_id: userId }];
+          window.localStorage.setItem(key, JSON.stringify(curr));
+        }
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["conversation-message-reactions", conversationId] });
+    },
+  });
+}
+
+export function savedMessagesQuery(userId?: string) {
+  return {
+    queryKey: ["saved-messages", userId],
+    enabled: Boolean(userId),
+    queryFn: async (): Promise<Set<string>> => {
+      if (!userId) return new Set();
+      const { data, error } = await (supabase as any)
+        .from("saved_messages")
+        .select("message_id")
+        .eq("user_id", userId);
+      if (error) {
+        if (!isMissingPhase2Messaging(error)) throw error;
+        if (typeof window === "undefined") return new Set();
+        try {
+          const raw = window.localStorage.getItem(`${LOCAL_SAVED_MSGS_PREFIX}${userId}`);
+          return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+        } catch {
+          return new Set();
+        }
+      }
+      return new Set(((data ?? []) as Array<{ message_id: string }>).map((r) => r.message_id));
+    },
+  };
+}
+
+export function useToggleSaveMessage(userId?: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      messageId,
+      currentlySaved,
+    }: {
+      messageId: string;
+      currentlySaved: boolean;
+    }) => {
+      if (!userId) throw new Error("Sign in to save messages.");
+      if (currentlySaved) {
+        const { error } = await (supabase as any)
+          .from("saved_messages")
+          .delete()
+          .eq("user_id", userId)
+          .eq("message_id", messageId);
+        if (error) {
+          if (!isMissingPhase2Messaging(error)) throw error;
+          if (typeof window !== "undefined") {
+            const key = `${LOCAL_SAVED_MSGS_PREFIX}${userId}`;
+            const curr: string[] = JSON.parse(window.localStorage.getItem(key) || "[]");
+            window.localStorage.setItem(key, JSON.stringify(curr.filter((id) => id !== messageId)));
+          }
+        }
+        return false;
+      }
+      const { error } = await (supabase as any)
+        .from("saved_messages")
+        .insert({ user_id: userId, message_id: messageId });
+      if (error && error.code !== "23505") {
+        if (!isMissingPhase2Messaging(error)) throw error;
+        if (typeof window !== "undefined") {
+          const key = `${LOCAL_SAVED_MSGS_PREFIX}${userId}`;
+          const curr = new Set<string>(JSON.parse(window.localStorage.getItem(key) || "[]"));
+          curr.add(messageId);
+          window.localStorage.setItem(key, JSON.stringify(Array.from(curr)));
+        }
+      }
+      return true;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["saved-messages", userId] });
+    },
+  });
+}
+
+export function useUpdateConversationPrefs(userId?: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      conversationId,
+      isMuted,
+      isArchived,
+    }: {
+      conversationId: string;
+      isMuted?: boolean;
+      isArchived?: boolean;
+    }) => {
+      if (!userId) throw new Error("Sign in first.");
+      const { error } = await (supabase as any).rpc("update_conversation_member_prefs", {
+        p_conversation_id: conversationId,
+        p_is_muted: isMuted ?? null,
+        p_is_archived: isArchived ?? null,
+      });
+      if (error) {
+        if (!isMissingPhase2Messaging(error)) throw error;
+        const patch: { is_muted?: boolean; is_archived?: boolean } = {};
+        if (typeof isMuted === "boolean") patch.is_muted = isMuted;
+        if (typeof isArchived === "boolean") patch.is_archived = isArchived;
+        const { error: updErr } = await supabase
+          .from("conversation_members")
+          .update(patch)
+          .eq("conversation_id", conversationId)
+          .eq("user_id", userId);
+        if (updErr) throw updErr;
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["user-conversations"] });
+    },
+  });
+}
+
+export function useCreateGroupConversation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      title,
+      description,
+      memberIds,
+      onlyAdminsCanPost,
+    }: {
+      title: string;
+      description?: string;
+      memberIds: string[];
+      onlyAdminsCanPost?: boolean;
+    }): Promise<string> => {
+      const { data, error } = await (supabase as any).rpc("create_group_conversation", {
+        p_title: title.trim(),
+        p_description: (description ?? "").trim(),
+        p_member_ids: memberIds,
+        p_only_admins_can_post: Boolean(onlyAdminsCanPost),
+      });
+      if (error) {
+        if (isMissingPhase2Messaging(error)) {
+          throw new Error("Group conversations require database migration 0029.");
+        }
+        throw error;
+      }
+      return data as string;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["user-conversations"] });
+    },
+  });
+}
+
+export function useAddGroupMember(conversationId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (targetUserId: string) => {
+      const { error } = await (supabase as any).rpc("add_group_member", {
+        p_conversation_id: conversationId,
+        p_target_user_id: targetUserId,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["conversation-members", conversationId] });
+      qc.invalidateQueries({ queryKey: ["user-conversations"] });
+    },
+  });
+}
+
+export function useRemoveGroupMember(conversationId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (targetUserId: string) => {
+      const { error } = await (supabase as any).rpc("remove_group_member", {
+        p_conversation_id: conversationId,
+        p_target_user_id: targetUserId,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["conversation-members", conversationId] });
+      qc.invalidateQueries({ queryKey: ["user-conversations"] });
+    },
+  });
 }

@@ -34,6 +34,12 @@ import { useTheme } from "@/lib/theme";
 import { clearSessionRestoredFlag } from "@/lib/telemetry";
 import { useInboxRealtime, userConversationsQuery } from "@/lib/messages";
 import { dotSummaryQuery } from "@/lib/economy";
+import {
+  fetchUnifiedNotifications,
+  groupNotifications,
+  markCentralNotificationsRead,
+  type GroupedNotification,
+} from "@/lib/notifications";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { FounderAvatar } from "@/components/ping/Avatar";
@@ -79,14 +85,6 @@ export function useSignOut() {
   };
 }
 
-interface NotificationItem {
-  id: string;
-  kind: "like" | "comment" | "follow";
-  text: string;
-  href: string;
-  created_at: string;
-}
-
 const NOTIF_SEEN_PREFIX = "ping_notif_seen_at:";
 
 function readSeenTimestamp(userId?: string): string | null {
@@ -111,93 +109,9 @@ function useNotificationsQuery(userId?: string) {
   return useQuery({
     queryKey: ["header-notifications", userId],
     enabled: Boolean(userId),
-    queryFn: async (): Promise<NotificationItem[]> => {
+    queryFn: async () => {
       if (!userId) return [];
-      const { data: myPings, error: pingsError } = await supabase
-        .from("pings")
-        .select("id, content")
-        .eq("user_id", userId)
-        .is("hidden_at", null)
-        .order("created_at", { ascending: false })
-        .limit(20);
-      if (pingsError) throw pingsError;
-
-      const pingIds = (myPings ?? []).map((p) => p.id);
-      const pingExcerpt = new Map((myPings ?? []).map((p) => [p.id, p.content.slice(0, 48)]));
-
-      const [commentsRes, followsRes, likesRes] = await Promise.all([
-        pingIds.length > 0
-          ? supabase
-              .from("comments")
-              .select(
-                "id, ping_id, user_id, content, created_at, author:profiles!comments_user_id_fkey(username, display_name)",
-              )
-              .in("ping_id", pingIds)
-              .neq("user_id", userId)
-              .order("created_at", { ascending: false })
-              .limit(10)
-          : Promise.resolve({ data: [] as any[], error: null }),
-        supabase
-          .from("follows")
-          .select(
-            "follower_id, created_at, follower:profiles!follows_follower_id_fkey(username, display_name)",
-          )
-          .eq("following_id", userId)
-          .order("created_at", { ascending: false })
-          .limit(10),
-        pingIds.length > 0
-          ? supabase
-              .from("likes")
-              .select(
-                "ping_id, user_id, created_at, actor:profiles!likes_user_id_fkey(username, display_name)",
-              )
-              .in("ping_id", pingIds)
-              .neq("user_id", userId)
-              .order("created_at", { ascending: false })
-              .limit(10)
-          : Promise.resolve({ data: [] as any[], error: null }),
-      ]);
-
-      if (commentsRes.error) throw commentsRes.error;
-      if (followsRes.error) throw followsRes.error;
-      if (likesRes.error) throw likesRes.error;
-
-      const items: NotificationItem[] = [];
-      for (const c of (commentsRes.data ?? []) as any[]) {
-        const actor = c.author?.display_name || `@${c.author?.username || "member"}`;
-        items.push({
-          id: `comment-${c.id}`,
-          kind: "comment",
-          text: `${actor} replied to "${pingExcerpt.get(c.ping_id) ?? "your Ping"}…"`,
-          href: `/p/${c.ping_id}`,
-          created_at: c.created_at,
-        });
-      }
-      for (const f of (followsRes.data ?? []) as any[]) {
-        const actor = f.follower?.display_name || `@${f.follower?.username || "member"}`;
-        const uname = f.follower?.username;
-        items.push({
-          id: `follow-${f.follower_id}-${f.created_at}`,
-          kind: "follow",
-          text: `${actor} started following you`,
-          href: uname ? `/@${uname}` : "/explore",
-          created_at: f.created_at,
-        });
-      }
-      for (const l of (likesRes.data ?? []) as any[]) {
-        const actor = l.actor?.display_name || `@${l.actor?.username || "member"}`;
-        items.push({
-          id: `like-${l.ping_id}-${l.user_id}-${l.created_at}`,
-          kind: "like",
-          text: `${actor} liked "${pingExcerpt.get(l.ping_id) ?? "your Ping"}…"`,
-          href: `/p/${l.ping_id}`,
-          created_at: l.created_at,
-        });
-      }
-
-      return items
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        .slice(0, 12);
+      return fetchUnifiedNotifications(userId);
     },
     staleTime: 30_000,
   });
@@ -206,7 +120,7 @@ function useNotificationsQuery(userId?: string) {
 export function useNotificationsState(userId?: string) {
   const qc = useQueryClient();
   const query = useNotificationsQuery(userId);
-  const notifications = useMemo(() => query.data ?? [], [query.data]);
+  const rawNotifications = useMemo(() => query.data ?? [], [query.data]);
 
   const { data: seenAt = null } = useQuery<string | null>({
     queryKey: ["notif-seen-at", userId],
@@ -216,9 +130,14 @@ export function useNotificationsState(userId?: string) {
     staleTime: Infinity,
   });
 
+  const notifications: GroupedNotification[] = useMemo(
+    () => groupNotifications(rawNotifications, seenAt),
+    [rawNotifications, seenAt],
+  );
+
   const markSeen = useCallback(() => {
     if (!userId) return;
-    const latestCreatedAt = notifications[0]?.created_at ?? new Date().toISOString();
+    const latestCreatedAt = rawNotifications[0]?.created_at ?? new Date().toISOString();
     const nextSeen =
       seenAt && new Date(seenAt).getTime() > new Date(latestCreatedAt).getTime()
         ? seenAt
@@ -227,16 +146,16 @@ export function useNotificationsState(userId?: string) {
       writeSeenTimestamp(userId, nextSeen);
       qc.setQueryData(["notif-seen-at", userId], nextSeen);
     }
-  }, [userId, notifications, seenAt, qc]);
+    void markCentralNotificationsRead().catch(() => {});
+  }, [userId, rawNotifications, seenAt, qc]);
 
-  const hasUnread =
-    notifications.length > 0 &&
-    (!seenAt ||
-      notifications.some((n) => new Date(n.created_at).getTime() > new Date(seenAt).getTime()));
+  const unreadCount = notifications.filter((n) => n.unread).length;
+  const hasUnread = unreadCount > 0;
 
   return {
     ...query,
     notifications,
+    unreadCount,
     hasUnread,
     markSeen,
   };
@@ -527,11 +446,33 @@ export function SiteHeader() {
       <Sheet open={isOpen("notifications")} onOpenChange={onOpenChangeFor("notifications")}>
         <SheetContent side="right" className="w-full sm:max-w-md rounded-l-3xl p-6 overflow-y-auto">
           <SheetHeader className="text-left">
-            <SheetTitle className="font-display text-xl font-bold flex items-center gap-2">
-              <Bell className="size-5 text-primary" /> Notifications
-            </SheetTitle>
+            <div className="flex items-center justify-between gap-2 pr-6">
+              <SheetTitle className="font-display text-xl font-bold flex items-center gap-2">
+                <Bell className="size-5 text-primary" /> Notifications
+              </SheetTitle>
+              {user && (
+                <div className="flex items-center gap-2">
+                  {notifications.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={markSeen}
+                      className="text-[11px] font-semibold text-primary hover:underline"
+                    >
+                      Mark all read
+                    </button>
+                  )}
+                  <Link
+                    to="/settings"
+                    onClick={closeOverlays}
+                    className="text-[11px] font-medium text-muted-foreground hover:text-foreground"
+                  >
+                    Preferences
+                  </Link>
+                </div>
+              )}
+            </div>
             <SheetDescription className="text-xs text-muted-foreground">
-              Replies, followers, and coordination activity on your Pings.
+              Grouped replies, reactions, followers, Hub activity, and opportunity updates.
             </SheetDescription>
           </SheetHeader>
 

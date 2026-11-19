@@ -33,6 +33,12 @@ import { blockedUsersQuery, useUnblockUser } from "@/lib/messages";
 import { dotSummaryQuery } from "@/lib/economy";
 import { closeCircleQuery } from "@/lib/moments";
 import {
+  DEFAULT_NOTIFICATION_PREFERENCES,
+  notificationPreferencesQuery,
+  useUpdateNotificationPreferences,
+  type NotificationPreferences,
+} from "@/lib/notifications";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -129,6 +135,77 @@ function MobilePushNotificationsCard() {
             {enabling ? "Enabling…" : "Enable"}
           </Button>
         )}
+      </div>
+    </div>
+  );
+}
+
+function NotificationPreferencesCard({ userId }: { userId?: string | undefined }) {
+  const { data: prefs = DEFAULT_NOTIFICATION_PREFERENCES } = useQuery(
+    notificationPreferencesQuery(userId),
+  );
+  const updatePrefs = useUpdateNotificationPreferences(userId);
+
+  const items: Array<{ key: keyof NotificationPreferences; label: string; desc: string }> = [
+    { key: "replies", label: "Replies & comments", desc: "When someone replies to your Pings" },
+    { key: "mentions", label: "Mentions", desc: "When someone mentions your @username" },
+    { key: "reactions", label: "Likes & reactions", desc: "Grouped reactions on your posts" },
+    { key: "follows", label: "New followers", desc: "When people follow your profile" },
+    { key: "messages", label: "Direct & group messages", desc: "New messages in Inbox" },
+    { key: "hubs", label: "Hub activity & events", desc: "Hub broadcasts, forums, and RSVPs" },
+    {
+      key: "opportunities",
+      label: "Opportunities & applications",
+      desc: "Updates on Signal opportunities",
+    },
+    { key: "email_digest", label: "Email summary digest", desc: "Periodic activity roundup" },
+  ];
+
+  const toggle = (key: keyof NotificationPreferences) => {
+    const next: NotificationPreferences = { ...prefs, [key]: !prefs[key] };
+    updatePrefs.mutate(next, {
+      onSuccess: () => toast.success("Notification preferences saved"),
+      onError: (err) => toast.error(err instanceof Error ? err.message : "Could not save setting"),
+    });
+  };
+
+  return (
+    <div className="surface-card mt-6 rounded-3xl p-6 space-y-4">
+      <div>
+        <p className="font-display text-base font-bold flex items-center gap-2">
+          <Bell className="size-4 text-primary" /> Notification Preferences
+        </p>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Choose which notifications appear in your Notification Centre and digests.
+        </p>
+      </div>
+      <div className="grid gap-2.5 sm:grid-cols-2">
+        {items.map((item) => {
+          const enabled = Boolean(prefs[item.key]);
+          return (
+            <button
+              key={item.key}
+              type="button"
+              role="switch"
+              aria-checked={enabled}
+              disabled={updatePrefs.isPending}
+              onClick={() => toggle(item.key)}
+              className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/30 px-3.5 py-2.5 text-left hover:bg-secondary/55 transition-colors"
+            >
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-foreground">{item.label}</p>
+                <p className="text-[11px] text-muted-foreground truncate">{item.desc}</p>
+              </div>
+              <span
+                className={`inline-flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition-colors ${
+                  enabled ? "bg-primary justify-end" : "bg-muted justify-start"
+                }`}
+              >
+                <span className="size-4 rounded-full bg-background shadow-sm" />
+              </span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -749,6 +826,8 @@ function Settings() {
           </Button>
         </form>
       )}
+
+      <NotificationPreferencesCard userId={user?.id} />
 
       <MobilePushNotificationsCard />
 

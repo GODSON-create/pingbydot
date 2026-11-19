@@ -79,6 +79,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { HubShareModal } from "@/components/hubs/HubShareModal";
 import { HubChat } from "@/components/hubs/HubChat";
+import { HubEventsSection } from "@/components/hubs/HubEventsSection";
 import { HubForumsAndBroadcasts } from "@/components/hubs/HubForumsAndBroadcasts";
 import { cn } from "@/lib/utils";
 import { pageHead } from "@/lib/site";
@@ -1133,6 +1134,9 @@ function HubDetail() {
             <TabsTrigger value="feed" className="rounded-full px-5 text-sm font-semibold">
               Feed ({hub.ping_count ?? 0})
             </TabsTrigger>
+            <TabsTrigger value="events" className="rounded-full px-5 text-sm font-semibold">
+              Events
+            </TabsTrigger>
             <TabsTrigger value="members" className="rounded-full px-5 text-sm font-semibold">
               Members ({(hub.member_count ?? 0).toLocaleString()})
             </TabsTrigger>
@@ -1149,6 +1153,16 @@ function HubDetail() {
           {/* TAB 0: LIVE CHAT */}
           <TabsContent value="chat" className="mt-6">
             <HubChat hubId={hub.id} isMember={isMember} isPrivate={isPrivate} isStaff={isStaff} />
+          </TabsContent>
+
+          {/* TAB: EVENTS */}
+          <TabsContent value="events" className="mt-6">
+            <HubEventsSection
+              hubId={hub.id}
+              hubName={hub.name}
+              userId={user?.id}
+              canManage={isStaff || isOwner}
+            />
           </TabsContent>
 
           {/* TAB 1: FEED */}

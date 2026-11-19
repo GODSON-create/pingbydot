@@ -35,6 +35,7 @@ import {
   MapPin,
   Globe,
   VolumeX,
+  Bookmark,
 } from "lucide-react";
 import { toast } from "sonner";
 import { profileQuery, likeCount, replyCount, type Profile, type Ping } from "@/lib/pings";
@@ -46,6 +47,7 @@ import {
   useUnblockUser,
 } from "@/lib/messages";
 import { mutedUsersQuery, useMuteUser, useUnmuteUser } from "@/lib/mutes";
+import { mutualConnectionsQuery, savedAccountsQuery, useToggleSaveAccount } from "@/lib/social";
 import { FounderAvatar } from "@/components/ping/Avatar";
 import { PingCard } from "@/components/ping/PingCard";
 import { QueryErrorCard } from "@/components/QueryErrorCard";
@@ -506,12 +508,16 @@ function ProfileContent({
   const { data: closeCircleMembers = [] } = useQuery(closeCircleQuery(user?.id));
   const { data: blockedUsers = [] } = useQuery(blockedUsersQuery(user?.id));
   const { data: mutedUsers = [] } = useQuery(mutedUsersQuery(user?.id));
+  const { data: savedAccounts = new Set<string>() } = useQuery(savedAccountsQuery(user?.id));
+  const toggleSaveAccount = useToggleSaveAccount(user?.id);
+  const { data: mutualInfo } = useQuery(mutualConnectionsQuery(user?.id, profile.id));
 
   const hasActiveMoments = activeMoments.length > 0;
   const hasUnseenMoments = activeMoments.some((m) => !m.has_viewed);
   const inCloseCircle = closeCircleMembers.some((m) => m.member_id === profile.id);
   const isBlocked = blockedUsers.some((b) => b.blocked_id === profile.id);
   const isMuted = mutedUsers.some((m) => m.muted_id === profile.id);
+  const isAccountSaved = savedAccounts.has(profile.id);
 
   // Extract relevant skills / interests from the creator's structured Pings & bio hashtags
   const skillTags = (() => {
@@ -736,7 +742,31 @@ function ProfileContent({
                   </div>
                 )}
 
-                {/* Primary Profile Actions: Edit Profile / Follow / Message & Share Profile */}
+                {/* Mutual Connections Badge */}
+                {!isMe &&
+                  (mutualInfo?.isMutualFollow ||
+                    (mutualInfo?.sharedConnections.length ?? 0) > 0) && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      {mutualInfo?.isMutualFollow && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-semibold text-primary">
+                          <UserCheck className="size-3" /> Mutual connection
+                        </span>
+                      )}
+                      {mutualInfo && mutualInfo.sharedConnections.length > 0 && (
+                        <span>
+                          Followed by{" "}
+                          <strong className="text-foreground">
+                            @{mutualInfo.sharedConnections[0]?.username}
+                          </strong>
+                          {mutualInfo.sharedConnections.length > 1
+                            ? ` and ${mutualInfo.sharedConnections.length - 1} other${mutualInfo.sharedConnections.length > 2 ? "s" : ""} you follow`
+                            : " whom you follow"}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                {/* Primary Profile Actions: Edit Profile / Follow / Message / Save & Share Profile */}
                 <div className="mt-5 flex flex-wrap items-center gap-2.5">
                   {isMe ? (
                     <Button asChild size="sm" variant="hero" className="rounded-full px-5">
@@ -746,25 +776,55 @@ function ProfileContent({
                     <>
                       <FollowButton profileId={profile.id} currentUserId={user?.id} />
                       {user && (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          className="rounded-full font-semibold"
-                          disabled={startChatMutation.isPending}
-                          onClick={async () => {
-                            try {
-                              const convId = await startChatMutation.mutateAsync(profile.id);
-                              navigate({
-                                to: "/messages",
-                                search: { conversationId: convId },
-                              });
-                            } catch (e: any) {
-                              toast.error(e.message || "Failed to start direct conversation");
+                        <>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="rounded-full font-semibold"
+                            disabled={startChatMutation.isPending}
+                            onClick={async () => {
+                              try {
+                                const convId = await startChatMutation.mutateAsync(profile.id);
+                                navigate({
+                                  to: "/messages",
+                                  search: { conversationId: convId },
+                                });
+                              } catch (e: any) {
+                                toast.error(e.message || "Failed to start direct conversation");
+                              }
+                            }}
+                          >
+                            <MessageSquare className="size-4 mr-1.5" /> Message
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={isAccountSaved ? "secondary" : "outline"}
+                            className="rounded-full"
+                            disabled={toggleSaveAccount.isPending}
+                            onClick={() =>
+                              toggleSaveAccount.mutate(
+                                { targetUserId: profile.id, currentlySaved: isAccountSaved },
+                                {
+                                  onSuccess: (saved) =>
+                                    toast.success(
+                                      saved
+                                        ? `Saved @${profile.username}`
+                                        : `Removed @${profile.username} from saved accounts`,
+                                    ),
+                                },
+                              )
                             }
-                          }}
-                        >
-                          <MessageSquare className="size-4 mr-1.5" /> Message
-                        </Button>
+                          >
+                            <Bookmark
+                              className={cn(
+                                "size-4 mr-1",
+                                isAccountSaved && "fill-current text-primary",
+                              )}
+                            />
+                            {isAccountSaved ? "Saved" : "Save"}
+                          </Button>
+                        </>
                       )}
                     </>
                   )}

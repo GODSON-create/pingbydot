@@ -204,6 +204,13 @@
       "when": 1796100000000,
       "tag": "0028_phase1_profile_controls_and_mutes",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1796200000000,
+      "tag": "0029_phase2_social_messaging_hubs_signals_notifications",
+      "breakpoints": true
     }
   ]
 }

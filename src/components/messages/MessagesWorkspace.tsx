@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { QueryErrorCard } from "@/components/QueryErrorCard";
 import { ConversationList } from "@/components/messages/ConversationList";
 import { DirectMessageChat } from "@/components/messages/DirectMessageChat";
+import { NewGroupChatDialog } from "@/components/messages/NewGroupChatDialog";
 import { FounderAvatar } from "@/components/ping/Avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,9 +34,11 @@ import { useKeyboardOpen } from "@/lib/native";
 import { useNavOverlay } from "@/lib/nav-overlay";
 import {
   conversationByIdQuery,
+  conversationMembersQuery,
   conversationMessagesQuery,
   useGetOrCreateDirectConversation,
   useInboxRealtime,
+  useRemoveGroupMember,
   userConversationsQuery,
 } from "@/lib/messages";
 import type { Profile } from "@/lib/pings";
@@ -179,6 +182,7 @@ export function MessagesWorkspace({
   const navigate = useNavigate();
   const { isOpen, openOverlay, closeOverlays } = useNavOverlay();
   const [newChatOpen, setNewChatOpen] = useState(false);
+  const [newGroupOpen, setNewGroupOpen] = useState(false);
   const handledUserParamRef = useRef<string | null>(null);
   const peerProfileOpen = isOpen("chat-peer-profile");
 
@@ -279,6 +283,13 @@ export function MessagesWorkspace({
     error: messagesError,
     refetch: refetchMessages,
   } = useQuery(conversationMessagesQuery(activeConversationId, user?.id));
+
+  const { data: groupMembers = [] } = useQuery(
+    conversationMembersQuery(
+      activeConversation?.type === "group" ? activeConversation.id : undefined,
+    ),
+  );
+  const removeGroupMember = useRemoveGroupMember(activeConversation?.id ?? "");
 
   const otherUser = activeConversation?.other_member;
 
@@ -412,6 +423,7 @@ export function MessagesWorkspace({
               conversations={conversations}
               selectedId={activeConversationId}
               onNewChat={() => setNewChatOpen(true)}
+              onNewGroup={() => setNewGroupOpen(true)}
               onSelect={(c) => {
                 closeOverlays();
                 setActiveConversationId(c.id);
@@ -444,6 +456,7 @@ export function MessagesWorkspace({
             ) : (
               <DirectMessageChat
                 conversation={activeConversation}
+                allConversations={conversations}
                 messages={messages}
                 isLoading={isMessagesLoading}
                 peerProfileOpen={peerProfileOpen}
@@ -542,16 +555,16 @@ export function MessagesWorkspace({
           )}
         </div>
 
-        {/* 3. RIGHT CONTEXTUAL USER DETAILS (Closed by default; opened cleanly on demand) */}
-        {peerProfileOpen && activeConversation && otherUser && (
+        {/* 3. RIGHT CONTEXTUAL DETAILS (Participant Profile OR Group Roster) */}
+        {peerProfileOpen && activeConversation && activeConversation.type === "group" && (
           <aside
-            aria-label="Participant profile details"
+            aria-label="Group conversation details"
             data-testid="chat-peer-profile-drawer"
             className="fixed inset-0 z-50 lg:static lg:z-auto flex flex-col w-full lg:w-72 shrink-0 h-full bg-card lg:bg-card/60 lg:rounded-3xl border border-border/70 p-5 overflow-y-auto shadow-lift lg:shadow-none"
           >
             <div className="flex items-center justify-between mb-3">
               <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                Participant
+                Group Info
               </span>
               <Button
                 type="button"
@@ -559,56 +572,143 @@ export function MessagesWorkspace({
                 size="icon"
                 className="size-7 rounded-full"
                 onClick={closeOverlays}
-                aria-label="Close participant profile"
+                aria-label="Close group details"
               >
                 <X className="size-4" />
               </Button>
             </div>
-            <div className="flex flex-col items-center text-center pb-5 border-b border-border/50">
-              <FounderAvatar
-                name={otherUser.display_name || otherUser.username}
-                src={otherUser.avatar_url}
-                size="xl"
-              />
-              <h4 className="mt-3 font-display font-bold text-base text-foreground">
-                {otherUser.display_name || otherUser.username}
-              </h4>
-              <p className="text-xs text-muted-foreground font-mono">@{otherUser.username}</p>
-
-              {otherUser.bio && (
-                <p className="text-xs text-foreground/80 mt-3 line-clamp-3 leading-relaxed">
-                  {otherUser.bio}
-                </p>
-              )}
-
-              <Button
-                asChild
-                size="sm"
-                variant="outline"
-                className="rounded-full mt-4 text-xs w-full"
-              >
-                <Link
-                  to="/@{$username}"
-                  params={{ username: otherUser.username }}
-                  onClick={closeOverlays}
-                >
-                  <ExternalLink className="size-3.5 mr-1.5" /> View Profile
-                </Link>
-              </Button>
-            </div>
-
-            <div className="mt-5 space-y-4 text-xs">
-              <div className="flex items-center gap-2.5 text-muted-foreground">
-                <Shield className="size-4 text-primary shrink-0" />
-                <span>Direct messages are restricted to conversation participants.</span>
-              </div>
-              <div className="flex items-center gap-2.5 text-muted-foreground">
-                <Sparkles className="size-4 text-primary shrink-0" />
-                <span>Real-time presence and read states are synchronized.</span>
-              </div>
+            <h4 className="font-display font-bold text-base text-foreground">
+              {activeConversation.title || "Group Conversation"}
+            </h4>
+            {activeConversation.description && (
+              <p className="mt-1 text-xs text-muted-foreground">{activeConversation.description}</p>
+            )}
+            <div className="mt-4 pt-4 border-t border-border/50 space-y-2.5">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                Members ({groupMembers.length})
+              </p>
+              {groupMembers.map((m) => {
+                const isAdminViewer =
+                  activeConversation.my_membership?.role === "owner" ||
+                  activeConversation.my_membership?.role === "admin";
+                const canRemove =
+                  (isAdminViewer && m.user_id !== user?.id) || m.user_id === user?.id;
+                return (
+                  <div
+                    key={m.user_id}
+                    className="flex items-center justify-between gap-2 rounded-xl bg-secondary/40 px-2.5 py-2"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FounderAvatar
+                        name={m.profile?.display_name || m.profile?.username || "Member"}
+                        src={m.profile?.avatar_url}
+                        size="sm"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold truncate">
+                          {m.profile?.display_name || m.profile?.username || "Member"}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground capitalize">{m.role}</p>
+                      </div>
+                    </div>
+                    {canRemove && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await removeGroupMember.mutateAsync(m.user_id);
+                            toast.success(
+                              m.user_id === user?.id ? "You left the group" : "Member removed",
+                            );
+                            if (m.user_id === user?.id) {
+                              closeOverlays();
+                              setActiveConversationId(undefined);
+                            }
+                          } catch (err: any) {
+                            toast.error(err?.message || "Could not remove member");
+                          }
+                        }}
+                        className="text-[11px] font-semibold text-destructive hover:underline shrink-0"
+                      >
+                        {m.user_id === user?.id ? "Leave" : "Remove"}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </aside>
         )}
+
+        {peerProfileOpen &&
+          activeConversation &&
+          activeConversation.type !== "group" &&
+          otherUser && (
+            <aside
+              aria-label="Participant profile details"
+              data-testid="chat-peer-profile-drawer"
+              className="fixed inset-0 z-50 lg:static lg:z-auto flex flex-col w-full lg:w-72 shrink-0 h-full bg-card lg:bg-card/60 lg:rounded-3xl border border-border/70 p-5 overflow-y-auto shadow-lift lg:shadow-none"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Participant
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 rounded-full"
+                  onClick={closeOverlays}
+                  aria-label="Close participant profile"
+                >
+                  <X className="size-4" />
+                </Button>
+              </div>
+              <div className="flex flex-col items-center text-center pb-5 border-b border-border/50">
+                <FounderAvatar
+                  name={otherUser.display_name || otherUser.username}
+                  src={otherUser.avatar_url}
+                  size="xl"
+                />
+                <h4 className="mt-3 font-display font-bold text-base text-foreground">
+                  {otherUser.display_name || otherUser.username}
+                </h4>
+                <p className="text-xs text-muted-foreground font-mono">@{otherUser.username}</p>
+
+                {otherUser.bio && (
+                  <p className="text-xs text-foreground/80 mt-3 line-clamp-3 leading-relaxed">
+                    {otherUser.bio}
+                  </p>
+                )}
+
+                <Button
+                  asChild
+                  size="sm"
+                  variant="outline"
+                  className="rounded-full mt-4 text-xs w-full"
+                >
+                  <Link
+                    to="/@{$username}"
+                    params={{ username: otherUser.username }}
+                    onClick={closeOverlays}
+                  >
+                    <ExternalLink className="size-3.5 mr-1.5" /> View Profile
+                  </Link>
+                </Button>
+              </div>
+
+              <div className="mt-5 space-y-4 text-xs">
+                <div className="flex items-center gap-2.5 text-muted-foreground">
+                  <Shield className="size-4 text-primary shrink-0" />
+                  <span>Direct messages are restricted to conversation participants.</span>
+                </div>
+                <div className="flex items-center gap-2.5 text-muted-foreground">
+                  <Sparkles className="size-4 text-primary shrink-0" />
+                  <span>Real-time presence and read states are synchronized.</span>
+                </div>
+              </div>
+            </aside>
+          )}
       </div>
 
       <NewDirectMessageDialog
@@ -616,6 +716,15 @@ export function MessagesWorkspace({
         onOpenChange={setNewChatOpen}
         currentUserId={user?.id}
         onStartChat={handleStartDirectChat}
+      />
+      <NewGroupChatDialog
+        open={newGroupOpen}
+        onOpenChange={setNewGroupOpen}
+        currentUserId={user?.id}
+        onCreated={(convId) => {
+          setActiveConversationId(convId);
+          navigate({ to: basePath, search: { conversationId: convId } as any });
+        }}
       />
     </div>
   );

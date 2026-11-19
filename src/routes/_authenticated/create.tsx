@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { PingComposer, type PingDraft } from "@/components/ping/PingComposer";
 import { clearPingComposerDraft } from "@/lib/draft-store";
+import { createPingPoll, extractHashtags, extractMentions } from "@/lib/social";
 import { pingSchema } from "@/lib/validation";
 import { ensureClientProfileRow } from "@/lib/ensure-profile";
 import { sanitizeErrorMessage } from "@/lib/error-diagnostics";
@@ -28,6 +29,7 @@ export const Route = createFileRoute("/_authenticated/create")({
   staticData: { sitemap: false },
   validateSearch: z.object({
     hub: z.string().optional(),
+    quote: z.string().max(400).optional(),
   }),
   head: () => ({
     meta: [
@@ -48,7 +50,7 @@ export const Route = createFileRoute("/_authenticated/create")({
 
 function Create() {
   const { user } = useAuth();
-  const { hub: initialHubId } = Route.useSearch();
+  const { hub: initialHubId, quote: initialQuote } = Route.useSearch();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const m = useMutation({
@@ -64,7 +66,9 @@ function Create() {
 
       const draft = pingSchema.parse(d);
       const imageUrl = d.image_url?.trim() || null;
-      const insertPayload = {
+      const hashtags = extractHashtags(draft.content);
+      const mentions = extractMentions(draft.content);
+      const baseInsertPayload = {
         user_id: authorId,
         category: draft.category,
         content: draft.content,
@@ -78,19 +82,47 @@ function Create() {
         cta_url: draft.cta_url || null,
         cta_label: draft.cta_label || null,
       };
+      const extendedInsertPayload = {
+        ...baseInsertPayload,
+        ...(d.scheduled_for ? { scheduled_for: d.scheduled_for } : {}),
+        ...(hashtags.length > 0 ? { hashtags } : {}),
+        ...(mentions.length > 0 ? { mentions } : {}),
+      };
 
-      let { data, error } = await supabase
+      let { data, error } = await (supabase as any)
         .from("pings")
-        .insert(insertPayload)
+        .insert(extendedInsertPayload)
         .select("id")
         .single();
+
+      // Gracefully retry without Phase 2 columns if remote DB hasn't applied migration 0029 yet
+      if (
+        error &&
+        (error.code === "PGRST204" ||
+          error.code === "42703" ||
+          String(error.message ?? "")
+            .toLowerCase()
+            .includes("column"))
+      ) {
+        const fallback = await supabase
+          .from("pings")
+          .insert(baseInsertPayload)
+          .select("id")
+          .single();
+        data = fallback.data;
+        error = fallback.error;
+      }
 
       // Recover automatically if OAuth/signup triggered before public.profiles row finished syncing
       if (error && error.code === "23503") {
         const { error: profileErr } = await supabase.rpc("ensure_my_profile");
         const recovered = profileErr ? await ensureClientProfileRow(user) : true;
         if (recovered) {
-          const retry = await supabase.from("pings").insert(insertPayload).select("id").single();
+          const retry = await supabase
+            .from("pings")
+            .insert(baseInsertPayload)
+            .select("id")
+            .single();
           data = retry.data;
           error = retry.error;
         }
@@ -98,6 +130,16 @@ function Create() {
 
       if (error || !data) {
         throw error ?? new Error("Database did not return the published Ping ID.");
+      }
+
+      if (d.poll && d.poll.question && d.poll.options.length >= 2) {
+        await createPingPoll({
+          pingId: data.id,
+          userId: authorId,
+          question: d.poll.question,
+          options: d.poll.options,
+          expiresAt: d.poll.expires_at ?? null,
+        }).catch(() => {});
       }
 
       let hubShareError: string | null = null;
@@ -112,15 +154,15 @@ function Create() {
         }
       }
 
-      return { id: data.id, hubShareError };
+      return { id: data.id, hubShareError, scheduled: Boolean(d.scheduled_for) };
     },
-    onSuccess: ({ id, hubShareError }) => {
+    onSuccess: ({ id, hubShareError, scheduled }) => {
       clearPingComposerDraft(initialHubId ? `hub:${initialHubId}` : "new");
       qc.invalidateQueries();
       if (hubShareError) {
         toast.warning(`Ping published, but sharing to the Hub failed: ${hubShareError}`);
       } else {
-        toast.success("Your Ping is live");
+        toast.success(scheduled ? "Your Ping has been scheduled" : "Your Ping is live");
       }
       navigate({ to: "/p/$id", params: { id } });
     },
@@ -136,8 +178,15 @@ function Create() {
       </p>
       <div className="mt-6">
         <PingComposer
-          initial={initialHubId ? { hub_id: initialHubId } : undefined}
-          draftKey={initialHubId ? `hub:${initialHubId}` : "new"}
+          initial={
+            initialHubId || initialQuote
+              ? {
+                  ...(initialHubId ? { hub_id: initialHubId } : {}),
+                  ...(initialQuote ? { content: `\n\n> ${initialQuote}` } : {}),
+                }
+              : undefined
+          }
+          draftKey={initialQuote ? undefined : initialHubId ? `hub:${initialHubId}` : "new"}
           submitLabel="Publish Ping"
           pending={m.isPending}
           onSubmit={(d) => m.mutate(d)}
