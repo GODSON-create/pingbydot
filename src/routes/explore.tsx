@@ -447,6 +447,9 @@ function Explore() {
             <Link to="/media">Video &amp; Media</Link>
           </Button>
           <Button asChild size="sm" variant="outline" className="rounded-full text-xs h-8">
+            <Link to="/businesses">Businesses</Link>
+          </Button>
+          <Button asChild size="sm" variant="outline" className="rounded-full text-xs h-8">
             <Link to="/signals/opportunities">Opportunities Hub</Link>
           </Button>
         </div>

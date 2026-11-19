@@ -403,6 +403,11 @@ export function SiteHeader() {
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild className="rounded-xl">
+                        <Link to="/business" onClick={closeOverlays}>
+                          <Building2 /> Business Suite
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild className="rounded-xl">
                         <Link to="/settings" onClick={closeOverlays}>
                           <Settings /> Settings
                         </Link>

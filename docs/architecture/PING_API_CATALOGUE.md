@@ -11,6 +11,7 @@
 | --- | --- | --- | --- |
 | `GET /api/public/ping-card/$id` | `src/routes/api/public/ping-card/$id.ts` | Public (non-hidden Pings only) | Renders Satori + resvg branded PNG share card with content-derived ETag & short caching; zero server-side arbitrary remote fetches |
 | `GET /sitemap.xml` | `src/routes/sitemap[.]xml.ts` | Public | Router-derived XML sitemap + paginated public Ping & profile URLs (excludes private routes) |
+| `POST /api/webhooks/paystack` | `src/routes/api/webhooks/paystack.ts` | Signed Webhook (`x-paystack-signature` HMAC-SHA512) | Verifies Paystack webhook signatures with `PAYSTACK_SECRET_KEY` and executes idempotent `settle_dot_topup_intent` / `reverse_dot_topup_intent` via service role |
 
 ---
 
@@ -56,6 +57,9 @@
 | `mark_notifications_read(...)` | `0029` | `authenticated` | Owner-scoped read-state update for central `public.notifications` inbox |
 | `record_ping_video_view(...)` | `0030` | `anon`, `authenticated` | Records bounded video view & watch-time seconds for non-hidden Pings |
 | `record_share_event(...)` | `0030` | `anon`, `authenticated` | Logs honest share analytics (`share_initiated`, `link_clicked`, `signup_attributed`) with referral codes |
+| `is_business_member(...)` | `0031` | `authenticated` (anti-spoof) | Verifies caller's role in `business_profiles` / `business_team_members` |
+| `create_dot_topup_intent(...)` | `0031` | `authenticated` | Creates pending custom DOT top-up intent (`10–100,000 DOT`) with 24h velocity limit (never issues credits) |
+| `settle_dot_topup_intent(...)` / `reverse_dot_topup_intent(...)` | `0031` | `service_role` ONLY | Server-only idempotent DOT credit issuance & refund reversal after verified webhook |
 
 ---
 

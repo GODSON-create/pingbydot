@@ -13,18 +13,27 @@ import {
 import {
   ArrowLeft,
   BarChart3,
+  Briefcase,
   Coins,
   Eye,
   Heart,
+  Info,
   MessageCircle,
   Radio,
+  ShieldCheck,
   Sparkles,
   Users,
 } from "lucide-react";
 import { formatDistanceToNowStrict } from "date-fns";
+import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 import { creatorAnalyticsQuery } from "@/lib/analytics";
+import { creatorEconomicSummaryQuery } from "@/lib/economic-events";
+import { creatorCommercialProfileQuery, useSaveCreatorCommercialProfile } from "@/lib/business";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { PingMark } from "@/components/BrandLogo";
 import { cn } from "@/lib/utils";
 
@@ -55,6 +64,24 @@ function AnalyticsPage() {
   }, []);
 
   const { data: analytics, isLoading } = useQuery(creatorAnalyticsQuery(user?.id, rangeDays));
+  const { data: econSummary } = useQuery(creatorEconomicSummaryQuery(user?.id, rangeDays));
+  const { data: commercialProfile } = useQuery(creatorCommercialProfileQuery(user?.id));
+  const saveCommercial = useSaveCreatorCommercialProfile(user?.id);
+
+  const [openSponsors, setOpenSponsors] = useState(false);
+  const [openBrandDeals, setOpenBrandDeals] = useState(false);
+  const [portfolioSummary, setPortfolioSummary] = useState("");
+  const [rateCardNotes, setRateCardNotes] = useState("");
+  const [mediaKitUrl, setMediaKitUrl] = useState("");
+
+  useEffect(() => {
+    if (!commercialProfile) return;
+    setOpenSponsors(commercialProfile.open_for_sponsorships);
+    setOpenBrandDeals(commercialProfile.open_for_brand_deals);
+    setPortfolioSummary(commercialProfile.portfolio_summary);
+    setRateCardNotes(commercialProfile.rate_card_notes);
+    setMediaKitUrl(commercialProfile.media_kit_url ?? "");
+  }, [commercialProfile]);
 
   const totals = analytics?.totals;
   const kpis = [
@@ -344,6 +371,162 @@ function AnalyticsPage() {
               ))}
             </div>
           )}
+        </section>
+      </div>
+
+      {/* Economic Outcome Analytics (Phase 4.11) + Creator Commercial Portfolio (Phase 4.7) */}
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        <section className="surface-card rounded-3xl p-6 space-y-4">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h2 className="font-display text-lg font-bold flex items-center gap-2">
+                <ShieldCheck className="size-5 text-primary" /> Economic Outcome Analytics
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Real network outcomes over the last {rangeDays} days — strictly separated from
+                non-cash DOT credits and self-reported estimates.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            <div className="rounded-2xl border border-border/70 bg-secondary/35 p-3.5">
+              <p className="text-muted-foreground">Leads &amp; Enquiries Received</p>
+              <p className="mt-1 font-display text-2xl font-extrabold tabular-nums">
+                {econSummary?.leads.leads_received ?? 0}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-border/70 bg-secondary/35 p-3.5">
+              <p className="text-muted-foreground">Referral Shares Received</p>
+              <p className="mt-1 font-display text-2xl font-extrabold tabular-nums">
+                {econSummary?.referrals.shares_received ?? 0}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-border/70 bg-secondary/35 p-3.5">
+              <p className="text-muted-foreground">DOT Credits Earned (Non-Cash)</p>
+              <p className="mt-1 font-display text-2xl font-extrabold tabular-nums text-primary">
+                {econSummary?.dot_credits.earned ?? 0} DOT
+              </p>
+            </div>
+            <div className="rounded-2xl border border-border/70 bg-secondary/35 p-3.5">
+              <p className="text-muted-foreground">Verified Settled Revenue</p>
+              <p className="mt-1 font-display text-2xl font-extrabold tabular-nums">
+                $
+                {((econSummary?.verified_outcomes.verified_net_amount_minor ?? 0) / 100).toFixed(2)}
+              </p>
+              <p className="text-[10px] text-muted-foreground">
+                {econSummary?.verified_outcomes.settled_transactions_count ?? 0} settled txns
+              </p>
+            </div>
+          </div>
+
+          <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
+            <Info className="size-3.5 shrink-0 mt-0.5 text-primary" />
+            <span>
+              Ping never labels self-reported or estimated earnings as verified revenue, and never
+              promises cash payouts based solely on likes or views.
+            </span>
+          </p>
+        </section>
+
+        <section className="surface-card rounded-3xl p-6 space-y-3">
+          <div>
+            <h2 className="font-display text-lg font-bold flex items-center gap-2">
+              <Briefcase className="size-5 text-primary" /> Creator Partnerships &amp; Portfolio
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Opt in to transparent brand partnerships, sponsorships, and commercial enquiries.
+            </p>
+          </div>
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              try {
+                await saveCommercial.mutateAsync({
+                  open_for_sponsorships: openSponsors,
+                  open_for_brand_deals: openBrandDeals,
+                  portfolio_summary: portfolioSummary,
+                  rate_card_notes: rateCardNotes,
+                  enquiry_email: user?.email ?? null,
+                  media_kit_url: mediaKitUrl.trim() || null,
+                });
+                toast.success("Creator commercial portfolio saved");
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : "Could not save portfolio");
+              }
+            }}
+            className="space-y-3"
+          >
+            <div className="flex flex-wrap gap-4 text-xs">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={openSponsors}
+                  onChange={(e) => setOpenSponsors(e.target.checked)}
+                  className="rounded border-border"
+                />
+                <span>Open for sponsorships</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={openBrandDeals}
+                  onChange={(e) => setOpenBrandDeals(e.target.checked)}
+                  className="rounded border-border"
+                />
+                <span>Open for brand partnerships</span>
+              </label>
+            </div>
+            <div>
+              <Label htmlFor="creator-port" className="text-xs">
+                Portfolio &amp; audience focus
+              </Label>
+              <Textarea
+                id="creator-port"
+                rows={2}
+                value={portfolioSummary}
+                onChange={(e) => setPortfolioSummary(e.target.value)}
+                placeholder="Topics you cover, past collaborations, audience demographics…"
+                className="mt-1 rounded-xl text-xs"
+              />
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div>
+                <Label htmlFor="creator-rates" className="text-xs">
+                  Rate card / terms notes
+                </Label>
+                <Input
+                  id="creator-rates"
+                  value={rateCardNotes}
+                  onChange={(e) => setRateCardNotes(e.target.value)}
+                  placeholder="Sponsored threads, workshops, demos…"
+                  className="mt-1 rounded-xl text-xs"
+                />
+              </div>
+              <div>
+                <Label htmlFor="creator-kit" className="text-xs">
+                  Media kit URL (optional)
+                </Label>
+                <Input
+                  id="creator-kit"
+                  type="url"
+                  value={mediaKitUrl}
+                  onChange={(e) => setMediaKitUrl(e.target.value)}
+                  placeholder="https://…"
+                  className="mt-1 rounded-xl text-xs"
+                />
+              </div>
+            </div>
+            <Button
+              type="submit"
+              size="sm"
+              variant="hero"
+              disabled={saveCommercial.isPending}
+              className="rounded-full text-xs"
+            >
+              {saveCommercial.isPending ? "Saving…" : "Save Commercial Profile"}
+            </Button>
+          </form>
         </section>
       </div>
     </div>

@@ -383,6 +383,28 @@ async function runSchemaVerification(sql, releaseEntries) {
     );
   }
 
+  const [{ p4_rls_count, auth_settle_exec, anon_biz_exec }] = await sql`
+    SELECT
+      (
+        SELECT count(*)::int FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relrowsecurity = true
+          AND c.relname = ANY(ARRAY[
+            'business_profiles', 'business_team_members', 'business_offerings',
+            'business_reviews', 'business_enquiries', 'business_saved_replies',
+            'creator_commercial_profiles', 'ad_campaigns', 'ad_reports',
+            'hub_membership_plans'
+          ])
+      ) AS p4_rls_count,
+      has_function_privilege('authenticated', 'public.settle_dot_topup_intent(text, text, integer, text)', 'EXECUTE') AS auth_settle_exec,
+      has_function_privilege('anon', 'public.is_business_member(uuid, uuid, text[])', 'EXECUTE') AS anon_biz_exec
+  `;
+  if (p4_rls_count < 10 || auth_settle_exec || anon_biz_exec) {
+    throw new Error(
+      `Schema Verification FAILED — Phase 4 business/wallet security mismatch (rls_count=${p4_rls_count}/10, auth_settle=${auth_settle_exec}, anon_biz=${anon_biz_exec})`,
+    );
+  }
+
   console.log(
     `[SCHEMA VERIFIED] Ledger ${minTag}–${maxTag}: ${releaseEntries.length}/${releaseEntries.length} recorded (total rows=${ledgerRows.length}); ${REQUIRED_TABLES_0011_0020.length}/${REQUIRED_TABLES_0011_0020.length} tables with RLS; storage 'media' bucket, hardened indexes & privileges intact.`,
   );

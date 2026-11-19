@@ -1,8 +1,8 @@
 # PING Bug Register & System Audit Log
 
 **Project:** Ping by DOT (`GODSON-create/pingbydot`)  
-**Branch:** `feat/phase-3-multimedia-music-distribution` (branched from `feat/phase-2-social-communication-community`)  
-**Last Updated:** 2026-11-19  
+**Branch:** `feat/phase-4-business-opportunities-economy` (branched from `feat/phase-3-multimedia-music-distribution`)  
+**Last Updated:** 2026-11-20  
 **Classification Standard:** `VERIFIED WORKING` | `BROKEN` | `PARTIALLY WORKING` | `UI ONLY` | `BLOCKED BY EXTERNAL DEPENDENCY` | `NOT TESTED`
 
 ---
@@ -24,6 +24,8 @@
 | **BUG-011** | Live Voice & Video Calling (Phase 2.5) | Medium | `BLOCKED BY EXTERNAL DEPENDENCY` | No WebRTC/SFU provider (LiveKit, Daily, Agora, or Twilio) credentials or signaling infrastructure provisioned; blueprint forbids fake call buttons without a real media connection. | Intentionally omitted fake call buttons; ready to integrate once RTC provider credentials & signaling token endpoint are provisioned. |
 | **BUG-012** | Remote Database Migration `0030` (Phase 3 Multimedia, Music & Share Analytics) | High | `BLOCKED BY EXTERNAL DEPENDENCY` | `0030_phase3_multimedia_music_and_distribution.sql` adds 6 RLS-enabled tables, 2 RPCs, and multimedia columns on `pings`; cannot apply remotely without operator approval + `LOVABLE_DB_MIGRATION_URL`. | All Phase 3 surfaces degrade cleanly with local/progressive fallback until `0022`–`0030` are applied remotely. |
 | **BUG-013** | External Video Transcoding (HLS), Licensed Commercial Music Catalog & App/Universal Link Signing (Phase 3.3, 3.4, 3.7) | Medium | `BLOCKED BY EXTERNAL DEPENDENCY` | Progressive video playback works on Supabase Storage, and Ping Originals + declared user audio work immediately, but adaptive HLS transcoding (Cloudflare Stream / Mux), commercial licensed music APIs, and production Android SHA-256 / Apple Team ID `.well-known` values require external provider credentials & store certificates. | Provider-agnostic adapters and `.well-known` templates are shipped; commercial music catalog remains responsibly gated pending licensing. |
+| **BUG-014** | Remote Database Migration `0031` (Phase 4 Business, Ads, Paid Hubs & DOT Settlement RPCs) | High | `BLOCKED BY EXTERNAL DEPENDENCY` | `0031_phase4_business_commerce_ads_and_wallet.sql` adds 10 RLS-enabled tables and 4 RPCs (`is_business_member`, `create_dot_topup_intent`, server-only `settle_dot_topup_intent`, `reverse_dot_topup_intent`); awaits operator approval + `LOVABLE_DB_MIGRATION_URL`. | All Phase 4 surfaces degrade cleanly with local fallback until `0022`–`0031` are applied remotely. |
+| **BUG-015** | Live Paystack Settlement, Paid Ads Activation, Optional Meta WhatsApp Business Platform & Crypto Rail (Phase 4.4, 4.8, 4.9, 4.10) | Medium | `BLOCKED BY EXTERNAL DEPENDENCY` | Signed webhook `/api/webhooks/paystack` and HMAC-SHA512 verifier are unit-tested, but live settlement requires `PAYSTACK_SECRET_KEY`, `VITE_PAYSTACK_PUBLIC_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and commercial/tax sign-off; live ads require ad policy approval; WhatsApp Business requires official Meta credentials; crypto rail awaits explicit provider approval. | All commercial rails safely remain in sandbox/review/inactive mode until credentials and written approval are provided. |
 
 ---
 

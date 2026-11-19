@@ -12,7 +12,7 @@
 | --- | --- | --- |
 | **UI & Client Runtime** | React 19, TypeScript 5.8, Tailwind CSS v4, Radix UI, Lucide Icons, Sonner, Recharts | Design system (Obsidian `#090B0A`, Graphite `#171B18`, Electric Ping Green `#C7F36B`, Champagne Gold `#D8B66A`), WCAG AA/AAA contrast |
 | **Routing & SSR** | TanStack Start (`@tanstack/react-start`), TanStack Router, TanStack Query v5, Vite 8, Nitro (Cloudflare target) | File-based SSR routes, validated URL search params, server functions (`createServerFn`), public social PNG card endpoint (`/api/public/ping-card/$id`) |
-| **Backend & Database** | Supabase (PostgreSQL 15+, Auth, PostgREST, Realtime, Storage) + Drizzle ORM (`drizzle/migrations/0000`–`0030`) | Row Level Security (RLS) on all tables, SECURITY DEFINER / INVOKER RPCs, append-only audit & economic event ledgers |
+| **Backend & Database** | Supabase (PostgreSQL 15+, Auth, PostgREST, Realtime, Storage) + Drizzle ORM (`drizzle/migrations/0000`–`0031`) | Row Level Security (RLS) on all tables, SECURITY DEFINER / INVOKER RPCs, append-only audit & economic event ledgers |
 | **Rich Sharing & OG Cards** | Satori + `@cf-wasm/resvg` | Shared Satori artwork tree for browser PNG export and public social image endpoint without arbitrary remote server-side fetches |
 | **Mobile Native Wrapper** | Capacitor 8 (`@capacitor/android`, `@capacitor/ios`, App, Browser, Camera, Keyboard, Network, PushNotifications, Share, SplashScreen, StatusBar) | Shared web codebase compiled to `.output/mobile` SPA for Android (`app.lovable.pingbydot`) and iOS |
 | **Testing & Quality** | Vitest 4, React Testing Library, jsdom, ESLint 9, Prettier | Unit, component, security policy, migration audit, and responsive layout verification |
@@ -29,7 +29,9 @@ PRIMARY NAVIGATION (5 Unified Destinations)
 ├── HUBS     (/hubs)      — Community directory, Hub Forums, Broadcasts, Group Room, Feed, Events & RSVPs, Governance
 └── INBOX    (/messages)  — Direct & Group Conversations (/messages & /signals) with edit/reply/forward/pin/react/save/search/archive
 
-OPPORTUNITIES, MULTIMEDIA & DISTRIBUTION
+OPPORTUNITIES, BUSINESS, MULTIMEDIA & DISTRIBUTION
+├── Businesses Directory  (/businesses, /b/$slug)  — Business profiles, storefronts, catalogues, bookings & customer reviews
+├── Business Suite        (/business)              — Multi-agent Business Inbox, lead CRM, CSV export, team roles & ad drafts
 ├── Multimedia Feeds      (/media)                 — Dedicated Video, Image Gallery, Text & Moments feeds (shared content model)
 ├── Share Target Import   (/share-target)          — Cross-platform external link import with preserved source attribution
 ├── Signals Opportunities (/signals/opportunities) — 14-category structured opportunities, applications & publisher dashboard
