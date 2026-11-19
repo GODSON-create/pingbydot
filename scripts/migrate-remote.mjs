@@ -361,6 +361,28 @@ async function runSchemaVerification(sql, releaseEntries) {
     );
   }
 
+  const [{ p3_rls_count, fmt_col_present }] = await sql`
+    SELECT
+      (
+        SELECT count(*)::int FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relrowsecurity = true
+          AND c.relname = ANY(ARRAY[
+            'media_assets', 'ping_video_views', 'copyright_reports',
+            'music_tracks', 'content_music_attachments', 'share_events'
+          ])
+      ) AS p3_rls_count,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'pings' AND column_name = 'content_format'
+      ) AS fmt_col_present
+  `;
+  if (p3_rls_count < 6 || !fmt_col_present) {
+    throw new Error(
+      `Schema Verification FAILED — Phase 3 multimedia/music/share schema mismatch (rls_count=${p3_rls_count}/6, content_format=${fmt_col_present})`,
+    );
+  }
+
   console.log(
     `[SCHEMA VERIFIED] Ledger ${minTag}–${maxTag}: ${releaseEntries.length}/${releaseEntries.length} recorded (total rows=${ledgerRows.length}); ${REQUIRED_TABLES_0011_0020.length}/${REQUIRED_TABLES_0011_0020.length} tables with RLS; storage 'media' bucket, hardened indexes & privileges intact.`,
   );

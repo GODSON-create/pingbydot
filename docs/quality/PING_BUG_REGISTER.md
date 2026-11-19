@@ -1,7 +1,7 @@
 # PING Bug Register & System Audit Log
 
 **Project:** Ping by DOT (`GODSON-create/pingbydot`)  
-**Branch:** `feat/phase-2-social-communication-community` (branched from `fix/full-system-audit-repair`)  
+**Branch:** `feat/phase-3-multimedia-music-distribution` (branched from `feat/phase-2-social-communication-community`)  
 **Last Updated:** 2026-11-19  
 **Classification Standard:** `VERIFIED WORKING` | `BROKEN` | `PARTIALLY WORKING` | `UI ONLY` | `BLOCKED BY EXTERNAL DEPENDENCY` | `NOT TESTED`
 
@@ -22,6 +22,8 @@
 | **BUG-009** | Android Emulator / Physical Device Verification & iOS Xcode Signing | Medium | `BLOCKED BY EXTERNAL DEPENDENCY` | Local Windows host lacks Android SDK/ADB/JDK and macOS/Xcode; pre-built `android/app/build/outputs/apk/debug/app-debug.apk` exists from 2026-11-18. | Documented as `BLOCKED BY EXTERNAL DEPENDENCY`; Android device testing requires Android SDK/emulator or USB device, and iOS release readiness requires macOS + Xcode + Apple signing. |
 | **BUG-010** | Remote Database Migration `0029` (Phase 2 Tables & RPCs) | High | `BLOCKED BY EXTERNAL DEPENDENCY` | `0029_phase2_social_messaging_hubs_signals_notifications.sql` defines 13 new RLS-enabled tables and 11 authenticated RPCs; cannot apply remotely without operator approval + `LOVABLE_DB_MIGRATION_URL`. | All Phase 2 client queries/mutations degrade cleanly with local/fallback paths until `0022`–`0029` are applied remotely. |
 | **BUG-011** | Live Voice & Video Calling (Phase 2.5) | Medium | `BLOCKED BY EXTERNAL DEPENDENCY` | No WebRTC/SFU provider (LiveKit, Daily, Agora, or Twilio) credentials or signaling infrastructure provisioned; blueprint forbids fake call buttons without a real media connection. | Intentionally omitted fake call buttons; ready to integrate once RTC provider credentials & signaling token endpoint are provisioned. |
+| **BUG-012** | Remote Database Migration `0030` (Phase 3 Multimedia, Music & Share Analytics) | High | `BLOCKED BY EXTERNAL DEPENDENCY` | `0030_phase3_multimedia_music_and_distribution.sql` adds 6 RLS-enabled tables, 2 RPCs, and multimedia columns on `pings`; cannot apply remotely without operator approval + `LOVABLE_DB_MIGRATION_URL`. | All Phase 3 surfaces degrade cleanly with local/progressive fallback until `0022`–`0030` are applied remotely. |
+| **BUG-013** | External Video Transcoding (HLS), Licensed Commercial Music Catalog & App/Universal Link Signing (Phase 3.3, 3.4, 3.7) | Medium | `BLOCKED BY EXTERNAL DEPENDENCY` | Progressive video playback works on Supabase Storage, and Ping Originals + declared user audio work immediately, but adaptive HLS transcoding (Cloudflare Stream / Mux), commercial licensed music APIs, and production Android SHA-256 / Apple Team ID `.well-known` values require external provider credentials & store certificates. | Provider-agnostic adapters and `.well-known` templates are shipped; commercial music catalog remains responsibly gated pending licensing. |
 
 ---
 

@@ -13,6 +13,7 @@ import {
   Radio,
   Search,
   Send,
+  Share2,
   Sparkles,
   Users,
 } from "lucide-react";
@@ -48,6 +49,7 @@ import {
 } from "@/components/ui/dialog";
 import { QueryErrorCard } from "@/components/QueryErrorCard";
 import { FounderAvatar } from "@/components/ping/Avatar";
+import { UniversalShareDialog } from "@/components/sharing/UniversalShareDialog";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/signals/opportunities")({
@@ -93,6 +95,7 @@ function SignalsOpportunitiesPage() {
 
   const [publishOpen, setPublishOpen] = useState(false);
   const [applyTarget, setApplyTarget] = useState<SignalOpportunity | null>(null);
+  const [shareTarget, setShareTarget] = useState<SignalOpportunity | null>(null);
 
   // Publish form state
   const [pubCategory, setPubCategory] = useState<OpportunityCategory>("partnerships");
@@ -468,6 +471,16 @@ function SignalsOpportunitiesPage() {
                       )}
 
                       <div className="flex items-center gap-1.5">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 rounded-full px-2.5 text-xs"
+                          aria-label={`Share ${opp.title}`}
+                          onClick={() => setShareTarget(opp)}
+                        >
+                          <Share2 className="size-3.5" />
+                        </Button>
                         {!isMine && (
                           <Button
                             type="button"
@@ -822,6 +835,20 @@ function SignalsOpportunitiesPage() {
       </Dialog>
 
       {/* APPLY MODAL */}
+      {shareTarget && (
+        <UniversalShareDialog
+          open={Boolean(shareTarget)}
+          onOpenChange={(o) => !o && setShareTarget(null)}
+          payload={{
+            targetType: "opportunity",
+            targetId: shareTarget.id,
+            title: shareTarget.title,
+            description: shareTarget.description.slice(0, 160),
+            path: `/signals/opportunities?cat=${shareTarget.category}`,
+          }}
+        />
+      )}
+
       <Dialog open={Boolean(applyTarget)} onOpenChange={(o) => !o && setApplyTarget(null)}>
         <DialogContent className="sm:max-w-md rounded-3xl p-6">
           <DialogHeader>

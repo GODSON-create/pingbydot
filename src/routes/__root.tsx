@@ -15,6 +15,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { sanitizeErrorMessage } from "../lib/error-diagnostics";
 import { initializeNativeApp, useNetworkStatus } from "@/lib/native";
+import { captureInboundReferral, recordShareEvent } from "@/lib/sharing/universal";
 import { useNavigate } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth";
 import { useFocusedWorkspace } from "@/lib/draft-store";
@@ -167,12 +168,33 @@ function RootShell({ children }: { children: ReactNode }) {
 }
 
 function RootShellContent() {
-  const { pathname } = useLocation();
+  const { pathname, searchStr } = useLocation();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { connected } = useNetworkStatus();
   const { helpOpen, setHelpOpen } = useKeyboardShortcuts();
   const { activeOverlay, isOpen, onOpenChangeFor, closeOverlays } = useNavOverlay();
+
+  useEffect(() => {
+    const refCode = captureInboundReferral(searchStr, pathname);
+    if (refCode) {
+      const targetType = pathname.startsWith("/p/")
+        ? "ping"
+        : pathname.startsWith("/hubs/")
+          ? "hub"
+          : pathname.startsWith("/signals")
+            ? "signal"
+            : pathname.startsWith("/@")
+              ? "profile"
+              : "ping";
+      void recordShareEvent({
+        targetType,
+        targetId: pathname,
+        eventKind: "link_clicked",
+        shareCode: refCode,
+      }).catch(() => {});
+    }
+  }, [pathname, searchStr]);
 
   useEffect(() => {
     void initializeNativeApp(

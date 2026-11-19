@@ -167,6 +167,35 @@ export function CreateStackModal({ open, onOpenChange }: CreateStackModalProps) 
               </div>
             </button>
 
+            {/* CARD 5 — IMPORT EXTERNAL LINK */}
+            <button
+              type="button"
+              role="listitem"
+              onClick={() =>
+                requireAuthOrRun("/share-target", () => {
+                  onOpenChange(false);
+                  navigate({ to: "/share-target" });
+                })
+              }
+              className="group relative flex w-full items-start gap-4 rounded-3xl border border-border bg-secondary/40 p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/60 hover:bg-secondary/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-secondary text-primary">
+                <ArrowUpRight className="size-6" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-display text-base font-extrabold text-foreground">
+                    Import External Link
+                  </span>
+                  <ArrowUpRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-foreground" />
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  Bring a post or link from X, YouTube, Snapchat, or the web with source
+                  attribution.
+                </p>
+              </div>
+            </button>
+
             {/* CARD 5 — CREATE A HUB */}
             <button
               type="button"

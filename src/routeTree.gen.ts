@@ -17,9 +17,11 @@ import { Route as ExploreRouteImport } from './routes/explore'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as HubsRouteImport } from './routes/hubs'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as MediaRouteImport } from './routes/media'
 import { Route as MessagesRouteImport } from './routes/messages'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as ShareTargetRouteImport } from './routes/share-target'
 import { Route as SignalsRouteImport } from './routes/signals'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
@@ -81,6 +83,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MediaRoute = MediaRouteImport.update({
+  id: '/media',
+  path: '/media',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MessagesRoute = MessagesRouteImport.update({
   id: '/messages',
   path: '/messages',
@@ -94,6 +101,11 @@ const PrivacyRoute = PrivacyRouteImport.update({
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShareTargetRoute = ShareTargetRouteImport.update({
+  id: '/share-target',
+  path: '/share-target',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SignalsRoute = SignalsRouteImport.update({
@@ -205,9 +217,11 @@ export interface FileRoutesByFullPath {
   '/forgot-password': typeof ForgotPasswordRoute
   '/hubs': typeof HubsRouteWithChildren
   '/login': typeof LoginRoute
+  '/media': typeof MediaRoute
   '/messages': typeof MessagesRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/share-target': typeof ShareTargetRoute
   '/signals': typeof SignalsRouteWithChildren
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -237,9 +251,11 @@ export interface FileRoutesByTo {
   '/forgot-password': typeof ForgotPasswordRoute
   '/hubs': typeof HubsRouteWithChildren
   '/login': typeof LoginRoute
+  '/media': typeof MediaRoute
   '/messages': typeof MessagesRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/share-target': typeof ShareTargetRoute
   '/signals': typeof SignalsRouteWithChildren
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -271,9 +287,11 @@ export interface FileRoutesById {
   '/forgot-password': typeof ForgotPasswordRoute
   '/hubs': typeof HubsRouteWithChildren
   '/login': typeof LoginRoute
+  '/media': typeof MediaRoute
   '/messages': typeof MessagesRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/share-target': typeof ShareTargetRoute
   '/signals': typeof SignalsRouteWithChildren
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -305,9 +323,11 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/hubs'
     | '/login'
+    | '/media'
     | '/messages'
     | '/privacy'
     | '/reset-password'
+    | '/share-target'
     | '/signals'
     | '/signup'
     | '/sitemap.xml'
@@ -337,9 +357,11 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/hubs'
     | '/login'
+    | '/media'
     | '/messages'
     | '/privacy'
     | '/reset-password'
+    | '/share-target'
     | '/signals'
     | '/signup'
     | '/sitemap.xml'
@@ -370,9 +392,11 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/hubs'
     | '/login'
+    | '/media'
     | '/messages'
     | '/privacy'
     | '/reset-password'
+    | '/share-target'
     | '/signals'
     | '/signup'
     | '/sitemap.xml'
@@ -404,9 +428,11 @@ export interface RootRouteChildren {
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   HubsRoute: typeof HubsRouteWithChildren
   LoginRoute: typeof LoginRoute
+  MediaRoute: typeof MediaRoute
   MessagesRoute: typeof MessagesRoute
   PrivacyRoute: typeof PrivacyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  ShareTargetRoute: typeof ShareTargetRoute
   SignalsRoute: typeof SignalsRouteWithChildren
   SignupRoute: typeof SignupRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
@@ -474,6 +500,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/media': {
+      id: '/media'
+      path: '/media'
+      fullPath: '/media'
+      preLoaderRoute: typeof MediaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/messages': {
       id: '/messages'
       path: '/messages'
@@ -493,6 +526,13 @@ declare module '@tanstack/react-router' {
       path: '/reset-password'
       fullPath: '/reset-password'
       preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/share-target': {
+      id: '/share-target'
+      path: '/share-target'
+      fullPath: '/share-target'
+      preLoaderRoute: typeof ShareTargetRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/signals': {
@@ -699,9 +739,11 @@ const rootRouteChildren: RootRouteChildren = {
   ForgotPasswordRoute: ForgotPasswordRoute,
   HubsRoute: HubsRouteWithChildren,
   LoginRoute: LoginRoute,
+  MediaRoute: MediaRoute,
   MessagesRoute: MessagesRoute,
   PrivacyRoute: PrivacyRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  ShareTargetRoute: ShareTargetRoute,
   SignalsRoute: SignalsRouteWithChildren,
   SignupRoute: SignupRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,

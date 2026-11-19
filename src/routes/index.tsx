@@ -491,9 +491,12 @@ function HomeFeedContent() {
               ))}
             </div>
 
-            <span className="text-xs text-muted-foreground font-medium shrink-0">
-              {categoryFilter ? `Filtering by #${categoryFilter}` : "Ranked for relevance"}
-            </span>
+            <Link
+              to="/media"
+              className="shrink-0 rounded-full border border-primary/35 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary hover:bg-primary hover:text-primary-foreground transition-colors"
+            >
+              Video &amp; Media Feeds →
+            </Link>
           </div>
 
           {trendingTopics.length > 0 && (

@@ -50,6 +50,7 @@ import { mutedUsersQuery, useMuteUser, useUnmuteUser } from "@/lib/mutes";
 import { mutualConnectionsQuery, savedAccountsQuery, useToggleSaveAccount } from "@/lib/social";
 import { FounderAvatar } from "@/components/ping/Avatar";
 import { PingCard } from "@/components/ping/PingCard";
+import { UniversalShareDialog } from "@/components/sharing/UniversalShareDialog";
 import { QueryErrorCard } from "@/components/QueryErrorCard";
 import { ErrorComponent } from "@/routes/__root";
 import { Button } from "@/components/ui/button";
@@ -489,6 +490,7 @@ function ProfileContent({
   const [momentModalOpen, setMomentModalOpen] = useState(false);
   const [closeCircleOpen, setCloseCircleOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [shareProfileOpen, setShareProfileOpen] = useState(false);
   const [followDialog, setFollowDialog] = useState<{
     open: boolean;
     mode: "followers" | "following";
@@ -542,20 +544,6 @@ function ProfileContent({
     const next = theme === "light" ? "dark" : theme === "dark" ? "system" : "light";
     setTheme(next);
     toast.success(`Theme set to ${next}`);
-  };
-
-  const shareProfile = async () => {
-    const url = siteUrl(`/@${encodeURIComponent(profile.username)}`);
-    try {
-      if (typeof navigator !== "undefined" && navigator.share) {
-        await navigator.share({ title: `${name} on PING`, url });
-        return;
-      }
-      await navigator.clipboard.writeText(url);
-      toast.success("Profile link copied");
-    } catch {
-      toast.error("Couldn't copy profile link.");
-    }
   };
 
   const professionalBadgeLabel = verificationBadges?.professional_verified
@@ -833,11 +821,22 @@ function ProfileContent({
                     variant="outline"
                     size="sm"
                     className="rounded-full"
-                    onClick={shareProfile}
+                    onClick={() => setShareProfileOpen(true)}
                   >
                     <Share2 className="size-4" /> Share Profile
                   </Button>
                 </div>
+                <UniversalShareDialog
+                  open={shareProfileOpen}
+                  onOpenChange={setShareProfileOpen}
+                  payload={{
+                    targetType: "profile",
+                    targetId: profile.id,
+                    title: `${name} (@${profile.username}) on Ping`,
+                    description: profile.bio || `Connect with ${name} on Ping by DOT.`,
+                    path: `/@${profile.username}`,
+                  }}
+                />
               </div>
             </div>
 
@@ -1215,7 +1214,14 @@ function ProfileContent({
               </div>
             ) : (
               <div className="mt-5 space-y-3">
-                <button type="button" onClick={shareProfile} className={drawerLinkClass}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeOverlays();
+                    setShareProfileOpen(true);
+                  }}
+                  className={drawerLinkClass}
+                >
                   <span className="flex items-center gap-3">
                     <Link2 className="size-4" /> Share Profile Link
                   </span>

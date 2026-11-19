@@ -13,6 +13,7 @@ import { LikeButton, PingMenu, ShareMenu } from "./PingActions";
 import { PingPollCard } from "./PingPollCard";
 import { PingReactionBar } from "./PingReactionBar";
 import { RichPingText } from "./RichPingText";
+import { MusicAttachmentBar } from "@/components/music/MusicAttachmentBar";
 import { cn } from "@/lib/utils";
 import { RepingAttribution } from "./Comments";
 import { useState } from "react";
@@ -132,9 +133,9 @@ export function PingCard({
     });
   };
   const visibleMedia = mediaList
-    .slice(0, 2)
+    .slice(0, 4)
     .filter((url) => !failedMedia.has(url) && !isSharePageUrl(url));
-  const shareLinks = mediaList.slice(0, 2).filter((url) => isSharePageUrl(url));
+  const shareLinks = mediaList.slice(0, 4).filter((url) => isSharePageUrl(url));
 
   const handleRespondConnect = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -298,9 +299,14 @@ export function PingCard({
           </div>
         )}
 
-        {/* Responsive Media Preview (Image or Video) */}
+        {/* Responsive Media Preview (Single, Multi-Image Gallery up to 4, or Video) */}
         {visibleMedia.length > 0 && (
-          <div className="relative z-10 mt-3.5 overflow-hidden rounded-2xl border border-border/60 bg-secondary/30">
+          <div
+            className={cn(
+              "relative z-10 mt-3.5 overflow-hidden rounded-2xl border border-border/60 bg-secondary/30",
+              visibleMedia.length > 1 && "grid grid-cols-2 gap-1",
+            )}
+          >
             {visibleMedia.map((url) =>
               isVideoUrl(url) ? (
                 <video
@@ -311,7 +317,10 @@ export function PingCard({
                   preload="metadata"
                   onClick={(e) => e.stopPropagation()}
                   onError={() => markMediaFailed(url)}
-                  className="max-h-80 w-full object-cover"
+                  className={cn(
+                    "w-full object-cover",
+                    visibleMedia.length > 1 ? "h-44 sm:h-52" : "max-h-80",
+                  )}
                 />
               ) : (
                 <img
@@ -320,7 +329,10 @@ export function PingCard({
                   alt={structured.headline || `Media shared by ${name}`}
                   loading="lazy"
                   onError={() => markMediaFailed(url)}
-                  className="max-h-80 w-full object-cover"
+                  className={cn(
+                    "w-full object-cover",
+                    visibleMedia.length > 1 ? "h-44 sm:h-52" : "max-h-80",
+                  )}
                 />
               ),
             )}
@@ -344,6 +356,7 @@ export function PingCard({
           </div>
         )}
 
+        <MusicAttachmentBar targetType="ping" targetId={ping.id} />
         <PingPollCard pingId={ping.id} />
         <RepingAttribution ping={ping} />
         <div className="relative z-10">

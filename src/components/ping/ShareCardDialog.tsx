@@ -21,8 +21,26 @@ import { pingUrl, type Ping } from "@/lib/pings";
 import { useAuth } from "@/lib/auth";
 import { recordNetworkEvent } from "@/lib/economic-events";
 import { shareExcerpt, shareMessage } from "@/lib/sharing/card";
+import {
+  buildShareDestinations,
+  generateShareCode,
+  recordShareEvent,
+  type ShareDestinationId,
+} from "@/lib/sharing/universal";
 
-function trackPingShare(userId: string | undefined, ping: Ping, channel: string, source: string) {
+function trackPingShare(
+  userId: string | undefined,
+  ping: Ping,
+  channel: ShareDestinationId,
+  source: string,
+) {
+  void recordShareEvent({
+    targetType: "ping",
+    targetId: ping.id,
+    eventKind: "share_initiated",
+    destination: channel,
+    shareCode: generateShareCode("ping", ping.id),
+  }).catch(() => {});
   if (!userId) return;
   void recordNetworkEvent({
     eventType: "ping_shared",
@@ -100,7 +118,7 @@ export function ShareCardDialog({
       setSharing(true);
       try {
         await navigator.share({ files: [card.file], title: "Ping by DOT" });
-        trackPingShare(user?.id, ping, "share_card_image", "share_card_dialog");
+        trackPingShare(user?.id, ping, "native_share", "share_card_dialog");
       } catch (e) {
         if (!(e instanceof DOMException && e.name === "AbortError"))
           toast.error("Couldn't share the image. Try Download card.");
@@ -208,9 +226,37 @@ export function ShareCardDialog({
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-          WhatsApp link sends text and a link, not the PNG. To send the card, use Share image or
-          attach the downloaded PNG in WhatsApp.
+          WhatsApp, X, Telegram, Facebook, LinkedIn, Email &amp; SMS share attributed Ping links
+          with rich previews. For Instagram or Snapchat Stories, use Share image or Download card.
         </p>
+        {(() => {
+          const { destinations } = buildShareDestinations({
+            targetType: "ping",
+            targetId: ping.id,
+            title: `${ping.author?.display_name || ping.author?.username || "Ping"} on Ping by DOT`,
+            description: shareExcerpt(ping.content),
+            path: `/p/${ping.id}`,
+          });
+          const extraDirect = destinations.filter(
+            (d) => d.mode === "direct_url" && d.id !== "whatsapp",
+          );
+          return (
+            <div className="flex flex-wrap gap-1.5" aria-label="More share destinations">
+              {extraDirect.map((dest) => (
+                <a
+                  key={dest.id}
+                  href={dest.href}
+                  target={dest.id === "email" || dest.id === "sms" ? undefined : "_blank"}
+                  rel="noopener noreferrer"
+                  onClick={() => trackPingShare(user?.id, ping, dest.id, "share_card_dialog")}
+                  className="rounded-full border border-border/80 bg-secondary/45 px-3 py-1 text-[11px] font-semibold text-foreground hover:bg-secondary transition-colors"
+                >
+                  {dest.label}
+                </a>
+              ))}
+            </div>
+          );
+        })()}
         <a
           href={pingUrl(ping.id)}
           className="break-all text-center text-xs text-muted-foreground underline"

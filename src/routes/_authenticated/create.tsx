@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { PingComposer, type PingDraft } from "@/components/ping/PingComposer";
 import { clearPingComposerDraft } from "@/lib/draft-store";
+import { attachMusicToContent } from "@/lib/music";
 import { createPingPoll, extractHashtags, extractMentions } from "@/lib/social";
 import { pingSchema } from "@/lib/validation";
 import { ensureClientProfileRow } from "@/lib/ensure-profile";
@@ -30,6 +31,9 @@ export const Route = createFileRoute("/_authenticated/create")({
   validateSearch: z.object({
     hub: z.string().optional(),
     quote: z.string().max(400).optional(),
+    importUrl: z.string().max(1000).optional(),
+    importTitle: z.string().max(240).optional(),
+    importPlatform: z.string().max(80).optional(),
   }),
   head: () => ({
     meta: [
@@ -50,7 +54,13 @@ export const Route = createFileRoute("/_authenticated/create")({
 
 function Create() {
   const { user } = useAuth();
-  const { hub: initialHubId, quote: initialQuote } = Route.useSearch();
+  const {
+    hub: initialHubId,
+    quote: initialQuote,
+    importUrl,
+    importTitle,
+    importPlatform,
+  } = Route.useSearch();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const m = useMutation({
@@ -65,7 +75,13 @@ function Create() {
       }
 
       const draft = pingSchema.parse(d);
-      const imageUrl = d.image_url?.trim() || null;
+      const mediaUrls =
+        d.media_urls && d.media_urls.length > 0
+          ? d.media_urls
+          : d.image_url?.trim()
+            ? [d.image_url.trim()]
+            : null;
+      const imageUrl = mediaUrls?.[0] ?? null;
       const hashtags = extractHashtags(draft.content);
       const mentions = extractMentions(draft.content);
       const baseInsertPayload = {
@@ -77,7 +93,7 @@ function Create() {
         offers: d.offers && d.offers.length > 0 ? d.offers : null,
         desired_outcome: d.desired_outcome?.trim() || null,
         image_url: imageUrl,
-        media_urls: imageUrl ? [imageUrl] : null,
+        media_urls: mediaUrls,
         visibility: (d.hub_id ? "hub" : "public") as "public" | "hub",
         cta_url: draft.cta_url || null,
         cta_label: draft.cta_label || null,
@@ -87,6 +103,17 @@ function Create() {
         ...(d.scheduled_for ? { scheduled_for: d.scheduled_for } : {}),
         ...(hashtags.length > 0 ? { hashtags } : {}),
         ...(mentions.length > 0 ? { mentions } : {}),
+        ...(d.content_format ? { content_format: d.content_format } : {}),
+        ...(d.poster_url ? { poster_url: d.poster_url } : {}),
+        ...(d.captions_text ? { captions_text: d.captions_text } : {}),
+        ...(typeof d.media_duration_sec === "number"
+          ? { media_duration_sec: d.media_duration_sec }
+          : {}),
+        ...(d.location_tag ? { location_tag: d.location_tag } : {}),
+        ...(d.imported_source_url ? { imported_source_url: d.imported_source_url } : {}),
+        ...(d.imported_source_platform
+          ? { imported_source_platform: d.imported_source_platform }
+          : {}),
       };
 
       let { data, error } = await (supabase as any)
@@ -95,7 +122,7 @@ function Create() {
         .select("id")
         .single();
 
-      // Gracefully retry without Phase 2 columns if remote DB hasn't applied migration 0029 yet
+      // Gracefully retry without Phase 2/3 columns if remote DB hasn't applied migrations 0029–0030 yet
       if (
         error &&
         (error.code === "PGRST204" ||
@@ -142,6 +169,17 @@ function Create() {
         }).catch(() => {});
       }
 
+      if (d.music?.track) {
+        await attachMusicToContent({
+          userId: authorId,
+          targetType: "ping",
+          targetId: data.id,
+          track: d.music.track,
+          clipStartSec: d.music.clipStartSec,
+          clipDurationSec: d.music.clipDurationSec,
+        }).catch(() => {});
+      }
+
       let hubShareError: string | null = null;
       if (d.hub_id) {
         const { error: hubError } = await supabase.rpc("share_ping_to_hub", {
@@ -168,25 +206,41 @@ function Create() {
     },
     onError: (err) => toast.error(describePublishError(err)),
   });
+
+  const hasInitialPrefill = Boolean(initialHubId || initialQuote || importUrl);
+
   return (
     <div className="mx-auto max-w-2xl px-5 py-10 pb-24">
       <h1 className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">
         Create a Ping
       </h1>
       <p className="mt-1.5 text-sm text-muted-foreground">
-        Share an intention. Find the people and resources to make it happen.
+        Publish text, photo galleries, or video — with optional polls, music, scheduling, and links.
       </p>
       <div className="mt-6">
         <PingComposer
           initial={
-            initialHubId || initialQuote
+            hasInitialPrefill
               ? {
                   ...(initialHubId ? { hub_id: initialHubId } : {}),
                   ...(initialQuote ? { content: `\n\n> ${initialQuote}` } : {}),
+                  ...(importTitle ? { headline: importTitle } : {}),
+                  ...(importUrl
+                    ? {
+                        cta_url: importUrl,
+                        cta_label: importPlatform
+                          ? `View on ${importPlatform}`
+                          : "Open source link",
+                        imported_source_url: importUrl,
+                        imported_source_platform: importPlatform ?? "Web",
+                      }
+                    : {}),
                 }
               : undefined
           }
-          draftKey={initialQuote ? undefined : initialHubId ? `hub:${initialHubId}` : "new"}
+          draftKey={
+            initialQuote || importUrl ? undefined : initialHubId ? `hub:${initialHubId}` : "new"
+          }
           submitLabel="Publish Ping"
           pending={m.isPending}
           onSubmit={(d) => m.mutate(d)}

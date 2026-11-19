@@ -54,6 +54,8 @@
 | `create_group_conversation(...)` / `add_group_member(...)` / `remove_group_member(...)` / `update_group_conversation(...)` | `0029` | `authenticated` | Group conversation creation, announcement-mode governance, and owner/admin member management |
 | `submit_signal_application(...)` / `update_signal_application_status(...)` | `0029` | `authenticated` | Structured opportunity applications with publisher-only review transitions & applicant withdraw |
 | `mark_notifications_read(...)` | `0029` | `authenticated` | Owner-scoped read-state update for central `public.notifications` inbox |
+| `record_ping_video_view(...)` | `0030` | `anon`, `authenticated` | Records bounded video view & watch-time seconds for non-hidden Pings |
+| `record_share_event(...)` | `0030` | `anon`, `authenticated` | Logs honest share analytics (`share_initiated`, `link_clicked`, `signup_attributed`) with referral codes |
 
 ---
 

@@ -5,10 +5,14 @@ import {
   CalendarClock,
   ChevronDown,
   ChevronUp,
+  Eye,
   Image as ImageIcon,
   Link2,
   Loader2,
+  MapPin,
+  Music,
   Plus,
+  RotateCcw,
   Sparkles,
   Upload,
   X,
@@ -36,7 +40,18 @@ import {
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { myHubsQuery } from "@/lib/hub-queries";
 import { HUB_INTENTS, type HubIntent } from "@/lib/hubs";
+import {
+  IMAGE_GALLERY_MAX,
+  isVideoMediaUrl,
+  probeVideoFile,
+  validateVideoFileMeta,
+  type PingContentFormat,
+} from "@/lib/media-pipeline";
 import { validateMediaUpload } from "@/lib/shield";
+import {
+  MusicAttachmentPicker,
+  type SelectedMusicDraft,
+} from "@/components/music/MusicAttachmentPicker";
 
 export type PingDraft = {
   category: Category;
@@ -44,6 +59,14 @@ export type PingDraft = {
   cta_url: string;
   cta_label: string;
   image_url?: string | null;
+  media_urls?: string[] | null;
+  content_format?: PingContentFormat;
+  poster_url?: string | null;
+  captions_text?: string | null;
+  media_duration_sec?: number | null;
+  location_tag?: string | null;
+  imported_source_url?: string | null;
+  imported_source_platform?: string | null;
   headline?: string | null;
   needs?: string[];
   offers?: string[];
@@ -56,6 +79,7 @@ export type PingDraft = {
     options: string[];
     expires_at?: string | null;
   } | null;
+  music?: SelectedMusicDraft | null;
 };
 
 export function PingComposer({
@@ -99,6 +123,26 @@ export function PingComposer({
     initial?.desired_outcome ?? storedDraft?.desiredOutcome ?? "",
   );
   const [mediaUrl, setMediaUrl] = useState(initial?.image_url ?? storedDraft?.mediaUrl ?? "");
+  const [galleryUrls, setGalleryUrls] = useState<string[]>(
+    initial?.media_urls && initial.media_urls.length > 0
+      ? initial.media_urls
+      : initial?.image_url
+        ? [initial.image_url]
+        : storedDraft?.mediaUrl
+          ? [storedDraft.mediaUrl]
+          : [],
+  );
+  const [posterUrl, setPosterUrl] = useState<string | null>(initial?.poster_url ?? null);
+  const [mediaDurationSec, setMediaDurationSec] = useState<number | null>(
+    initial?.media_duration_sec ?? null,
+  );
+  const [captionsText, setCaptionsText] = useState(initial?.captions_text ?? "");
+  const [locationTag, setLocationTag] = useState(initial?.location_tag ?? "");
+  const [musicDraft, setMusicDraft] = useState<SelectedMusicDraft | null>(initial?.music ?? null);
+  const [showMusic, setShowMusic] = useState(Boolean(initial?.music));
+  const [showPreview, setShowPreview] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [failedMediaFile, setFailedMediaFile] = useState<File | null>(null);
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const mediaFileInputRef = useRef<HTMLInputElement | null>(null);
   const [showCoordinationDetails, setShowCoordinationDetails] = useState(
@@ -180,27 +224,90 @@ export function PingComposer({
       toast.error(validation.error || "Unsupported media file");
       return;
     }
+    if (mediaKind === "image" && galleryUrls.length >= IMAGE_GALLERY_MAX) {
+      toast.error(`You can attach up to ${IMAGE_GALLERY_MAX} images per Ping.`);
+      return;
+    }
     try {
       setIsUploadingMedia(true);
+      setFailedMediaFile(null);
+      setUploadProgress(15);
+
+      let durationSec: number | null = null;
+      let posterBlob: Blob | null = null;
+      if (mediaKind === "video") {
+        const probe = await probeVideoFile(file);
+        durationSec = probe.durationSec;
+        posterBlob = probe.posterBlob;
+        const videoCheck = validateVideoFileMeta({
+          size: file.size,
+          type: file.type,
+          name: file.name,
+          durationSec,
+        });
+        if (!videoCheck.valid) {
+          toast.error(videoCheck.error || "Video failed validation.");
+          return;
+        }
+      }
+
+      setUploadProgress(45);
       const { uploadUserMedia } = await import("@/lib/storage");
-      const ext = file.name.split(".").pop()?.toLowerCase() || "png";
+      const ext =
+        file.name.split(".").pop()?.toLowerCase() || (mediaKind === "video" ? "mp4" : "png");
       const path = `${user.id}/pings/${Date.now()}.${ext}`;
       const publicUrl = await uploadUserMedia(path, file, { cacheControl: "3600", upsert: false });
-      setMediaUrl(publicUrl);
+
+      setUploadProgress(80);
+      if (posterBlob) {
+        try {
+          const posterFile = new File([posterBlob], `poster-${Date.now()}.jpg`, {
+            type: "image/jpeg",
+          });
+          const uploadedPoster = await uploadUserMedia(
+            `${user.id}/pings/posters/${Date.now()}.jpg`,
+            posterFile,
+            { cacheControl: "3600", upsert: false },
+          );
+          setPosterUrl(uploadedPoster);
+        } catch {
+          // non-blocking poster upload failure
+        }
+      }
+
+      if (mediaKind === "video") {
+        setMediaUrl(publicUrl);
+        setGalleryUrls([publicUrl]);
+        setMediaDurationSec(durationSec);
+      } else {
+        setGalleryUrls((prev) => {
+          const filtered = prev.filter((u) => !isVideoMediaUrl(u));
+          const next = [...filtered, publicUrl].slice(0, IMAGE_GALLERY_MAX);
+          setMediaUrl(next[0] ?? publicUrl);
+          return next;
+        });
+        setPosterUrl(null);
+        setMediaDurationSec(null);
+      }
+      setUploadProgress(100);
       setShowCoordinationDetails(true);
-      toast.success("Media uploaded");
+      toast.success(mediaKind === "video" ? "Video uploaded" : "Image added");
     } catch (err) {
+      setFailedMediaFile(file);
       const { formatStorageUploadError } = await import("@/lib/storage");
       toast.error(formatStorageUploadError(err, "Media upload failed"));
     } finally {
       setIsUploadingMedia(false);
+      setTimeout(() => setUploadProgress(null), 600);
     }
   };
 
   const handleMediaFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) await uploadPingMediaFile(file);
+    const files = Array.from(e.target.files ?? []);
     e.target.value = "";
+    for (const file of files.slice(0, IMAGE_GALLERY_MAX)) {
+      await uploadPingMediaFile(file);
+    }
   };
 
   const handlePingMediaClick = async () => {
@@ -290,17 +397,36 @@ export function PingComposer({
           }
         : null;
 
+    const mergedMediaUrls = Array.from(
+      new Set([...galleryUrls, ...(mediaUrl.trim() ? [mediaUrl.trim()] : [])]),
+    ).slice(0, IMAGE_GALLERY_MAX);
+    const hasVideo = mergedMediaUrls.some((u) => isVideoMediaUrl(u));
+    const derivedFormat: PingContentFormat = hasVideo
+      ? "video"
+      : mergedMediaUrls.length > 0
+        ? "image"
+        : "text";
+
     onSubmit({
       ...(r.data as PingDraft),
       headline: headline.trim() || null,
       needs: needsList,
       offers: offersList,
       desired_outcome: desiredOutcome.trim() || null,
-      image_url: mediaUrl.trim() || null,
+      image_url: mergedMediaUrls[0] ?? null,
+      media_urls: mergedMediaUrls.length > 0 ? mergedMediaUrls : null,
+      content_format: derivedFormat,
+      poster_url: hasVideo ? posterUrl : null,
+      captions_text: hasVideo && captionsText.trim() ? captionsText.trim() : null,
+      media_duration_sec: hasVideo ? mediaDurationSec : null,
+      location_tag: locationTag.trim() || null,
+      imported_source_url: initial?.imported_source_url ?? null,
+      imported_source_platform: initial?.imported_source_platform ?? null,
       hub_id: d.hub_id || null,
       hub_intent: d.hub_id ? d.hub_intent || null : null,
       scheduled_for: showSchedule && scheduledFor ? new Date(scheduledFor).toISOString() : null,
       poll: pollPayload,
+      music: musicDraft,
     });
   };
 
@@ -451,23 +577,53 @@ export function PingComposer({
               />
             </div>
 
-            <div className="sm:col-span-2">
+            <div>
+              <Label
+                htmlFor="ping-location"
+                className="text-xs font-semibold flex items-center gap-1"
+              >
+                <MapPin className="size-3 text-primary" /> Location tag (optional)
+              </Label>
+              <Input
+                id="ping-location"
+                value={locationTag}
+                onChange={(e) => setLocationTag(e.target.value)}
+                placeholder="e.g. Lagos, Nairobi, London"
+                maxLength={80}
+                className="mt-1 rounded-xl bg-card text-xs"
+              />
+            </div>
+
+            <div className="sm:col-span-2 space-y-2">
               <Label htmlFor="ping-media" className="text-xs font-semibold flex items-center gap-1">
-                <ImageIcon className="size-3.5 text-primary" /> Media URL or upload (image/video)
+                <ImageIcon className="size-3.5 text-primary" /> Photos (up to {IMAGE_GALLERY_MAX})
+                or Video (MP4/WebM/MOV)
               </Label>
               <div className="mt-1 flex flex-col sm:flex-row gap-2">
                 <Input
                   id="ping-media"
                   type="url"
                   value={mediaUrl}
-                  onChange={(e) => setMediaUrl(e.target.value)}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setMediaUrl(next);
+                    if (next.trim() && !galleryUrls.includes(next.trim())) {
+                      setGalleryUrls((prev) =>
+                        [next.trim(), ...prev.filter((u) => u !== mediaUrl)].slice(
+                          0,
+                          IMAGE_GALLERY_MAX,
+                        ),
+                      );
+                    }
+                  }}
                   placeholder="https://…/preview.png or upload from device"
                   className="rounded-xl bg-card text-xs flex-1"
                 />
                 <input
                   ref={mediaFileInputRef}
                   type="file"
-                  accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
+                  multiple
+                  accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
                   className="hidden"
                   onChange={handleMediaFileUpload}
                 />
@@ -485,15 +641,32 @@ export function PingComposer({
                     ) : (
                       <Upload className="size-3.5" />
                     )}
-                    {isUploadingMedia ? "Uploading…" : "Upload media"}
+                    {isUploadingMedia ? `Uploading ${uploadProgress ?? 50}%…` : "Upload media"}
                   </Button>
-                  {mediaUrl && (
+                  {failedMediaFile && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void uploadPingMediaFile(failedMediaFile)}
+                      className="rounded-xl text-xs gap-1 text-destructive border-destructive/40"
+                    >
+                      <RotateCcw className="size-3" /> Retry
+                    </Button>
+                  )}
+                  {(mediaUrl || galleryUrls.length > 0) && (
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
                       aria-label="Clear media attachment"
-                      onClick={() => setMediaUrl("")}
+                      onClick={() => {
+                        setMediaUrl("");
+                        setGalleryUrls([]);
+                        setPosterUrl(null);
+                        setMediaDurationSec(null);
+                        setCaptionsText("");
+                      }}
                       className="size-8 rounded-xl"
                     >
                       <X className="size-3.5" />
@@ -501,6 +674,56 @@ export function PingComposer({
                   )}
                 </div>
               </div>
+
+              {galleryUrls.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                  {galleryUrls.map((u) => (
+                    <div
+                      key={u}
+                      className="relative aspect-square rounded-xl overflow-hidden border border-border/70 bg-black/20"
+                    >
+                      {isVideoMediaUrl(u) ? (
+                        <video
+                          src={u}
+                          poster={posterUrl ?? undefined}
+                          muted
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <img src={u} alt="Attached media" className="h-full w-full object-cover" />
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = galleryUrls.filter((x) => x !== u);
+                          setGalleryUrls(next);
+                          setMediaUrl(next[0] ?? "");
+                        }}
+                        aria-label="Remove media item"
+                        className="absolute top-1 right-1 size-6 rounded-full bg-black/70 text-white flex items-center justify-center"
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {galleryUrls.some((u) => isVideoMediaUrl(u)) && (
+                <div className="pt-1">
+                  <Label htmlFor="video-captions" className="text-xs font-semibold">
+                    Video captions / subtitles (optional)
+                  </Label>
+                  <Input
+                    id="video-captions"
+                    value={captionsText}
+                    onChange={(e) => setCaptionsText(e.target.value)}
+                    placeholder="Add caption text or transcript summary for viewers watching muted…"
+                    maxLength={300}
+                    className="mt-1 rounded-xl bg-card text-xs"
+                  />
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -737,6 +960,37 @@ export function PingComposer({
         </div>
       ) : null}
 
+      {showMusic && (
+        <div className="mt-4">
+          <MusicAttachmentPicker value={musicDraft} onChange={setMusicDraft} />
+        </div>
+      )}
+
+      {showPreview && (
+        <div className="mt-4 rounded-2xl border border-primary/30 bg-card p-4 space-y-2">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-primary flex items-center gap-1">
+            <Eye className="size-3.5" /> Pre-Publish Preview
+          </p>
+          {headline.trim() && (
+            <h3 className="font-display text-base font-bold text-foreground">{headline.trim()}</h3>
+          )}
+          <p className="text-sm whitespace-pre-line text-foreground/95">
+            {d.content.trim() || "Write your Ping content to preview…"}
+          </p>
+          {locationTag.trim() && (
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <MapPin className="size-3 text-primary" /> {locationTag.trim()}
+            </p>
+          )}
+          {musicDraft && (
+            <p className="text-xs text-primary flex items-center gap-1">
+              <Music className="size-3" /> {musicDraft.track.title} — {musicDraft.track.artist} (
+              {musicDraft.clipDurationSec}s)
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {!showCta && (
           <Button
@@ -747,6 +1001,17 @@ export function PingComposer({
             onClick={() => setShowCta(true)}
           >
             <Link2 className="size-3.5" /> Add link
+          </Button>
+        )}
+        {!showMusic && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="rounded-full text-xs gap-1.5"
+            onClick={() => setShowMusic(true)}
+          >
+            <Music className="size-3.5" /> Add music
           </Button>
         )}
         {!showPoll && (
@@ -771,6 +1036,15 @@ export function PingComposer({
             <CalendarClock className="size-3.5" /> Schedule
           </Button>
         )}
+        <Button
+          type="button"
+          variant={showPreview ? "secondary" : "ghost"}
+          size="sm"
+          className="rounded-full text-xs gap-1.5 ml-auto"
+          onClick={() => setShowPreview((prev) => !prev)}
+        >
+          <Eye className="size-3.5" /> {showPreview ? "Hide preview" : "Preview"}
+        </Button>
       </div>
 
       <div className="mt-6 flex items-center justify-end gap-3">
