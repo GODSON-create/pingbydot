@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { ensureClientProfileRow } from "@/lib/ensure-profile";
 import type { Json } from "@/integrations/supabase/types";
 
 export type SignalInstitutionType =
@@ -503,6 +504,11 @@ export function signalMessagesQuery(signalId: string) {
         .limit(150);
 
       if (error) {
+        if (error.code === "PGRST205" || /could not find the table/i.test(error.message || "")) {
+          throw new Error(
+            "Signal channel discussions require database migration 0022 to be applied.",
+          );
+        }
         throw error;
       }
       return (data ?? []) as unknown as SignalMessage[];
@@ -516,7 +522,8 @@ export function useSendSignalMessage(signalId: string) {
   return useMutation({
     mutationFn: async (payload: { content: string; parentId?: string | null }) => {
       const { data: u } = await supabase.auth.getSession();
-      const userId = u.session?.user?.id;
+      const userObj = u.session?.user;
+      const userId = userObj?.id;
       if (!userId) throw new Error("Please sign in to post in Signal channel chat.");
       const cleaned = payload.content.trim();
       if (!cleaned) throw new Error("Message cannot be empty.");
@@ -530,13 +537,20 @@ export function useSendSignalMessage(signalId: string) {
 
       let { error } = await supabase.from("signal_messages").insert(insertPayload);
       if (error && error.code === "23503") {
-        const { error: profileErr } = await supabase.rpc("ensure_my_profile");
-        if (!profileErr) {
+        const recovered = await ensureClientProfileRow(userObj);
+        if (recovered) {
           const retry = await supabase.from("signal_messages").insert(insertPayload);
           error = retry.error;
         }
       }
-      if (error) throw error;
+      if (error) {
+        if (error.code === "PGRST205" || /could not find the table/i.test(error.message || "")) {
+          throw new Error(
+            "Posting in Signal channel discussions requires database migration 0022.",
+          );
+        }
+        throw error;
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["signal-messages", signalId] });

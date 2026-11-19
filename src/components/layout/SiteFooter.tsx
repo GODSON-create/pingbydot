@@ -35,6 +35,9 @@ export function SiteFooter() {
         </nav>
         <nav className="flex flex-col gap-2 text-sm" aria-label="Account">
           <span className="font-display font-bold">Account & Legal</span>
+          <Link to="/welcome" className="text-muted-foreground hover:text-foreground">
+            Welcome Tour
+          </Link>
           <Link to="/signup" className="text-muted-foreground hover:text-foreground">
             Sign up
           </Link>
@@ -58,7 +61,8 @@ export function SiteFooter() {
         </nav>
       </div>
       <p className="mx-auto max-w-6xl px-5 pb-8 text-xs text-muted-foreground">
-        © {new Date().getFullYear()} Ping by DOT. Made for people building things.
+        © {new Date().getFullYear()} Ping by DOT. Open to everyone — connect, create, discover, and
+        build together.
       </p>
     </footer>
   );

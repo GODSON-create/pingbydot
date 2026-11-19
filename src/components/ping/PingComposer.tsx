@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Building2,
   ChevronDown,
@@ -25,6 +25,12 @@ import {
 } from "@/lib/validation";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
+import {
+  clearPingComposerDraft,
+  getPingComposerDraft,
+  savePingComposerDraft,
+} from "@/lib/draft-store";
+import { isFeatureEnabled } from "@/lib/feature-flags";
 import { myHubsQuery } from "@/lib/hub-queries";
 import { HUB_INTENTS, type HubIntent } from "@/lib/hubs";
 import { validateMediaUpload } from "@/lib/shield";
@@ -45,33 +51,45 @@ export type PingDraft = {
 
 export function PingComposer({
   initial,
+  draftKey,
   submitLabel,
   pending,
   onSubmit,
 }: {
   initial?: Partial<PingDraft> | undefined;
+  draftKey?: string | undefined;
   submitLabel: string;
   pending: boolean;
   onSubmit: (d: PingDraft) => void;
 }) {
   const { user } = useAuth();
+  const persistDrafts = Boolean(draftKey && isFeatureEnabled("ping_composer_drafts"));
+  const storedDraft = persistDrafts && draftKey ? getPingComposerDraft(draftKey) : null;
+  const [restoredDraft, setRestoredDraft] = useState(Boolean(storedDraft));
+
   const [d, setD] = useState<PingDraft>({
-    category: "progress",
-    content: "",
-    cta_url: "",
-    cta_label: "",
-    image_url: null,
-    hub_id: null,
-    hub_intent: null,
+    category: (storedDraft?.category as Category | undefined) ?? "progress",
+    content: storedDraft?.content ?? "",
+    cta_url: storedDraft?.cta_url ?? "",
+    cta_label: storedDraft?.cta_label ?? "",
+    image_url: storedDraft?.mediaUrl ?? null,
+    hub_id: storedDraft?.hub_id ?? null,
+    hub_intent: (storedDraft?.hub_intent as HubIntent | null | undefined) ?? null,
     ...initial,
   });
 
   // Structured intent coordination fields (progressive disclosure)
-  const [headline, setHeadline] = useState(initial?.headline ?? "");
-  const [needsInput, setNeedsInput] = useState((initial?.needs ?? []).join(", "));
-  const [offersInput, setOffersInput] = useState((initial?.offers ?? []).join(", "));
-  const [desiredOutcome, setDesiredOutcome] = useState(initial?.desired_outcome ?? "");
-  const [mediaUrl, setMediaUrl] = useState(initial?.image_url ?? "");
+  const [headline, setHeadline] = useState(initial?.headline ?? storedDraft?.headline ?? "");
+  const [needsInput, setNeedsInput] = useState(
+    initial?.needs?.length ? initial.needs.join(", ") : (storedDraft?.needsInput ?? ""),
+  );
+  const [offersInput, setOffersInput] = useState(
+    initial?.offers?.length ? initial.offers.join(", ") : (storedDraft?.offersInput ?? ""),
+  );
+  const [desiredOutcome, setDesiredOutcome] = useState(
+    initial?.desired_outcome ?? storedDraft?.desiredOutcome ?? "",
+  );
+  const [mediaUrl, setMediaUrl] = useState(initial?.image_url ?? storedDraft?.mediaUrl ?? "");
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const mediaFileInputRef = useRef<HTMLInputElement | null>(null);
   const [showCoordinationDetails, setShowCoordinationDetails] = useState(
@@ -79,23 +97,78 @@ export function PingComposer({
       (initial?.needs && initial.needs.length > 0) ||
       (initial?.offers && initial.offers.length > 0) ||
       initial?.desired_outcome ||
-      initial?.image_url,
+      initial?.image_url ||
+      storedDraft?.needsInput ||
+      storedDraft?.offersInput ||
+      storedDraft?.desiredOutcome ||
+      storedDraft?.mediaUrl,
     ),
   );
 
-  const handleMediaFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // Persist unfinished Ping drafts across navigation when draftKey is enabled
+  useEffect(() => {
+    if (!persistDrafts || !draftKey) return;
+    savePingComposerDraft(
+      {
+        category: d.category,
+        headline,
+        content: d.content,
+        needsInput,
+        offersInput,
+        desiredOutcome,
+        mediaUrl,
+        cta_url: d.cta_url,
+        cta_label: d.cta_label,
+        hub_id: d.hub_id ?? null,
+        hub_intent: d.hub_intent ?? null,
+      },
+      draftKey,
+    );
+  }, [
+    persistDrafts,
+    draftKey,
+    d.category,
+    d.content,
+    d.cta_url,
+    d.cta_label,
+    d.hub_id,
+    d.hub_intent,
+    headline,
+    needsInput,
+    offersInput,
+    desiredOutcome,
+    mediaUrl,
+  ]);
+
+  const discardDraft = () => {
+    if (draftKey) clearPingComposerDraft(draftKey);
+    setD({
+      category: initial?.category ?? "progress",
+      content: initial?.content ?? "",
+      cta_url: initial?.cta_url ?? "",
+      cta_label: initial?.cta_label ?? "",
+      image_url: initial?.image_url ?? null,
+      hub_id: initial?.hub_id ?? null,
+      hub_intent: initial?.hub_intent ?? null,
+    });
+    setHeadline(initial?.headline ?? "");
+    setNeedsInput((initial?.needs ?? []).join(", "));
+    setOffersInput((initial?.offers ?? []).join(", "));
+    setDesiredOutcome(initial?.desired_outcome ?? "");
+    setMediaUrl(initial?.image_url ?? "");
+    setRestoredDraft(false);
+    toast.success("Draft cleared");
+  };
+
+  const uploadPingMediaFile = async (file: File) => {
     if (!user) {
       toast.error("Sign in before uploading media.");
-      e.target.value = "";
       return;
     }
     const mediaKind = file.type.startsWith("video/") ? "video" : "image";
     const validation = validateMediaUpload(file, mediaKind);
     if (!validation.valid) {
       toast.error(validation.error || "Unsupported media file");
-      e.target.value = "";
       return;
     }
     try {
@@ -112,12 +185,22 @@ export function PingComposer({
       toast.error(formatStorageUploadError(err, "Media upload failed"));
     } finally {
       setIsUploadingMedia(false);
-      e.target.value = "";
     }
   };
 
+  const handleMediaFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) await uploadPingMediaFile(file);
+    e.target.value = "";
+  };
+
+  const handlePingMediaClick = async () => {
+    const { pickOrCaptureImage } = await import("@/lib/native");
+    await pickOrCaptureImage(mediaFileInputRef.current, uploadPingMediaFile);
+  };
+
   const [errors, setErrors] = useState<Partial<Record<keyof PingDraft, string>>>({});
-  const [showCta, setShowCta] = useState(!!initial?.cta_url);
+  const [showCta, setShowCta] = useState(Boolean(initial?.cta_url || storedDraft?.cta_url));
 
   const { data: myHubs } = useQuery(myHubsQuery(user?.id));
 
@@ -196,6 +279,23 @@ export function PingComposer({
 
   return (
     <form onSubmit={submit} className="surface-card rounded-3xl p-5 sm:p-7" noValidate>
+      {restoredDraft && (
+        <div
+          role="status"
+          className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-primary/25 bg-primary/10 px-4 py-2.5 text-xs"
+        >
+          <span className="font-medium text-foreground">
+            Unfinished Ping draft restored automatically.
+          </span>
+          <button
+            type="button"
+            onClick={discardDraft}
+            className="font-semibold text-primary hover:underline shrink-0"
+          >
+            Discard draft
+          </button>
+        </div>
+      )}
       {/* 1. Intent Type Selector */}
       <fieldset>
         <legend className="text-sm font-semibold text-foreground">Intent type</legend>
@@ -348,7 +448,7 @@ export function PingComposer({
                     variant="outline"
                     size="sm"
                     disabled={isUploadingMedia || !user}
-                    onClick={() => mediaFileInputRef.current?.click()}
+                    onClick={() => void handlePingMediaClick()}
                     className="rounded-xl text-xs gap-1.5 shrink-0"
                   >
                     {isUploadingMedia ? (

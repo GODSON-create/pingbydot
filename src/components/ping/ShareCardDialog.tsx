@@ -18,7 +18,20 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { pingUrl, type Ping } from "@/lib/pings";
+import { useAuth } from "@/lib/auth";
+import { recordNetworkEvent } from "@/lib/economic-events";
 import { shareExcerpt, shareMessage } from "@/lib/sharing/card";
+
+function trackPingShare(userId: string | undefined, ping: Ping, channel: string, source: string) {
+  if (!userId) return;
+  void recordNetworkEvent({
+    eventType: "ping_shared",
+    targetType: "ping",
+    targetId: ping.id,
+    source,
+    metadata: { channel, ping_category: ping.category },
+  });
+}
 
 export function ShareCardDialog({
   ping,
@@ -29,6 +42,7 @@ export function ShareCardDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const { user } = useAuth();
   const hydrated = useHydrated();
   const [card, setCard] = useState<{ file: File; url: string; imageOmitted: boolean } | null>(null);
   const [error, setError] = useState(false);
@@ -72,6 +86,7 @@ export function ShareCardDialog({
         text: shareExcerpt(ping.content),
         url: pingUrl(ping.id),
       });
+      trackPingShare(user?.id, ping, "native_share", "share_card_dialog");
     } catch (e) {
       if (!(e instanceof DOMException && e.name === "AbortError"))
         toast.error("Couldn't share the link. Try copying it instead.");
@@ -85,6 +100,7 @@ export function ShareCardDialog({
       setSharing(true);
       try {
         await navigator.share({ files: [card.file], title: "Ping by DOT" });
+        trackPingShare(user?.id, ping, "share_card_image", "share_card_dialog");
       } catch (e) {
         if (!(e instanceof DOMException && e.name === "AbortError"))
           toast.error("Couldn't share the image. Try Download card.");
@@ -96,6 +112,7 @@ export function ShareCardDialog({
       try {
         const { downloadCard } = await import("@/lib/sharing/browser");
         downloadCard(card.file);
+        trackPingShare(user?.id, ping, "download_card", "share_card_dialog");
       } catch {
         toast.error("Couldn't download the card. Please try again.");
       } finally {
@@ -156,8 +173,10 @@ export function ShareCardDialog({
               variant="outline"
               disabled={!card || sharing}
               onClick={() => {
-                if (card)
+                if (card) {
+                  trackPingShare(user?.id, ping, "download_card", "share_card_dialog");
                   void import("@/lib/sharing/browser").then((m) => m.downloadCard(card.file));
+                }
               }}
             >
               <Download /> Download card
@@ -168,6 +187,7 @@ export function ShareCardDialog({
               href={`https://wa.me/?text=${encodeURIComponent(shareMessage(ping))}`}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => trackPingShare(user?.id, ping, "whatsapp", "share_card_dialog")}
             >
               <MessageCircle /> WhatsApp link
             </a>
@@ -177,6 +197,7 @@ export function ShareCardDialog({
             onClick={async () => {
               try {
                 await navigator.clipboard.writeText(pingUrl(ping.id));
+                trackPingShare(user?.id, ping, "copy_link", "share_card_dialog");
                 toast.success("Link copied");
               } catch {
                 toast.error("Couldn't copy. Copy the link below instead.");
@@ -202,6 +223,7 @@ export function ShareCardDialog({
 }
 
 export function PingShareActions({ ping }: { ping: Ping }) {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -218,6 +240,7 @@ export function PingShareActions({ ping }: { ping: Ping }) {
               href={`https://wa.me/?text=${encodeURIComponent(shareMessage(ping))}`}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => trackPingShare(user?.id, ping, "whatsapp", "ping_detail_actions")}
             >
               <MessageCircle /> Share on WhatsApp
             </a>
@@ -227,6 +250,7 @@ export function PingShareActions({ ping }: { ping: Ping }) {
             onClick={async () => {
               try {
                 await navigator.clipboard.writeText(pingUrl(ping.id));
+                trackPingShare(user?.id, ping, "copy_link", "ping_detail_actions");
                 toast.success("Link copied");
               } catch {
                 toast.error("Couldn't copy. Copy the public link below instead.");

@@ -188,15 +188,15 @@ function HubsDirectory() {
   const isMomentsView = view === "moments";
 
   return (
-    <div className="mx-auto max-w-6xl w-full min-w-0 px-4 sm:px-6 py-8 pb-24 overflow-x-clip">
+    <div className="mx-auto max-w-6xl w-full min-w-0 px-4 sm:px-6 py-4 sm:py-8 pb-32 sm:pb-24 overflow-x-clip">
       {/* Community Section Switcher: Hub | Signal | Moment */}
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-4">
-        <div className="inline-flex items-center gap-1.5 rounded-full bg-secondary/80 p-1">
+      <div className="mb-4 sm:mb-6 flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 border-b border-border/60 pb-3 sm:pb-4">
+        <div className="inline-flex lg:hidden max-w-full flex-nowrap overflow-x-auto scrollbar-none items-center gap-1.5 rounded-full bg-secondary/80 p-1">
           <Link
             to="/hubs"
             search={{}}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold transition-colors",
+              "inline-flex shrink-0 items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold transition-colors",
               !isMomentsView
                 ? "bg-foreground text-background shadow-sm"
                 : "text-muted-foreground hover:text-foreground",
@@ -207,7 +207,7 @@ function HubsDirectory() {
           <Link
             to="/signals"
             title="1-on-1 Chats & Conversations"
-            className="inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
           >
             <Radio className="size-3.5" /> Signal
           </Link>
@@ -215,7 +215,7 @@ function HubsDirectory() {
             to="/hubs"
             search={{ view: "moments" }}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold transition-colors",
+              "inline-flex shrink-0 items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold transition-colors",
               isMomentsView
                 ? "bg-foreground text-background shadow-sm"
                 : "text-muted-foreground hover:text-foreground",
@@ -237,12 +237,12 @@ function HubsDirectory() {
               }
               setMomentComposerOpen(true);
             }}
-            className="rounded-full gap-1.5"
+            className="rounded-full gap-1.5 lg:ml-auto"
           >
             <Camera className="size-4" /> Share Community Moment
           </Button>
         ) : (
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
             <Button asChild variant="outline" size="sm" className="rounded-full gap-1.5">
               <Link to="/signals/channels">
                 <Radio className="size-3.5 text-gold" /> Signal Channels
@@ -284,11 +284,11 @@ function HubsDirectory() {
       ) : (
         /* COMMUNITY DESTINATION 2: HUB — ORGANIZATIONAL & INSTITUTIONAL ENVIRONMENT */
         <>
-          <div className="relative overflow-hidden rounded-[2rem] bg-hero p-6 sm:p-10 mb-8 border border-border">
+          <div className="relative overflow-hidden rounded-[2rem] bg-hero p-4 sm:p-10 mb-4 sm:mb-8 border border-border">
             <h1 className="font-display text-3xl font-extrabold tracking-tight sm:text-5xl">
               Hubs
             </h1>
-            <p className="mt-2 max-w-2xl text-sm text-muted-foreground sm:text-base">
+            <p className="mt-1.5 sm:mt-2 max-w-2xl text-xs sm:text-base text-muted-foreground">
               Organizational and institutional environments for educational institutions, companies,
               government agencies, NGOs, professional associations, and communities — equipped with
               multi-topic Forums and official institutional Broadcasts.
@@ -296,7 +296,7 @@ function HubsDirectory() {
           </div>
 
           {/* Search & Institutional Category Filter */}
-          <div className="mb-8 space-y-4">
+          <div className="mb-4 sm:mb-8 space-y-3 sm:space-y-4">
             <div className="relative max-w-md">
               <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
@@ -403,21 +403,21 @@ function HubsDirectory() {
               ))}
             </div>
           ) : (
-            <div className="surface-card mx-auto max-w-lg rounded-3xl p-10 text-center">
-              <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-lime text-lime-foreground">
-                <Building2 className="size-7" />
+            <div className="surface-card mx-auto max-w-lg rounded-3xl p-6 sm:p-10 text-center">
+              <div className="mx-auto flex size-12 sm:size-14 items-center justify-center rounded-2xl bg-lime text-lime-foreground">
+                <Building2 className="size-6 sm:size-7" />
               </div>
-              <h2 className="mt-4 font-display text-xl font-bold">
+              <h2 className="mt-3 sm:mt-4 font-display text-lg sm:text-xl font-bold">
                 {deferredSearch || selectedCategory
                   ? "No matching Hubs found"
                   : "No public Hubs yet"}
               </h2>
-              <p className="mt-2 text-xs text-muted-foreground">
+              <p className="mt-1.5 sm:mt-2 text-xs text-muted-foreground">
                 {deferredSearch || selectedCategory
                   ? "Try clearing your search or selecting another organization category."
                   : "Create an institutional or community Hub with Forums and official Broadcasts."}
               </p>
-              <Button asChild variant="hero" className="mt-5 rounded-full">
+              <Button asChild variant="hero" className="mt-4 sm:mt-5 rounded-full">
                 <Link to="/hubs/create">Create a Hub</Link>
               </Button>
             </div>

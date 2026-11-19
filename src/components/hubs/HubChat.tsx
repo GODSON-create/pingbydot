@@ -8,23 +8,39 @@ import {
   Lock,
   Pencil,
   Trash2,
-  Image as ImageIcon,
-  Loader2,
   X,
   Check,
+  RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { useChatDraft } from "@/lib/draft-store";
+import { ensureClientProfileRow } from "@/lib/ensure-profile";
 import { useHubPresence } from "@/lib/presence";
 import { useMarkMessagesRead } from "@/lib/read-receipts";
 import { ReadReceiptDot } from "@/components/ping/ReadReceiptDot";
 import { QueryErrorCard } from "@/components/QueryErrorCard";
+import {
+  ChatAttachmentMenu,
+  ChatStickerBubble,
+  ChatStickerPicker,
+  ResolvedChatMedia,
+  VoiceNoteButton,
+  formatStickerToken,
+  parseStickerMessage,
+} from "@/components/chat/ChatAttachmentControls";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { checkShieldRateLimit, sanitizeUserText, validateMediaUpload } from "@/lib/shield";
+import {
+  checkShieldRateLimit,
+  detectMediaKind,
+  sanitizeUserText,
+  validateMediaUpload,
+  type MediaKind,
+} from "@/lib/shield";
 import { cn } from "@/lib/utils";
 
 export interface HubMessage {
@@ -57,15 +73,18 @@ interface HubChatProps {
 export function HubChat({ hubId, isMember, isPrivate, isStaff = false }: HubChatProps) {
   const { user } = useAuth();
   const qc = useQueryClient();
-  const [content, setContent] = useState("");
+  const [content, setContent, clearDraft] = useChatDraft(`hub:${hubId}`);
   const [replyTo, setReplyTo] = useState<HubMessage | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
+  const [mediaKind, setMediaKind] = useState<MediaKind | null>(null);
+  const [mediaName, setMediaName] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [failedFile, setFailedFile] = useState<File | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const markedIdsRef = useRef<Set<string>>(new Set());
 
   const { activeCount, isUserActivelyReading } = useHubPresence(hubId);
@@ -179,33 +198,61 @@ export function HubChat({ hubId, isMember, isPrivate, isStaff = false }: HubChat
   const QUICK_REACTIONS = ["👍", "❤️", "🔥", "🚀", "👀"];
 
   const sendMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (overrideText?: string) => {
       if (!user) throw new Error("Must be signed in to post.");
-      const clean = sanitizeUserText(content);
+      const clean = sanitizeUserText(overrideText ?? content);
       if (!clean && !mediaUrl) return;
 
       const rate = checkShieldRateLimit("send_message", user.id);
       if (!rate.allowed) throw new Error(rate.reason || "Sending too fast.");
 
-      const { data, error } = await supabase
+      const fallbackContent =
+        mediaKind === "audio"
+          ? "🎙️ Voice note"
+          : mediaKind === "video"
+            ? "🎬 Video"
+            : mediaKind === "document"
+              ? `📄 ${mediaName || "Document"}`
+              : "📷 Photo";
+
+      const insertPayload = {
+        hub_id: hubId,
+        sender_id: user.id,
+        content: clean || fallbackContent,
+        media_url: overrideText ? null : mediaUrl,
+        reply_to_id: replyTo?.id ?? null,
+      };
+
+      let { data, error } = await supabase
         .from("hub_messages")
-        .insert({
-          hub_id: hubId,
-          sender_id: user.id,
-          content: clean || "📷 Photo",
-          media_url: mediaUrl,
-          reply_to_id: replyTo?.id ?? null,
-        })
+        .insert(insertPayload)
         .select("id")
         .single();
+
+      if (error && error.code === "23503") {
+        const recovered = await ensureClientProfileRow(user);
+        if (recovered) {
+          const retry = await supabase
+            .from("hub_messages")
+            .insert(insertPayload)
+            .select("id")
+            .single();
+          data = retry.data;
+          error = retry.error;
+        }
+      }
 
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
-      setContent("");
+    onSuccess: (_data, overrideText) => {
+      if (!overrideText) {
+        clearDraft();
+        setMediaUrl(null);
+        setMediaKind(null);
+        setMediaName(null);
+      }
       setReplyTo(null);
-      setMediaUrl(null);
       qc.invalidateQueries({ queryKey: ["hub-messages", hubId] });
     },
     onError: (err: any) => {
@@ -247,39 +294,54 @@ export function HubChat({ hubId, isMember, isPrivate, isStaff = false }: HubChat
     onError: () => toast.error("Couldn't remove message."),
   });
 
-  const handleUploadImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user) return;
+  const uploadHubFile = async (file: File) => {
+    if (!user) return;
+    const detected = detectMediaKind(file);
     const check = validateMediaUpload(
       { type: file.type, size: file.size, name: file.name },
-      "image",
+      detected,
     );
     if (!check.valid) {
-      toast.error(check.error || "Invalid image");
-      e.target.value = "";
+      const msg = check.error || "Invalid attachment";
+      setUploadError(msg);
+      toast.error(msg);
       return;
     }
     try {
       setIsUploading(true);
+      setUploadError(null);
+      setFailedFile(null);
       const { uploadUserMedia } = await import("@/lib/storage");
-      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const fallbackExt =
+        detected === "video"
+          ? "mp4"
+          : detected === "audio"
+            ? "webm"
+            : detected === "document"
+              ? "bin"
+              : "jpg";
+      const ext = file.name.split(".").pop()?.toLowerCase() || fallbackExt;
       const path = `${user.id}/hubs/${hubId}/${Date.now()}.${ext}`;
       const publicUrl = await uploadUserMedia(path, file);
       setMediaUrl(publicUrl);
-      toast.success("Image attached");
+      setMediaKind(detected);
+      setMediaName(file.name);
+      toast.success("Attachment ready");
     } catch (err: any) {
       const { formatStorageUploadError } = await import("@/lib/storage");
-      toast.error(formatStorageUploadError(err, "Image upload failed"));
+      const msg = formatStorageUploadError(err, "Upload failed");
+      setUploadError(msg);
+      setFailedFile(file);
+      toast.error(msg);
     } finally {
       setIsUploading(false);
-      e.target.value = "";
     }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if ((!content.trim() && !mediaUrl) || sendMutation.isPending) return;
-    sendMutation.mutate();
+    sendMutation.mutate(undefined);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -305,7 +367,10 @@ export function HubChat({ hubId, isMember, isPrivate, isStaff = false }: HubChat
   }
 
   return (
-    <div className="surface-card flex flex-col rounded-3xl border border-border overflow-hidden shadow-sm h-[min(600px,68dvh)]">
+    <div
+      data-no-gesture="true"
+      className="surface-card flex flex-col rounded-3xl border border-border overflow-hidden shadow-sm h-[min(600px,68dvh)]"
+    >
       {/* Realtime Active Presence Header */}
       <div className="flex items-center justify-between border-b border-border bg-card/60 px-5 py-3 text-xs">
         <div className="flex items-center gap-2">
@@ -438,14 +503,17 @@ export function HubChat({ hubId, isMember, isPrivate, isStaff = false }: HubChat
                       )}
                     >
                       {msg.media_url && (
-                        <img
-                          src={msg.media_url}
-                          alt="Hub attachment"
-                          className="mb-2 max-h-56 rounded-xl object-cover"
-                          loading="lazy"
-                        />
+                        <div className="mb-2 rounded-xl overflow-hidden">
+                          <ResolvedChatMedia mediaUrl={msg.media_url} />
+                        </div>
                       )}
-                      {msg.content}
+                      {(() => {
+                        const sticker = !msg.media_url ? parseStickerMessage(msg.content) : null;
+                        if (sticker) {
+                          return <ChatStickerBubble sticker={sticker} />;
+                        }
+                        return msg.content;
+                      })()}
                     </div>
                   )}
 
@@ -562,21 +630,61 @@ export function HubChat({ hubId, isMember, isPrivate, isStaff = false }: HubChat
         </div>
       )}
 
-      {/* Image attachment preview */}
+      {/* Upload failure recovery */}
+      {uploadError && (
+        <div
+          role="alert"
+          className="flex items-center justify-between gap-2 border-t border-destructive/30 bg-destructive/10 px-4 py-2 text-xs"
+        >
+          <span className="text-destructive truncate">{uploadError}</span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {failedFile && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 rounded-full text-[11px] gap-1"
+                onClick={() => void uploadHubFile(failedFile)}
+              >
+                <RotateCcw className="size-3" /> Retry
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-6 rounded-full"
+              onClick={() => {
+                setUploadError(null);
+                setFailedFile(null);
+              }}
+              aria-label="Dismiss upload error"
+            >
+              <X className="size-3.5" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Attachment preview */}
       {mediaUrl && (
-        <div className="flex items-center justify-between border-t border-border bg-secondary/40 px-4 py-2 text-xs">
-          <div className="flex items-center gap-2">
-            <img
-              src={mediaUrl}
-              alt="Attachment"
-              className="size-8 rounded-lg object-cover border border-border"
-            />
-            <span className="font-semibold text-primary">Image attached</span>
+        <div className="flex items-center justify-between border-t border-border bg-secondary/40 px-4 py-2 text-xs gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="max-w-[140px] max-h-12 overflow-hidden rounded-lg">
+              <ResolvedChatMedia mediaUrl={mediaUrl} mediaType={mediaKind} />
+            </div>
+            <span className="font-semibold text-primary truncate">
+              {mediaName || "Attachment ready"}
+            </span>
           </div>
           <button
             type="button"
-            onClick={() => setMediaUrl(null)}
-            className="text-destructive font-semibold text-xs hover:underline"
+            onClick={() => {
+              setMediaUrl(null);
+              setMediaKind(null);
+              setMediaName(null);
+            }}
+            className="text-destructive font-semibold text-xs hover:underline shrink-0"
           >
             Remove
           </button>
@@ -584,38 +692,32 @@ export function HubChat({ hubId, isMember, isPrivate, isStaff = false }: HubChat
       )}
 
       {/* Message input */}
-      <div className="border-t border-border bg-card p-3 sm:p-4">
+      <div className="border-t border-border bg-card p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4">
         {isMember ? (
-          <form onSubmit={handleSubmit} className="flex gap-2 items-end">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/gif"
-              className="hidden"
-              onChange={handleUploadImage}
+          <form onSubmit={handleSubmit} className="flex gap-1.5 items-end">
+            <ChatAttachmentMenu
+              onFileSelected={uploadHubFile}
+              loading={isUploading}
+              disabled={sendMutation.isPending}
             />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading}
-              className="size-11 shrink-0 rounded-2xl text-muted-foreground hover:text-foreground"
-              aria-label="Attach image"
-            >
-              {isUploading ? (
-                <Loader2 className="size-4 animate-spin text-primary" />
-              ) : (
-                <ImageIcon className="size-4" />
-              )}
-            </Button>
+            <ChatStickerPicker
+              onSelect={(sticker) => sendMutation.mutate(formatStickerToken(sticker))}
+              disabled={sendMutation.isPending || isUploading}
+            />
+            <VoiceNoteButton
+              onRecorded={uploadHubFile}
+              disabled={sendMutation.isPending || isUploading}
+            />
             <Textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
               onKeyDown={handleKeyDown}
+              onFocus={(e) => {
+                e.currentTarget.scrollIntoView({ block: "nearest", behavior: "smooth" });
+              }}
               placeholder="Send a Ping to this Hub… (Enter to send)"
               rows={1}
-              className="min-h-[44px] max-h-32 resize-none rounded-2xl bg-secondary/40 border-border text-sm py-2.5 px-3.5 leading-normal"
+              className="min-h-[44px] max-h-32 min-w-0 flex-1 resize-none rounded-2xl bg-secondary/40 border-border text-sm py-2.5 px-3.5 leading-normal"
             />
             <Button
               type="submit"

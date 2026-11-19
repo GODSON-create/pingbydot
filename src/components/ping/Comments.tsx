@@ -53,6 +53,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { isNative } from "@/lib/native";
+import { fetchPublicComments } from "@/lib/public-queries";
 
 const threadKey = (pingId: string) => ["comments", pingId] as const;
 
@@ -67,7 +69,10 @@ export function CommentsSection({ ping }: { ping: Ping }) {
   const q = useInfiniteQuery({
     queryKey: threadKey(ping.id),
     initialPageParam: 0,
-    queryFn: ({ pageParam }) => readPublicComments({ data: { pingId: ping.id, page: pageParam } }),
+    queryFn: ({ pageParam }) =>
+      isNative
+        ? fetchPublicComments(supabase, { pingId: ping.id, page: pageParam })
+        : readPublicComments({ data: { pingId: ping.id, page: pageParam } }),
     getNextPageParam: (last, pages) => (last.hasMore ? pages.length : undefined),
   });
   const rows = useMemo(
@@ -104,7 +109,7 @@ export function CommentsSection({ ping }: { ping: Ping }) {
         <p className="mt-3 rounded-2xl border border-dashed border-border p-4 text-sm text-muted-foreground">
           <Link
             to="/login"
-            search={{ redirect: `/p/${ping.id}` } as never}
+            search={{ next: `/p/${ping.id}` } as never}
             className="font-semibold text-foreground underline"
           >
             Sign in
@@ -260,7 +265,7 @@ function CommentItem({
   const name = node.author?.display_name || node.author?.username || "Founder";
   const mine = canModifyComment(node, user?.id);
   const refresh = () => qc.invalidateQueries({ queryKey: threadKey(ping.id) });
-  const signIn = () => navigate({ to: "/login", search: { redirect: `/p/${ping.id}` } as never });
+  const signIn = () => navigate({ to: "/login", search: { next: `/p/${ping.id}` } as never });
 
   const edit = useMutation({
     mutationFn: async () => {

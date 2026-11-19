@@ -20,7 +20,8 @@ export function FounderAvatar({
   className?: string;
 }) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
-  const showImage = !!src && failedSrc !== src;
+  const isNonDirectShareUrl = Boolean(src && /^https?:\/\/photos\.app\.goo\.gl\//i.test(src));
+  const showImage = !!src && !isNonDirectShareUrl && failedSrc !== src;
   const initials =
     name
       .split(/\s+/)

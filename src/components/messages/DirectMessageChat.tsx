@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   Send,
-  Image as ImageIcon,
   MoreVertical,
   ShieldAlert,
   Trash2,
@@ -10,9 +9,10 @@ import {
   CheckCheck,
   Loader2,
   ArrowLeft,
-  Paperclip,
   Flag,
   X,
+  User,
+  RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { FounderAvatar } from "@/components/ping/Avatar";
@@ -26,7 +26,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  ChatAttachmentMenu,
+  ChatStickerBubble,
+  ChatStickerPicker,
+  ResolvedChatMedia,
+  VoiceNoteButton,
+  formatStickerToken,
+  parseStickerMessage,
+} from "@/components/chat/ChatAttachmentControls";
+import {
   type Conversation,
+  type MessageMediaType,
   type PrivateMessage,
   useSendPrivateMessage,
   useMarkConversationRead,
@@ -37,24 +47,42 @@ import {
   useConversationPresence,
 } from "@/lib/messages";
 import { useAuth } from "@/lib/auth";
+import { useChatDraft } from "@/lib/draft-store";
 import { supabase } from "@/integrations/supabase/client";
-import { checkShieldRateLimit, sanitizeUserText, validateMediaUpload } from "@/lib/shield";
+import {
+  checkShieldRateLimit,
+  detectMediaKind,
+  sanitizeUserText,
+  validateMediaUpload,
+} from "@/lib/shield";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 
 interface DirectMessageChatProps {
   conversation: Conversation;
   messages: PrivateMessage[];
+  isLoading?: boolean;
   onBack?: () => void;
+  peerProfileOpen?: boolean;
+  onTogglePeerProfile?: () => void;
 }
 
-export function DirectMessageChat({ conversation, messages, onBack }: DirectMessageChatProps) {
+export function DirectMessageChat({
+  conversation,
+  messages,
+  isLoading = false,
+  onBack,
+  peerProfileOpen = false,
+  onTogglePeerProfile,
+}: DirectMessageChatProps) {
   const { user } = useAuth();
-  const [content, setContent] = useState("");
+  const [content, setContent, clearDraft] = useChatDraft(`dm:${conversation.id}`);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [failedFile, setFailedFile] = useState<File | null>(null);
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
-  const [mediaType, setMediaType] = useState<"image" | "video" | "document" | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [mediaType, setMediaType] = useState<MessageMediaType | null>(null);
+  const [mediaPreviewName, setMediaPreviewName] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const lastMarkedRef = useRef<string>("");
 
@@ -105,13 +133,17 @@ export function DirectMessageChat({ conversation, messages, onBack }: DirectMess
       return;
     }
 
+    const currentMediaUrl = mediaUrl;
+    const currentMediaType = mediaType;
+
     try {
-      setContent("");
+      clearDraft();
       notifyTyping(false);
-      const currentMediaUrl = mediaUrl;
-      const currentMediaType = mediaType;
       setMediaUrl(null);
       setMediaType(null);
+      setMediaPreviewName(null);
+      setUploadError(null);
+      setFailedFile(null);
 
       await sendMutation.mutateAsync({
         conversationId: conversation.id,
@@ -120,41 +152,76 @@ export function DirectMessageChat({ conversation, messages, onBack }: DirectMess
         mediaType: currentMediaType,
       });
     } catch (err: any) {
-      toast.error(err.message || "Failed to send message");
+      setContent((prev) => prev || cleaned);
+      if (currentMediaUrl) {
+        setMediaUrl(currentMediaUrl);
+        setMediaType(currentMediaType);
+      }
+      toast.error(err?.message || "Failed to send message — your draft was kept.");
     }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user) return;
+  const handleSendSticker = async (stickerToken: string) => {
+    if (!user) return;
+    const rateCheck = checkShieldRateLimit("send_message", user.id);
+    if (!rateCheck.allowed) {
+      toast.error(rateCheck.reason || "You are sending messages too quickly.");
+      return;
+    }
+    try {
+      await sendMutation.mutateAsync({
+        conversationId: conversation.id,
+        content: stickerToken,
+      });
+    } catch (err: any) {
+      toast.error(err?.message || "Couldn't send sticker.");
+    }
+  };
 
-    const isVideo = file.type.startsWith("video/");
+  const uploadSelectedFile = async (file: File) => {
+    if (!user) return;
+
+    const detectedKind = detectMediaKind(file);
     const check = validateMediaUpload(
       { type: file.type, size: file.size, name: file.name },
-      isVideo ? "video" : "image",
+      detectedKind,
     );
     if (!check.valid) {
-      toast.error(check.error || "Unsupported attachment");
-      e.target.value = "";
+      const errMsg = check.error || "Unsupported attachment";
+      setUploadError(errMsg);
+      toast.error(errMsg);
       return;
     }
 
     try {
       setIsUploading(true);
-      const { uploadUserMedia } = await import("@/lib/storage");
-      const ext = file.name.split(".").pop()?.toLowerCase() || (isVideo ? "mp4" : "jpg");
+      setUploadError(null);
+      setFailedFile(null);
+      const { uploadPrivateDmMedia } = await import("@/lib/storage");
+      const fallbackExt =
+        detectedKind === "video"
+          ? "mp4"
+          : detectedKind === "audio"
+            ? "webm"
+            : detectedKind === "document"
+              ? "bin"
+              : "jpg";
+      const ext = file.name.split(".").pop()?.toLowerCase() || fallbackExt;
       const path = `${user.id}/dm/${conversation.id}/${Date.now()}.${ext}`;
 
-      const publicUrl = await uploadUserMedia(path, file);
-      setMediaUrl(publicUrl);
-      setMediaType(isVideo ? "video" : "image");
-      toast.success("Attachment ready");
+      const { storageRef } = await uploadPrivateDmMedia(path, file, file.name);
+      setMediaUrl(storageRef);
+      setMediaType(detectedKind);
+      setMediaPreviewName(file.name);
+      toast.success("Private attachment ready");
     } catch (err: any) {
       const { formatStorageUploadError } = await import("@/lib/storage");
-      toast.error(formatStorageUploadError(err, "Upload failed"));
+      const msg = formatStorageUploadError(err, "Upload failed");
+      setUploadError(msg);
+      setFailedFile(file);
+      toast.error(msg);
     } finally {
       setIsUploading(false);
-      e.target.value = "";
     }
   };
 
@@ -177,7 +244,10 @@ export function DirectMessageChat({ conversation, messages, onBack }: DirectMess
   };
 
   return (
-    <div className="flex flex-col h-full bg-card/60 rounded-3xl border border-border/70 overflow-hidden shadow-soft">
+    <div
+      data-no-gesture="true"
+      className="flex flex-col h-full bg-card/60 rounded-3xl border border-border/70 overflow-hidden shadow-soft"
+    >
       {/* 1. CHAT HEADER */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border/60 bg-card/90 backdrop-blur-md">
         <div className="flex items-center gap-3 min-w-0">
@@ -239,62 +309,89 @@ export function DirectMessageChat({ conversation, messages, onBack }: DirectMess
           )}
         </div>
 
-        {/* Action dropdown */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
+        <div className="flex items-center gap-1 shrink-0">
+          {otherUser && onTogglePeerProfile && (
             <Button
-              variant="ghost"
+              type="button"
+              variant={peerProfileOpen ? "secondary" : "ghost"}
               size="icon"
+              data-testid="chat-peer-profile-toggle"
               className="size-8 rounded-full shrink-0"
-              aria-label="Chat options"
+              onClick={onTogglePeerProfile}
+              aria-label="Toggle participant profile"
+              aria-expanded={peerProfileOpen}
+              title={peerProfileOpen ? "Close participant profile" : "View participant details"}
             >
-              <MoreVertical className="size-4 text-muted-foreground" />
+              <User className="size-4 text-muted-foreground" />
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52 rounded-2xl p-1.5">
-            {otherUser && (
-              <>
-                <DropdownMenuItem className="rounded-xl cursor-pointer" onClick={handleReportUser}>
-                  <Flag className="size-4 mr-2" /> Report @{otherUser.username}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="rounded-xl text-destructive focus:text-destructive cursor-pointer"
-                  onClick={async () => {
-                    try {
-                      await blockMutation.mutateAsync(otherUser.id);
-                      toast.success(`Blocked @${otherUser.username}`);
-                      onBack?.();
-                    } catch (e: any) {
-                      toast.error(e.message || "Failed to block user");
-                    }
-                  }}
-                >
-                  <ShieldAlert className="size-4 mr-2" /> Block @{otherUser.username}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-              </>
-            )}
-            <DropdownMenuItem
-              className="rounded-xl cursor-pointer"
-              onClick={async () => {
-                try {
-                  await hideMutation.mutateAsync(conversation.id);
-                  toast.success("Conversation hidden");
-                  onBack?.();
-                } catch (e: any) {
-                  toast.error(e.message || "Failed to hide conversation");
-                }
-              }}
-            >
-              <Trash2 className="size-4 mr-2" /> Delete / Hide Chat
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+          )}
+
+          {/* Action dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8 rounded-full shrink-0"
+                aria-label="Chat options"
+              >
+                <MoreVertical className="size-4 text-muted-foreground" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52 rounded-2xl p-1.5">
+              {otherUser && (
+                <>
+                  <DropdownMenuItem
+                    className="rounded-xl cursor-pointer"
+                    onClick={handleReportUser}
+                  >
+                    <Flag className="size-4 mr-2" /> Report @{otherUser.username}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="rounded-xl text-destructive focus:text-destructive cursor-pointer"
+                    onClick={async () => {
+                      try {
+                        await blockMutation.mutateAsync(otherUser.id);
+                        toast.success(`Blocked @${otherUser.username}`);
+                        onBack?.();
+                      } catch (e: any) {
+                        toast.error(e.message || "Failed to block user");
+                      }
+                    }}
+                  >
+                    <ShieldAlert className="size-4 mr-2" /> Block @{otherUser.username}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
+              <DropdownMenuItem
+                className="rounded-xl cursor-pointer"
+                onClick={async () => {
+                  try {
+                    await hideMutation.mutateAsync(conversation.id);
+                    toast.success("Conversation hidden");
+                    onBack?.();
+                  } catch (e: any) {
+                    toast.error(e.message || "Failed to hide conversation");
+                  }
+                }}
+              >
+                <Trash2 className="size-4 mr-2" /> Delete / Hide Chat
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       {/* 2. MESSAGE STREAM */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3.5 scrollbar-thin">
-        {messages.length === 0 ? (
+        {isLoading && messages.length === 0 ? (
+          <div className="space-y-3 py-4" aria-label="Loading messages">
+            <div className="h-10 w-2/3 animate-pulse rounded-2xl bg-secondary/70" />
+            <div className="ml-auto h-10 w-1/2 animate-pulse rounded-2xl bg-primary/15" />
+            <div className="h-10 w-3/5 animate-pulse rounded-2xl bg-secondary/70" />
+          </div>
+        ) : messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-6 text-muted-foreground">
             <div className="size-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
               <Send className="size-5 text-primary" />
@@ -348,29 +445,19 @@ export function DirectMessageChat({ conversation, messages, onBack }: DirectMess
                   >
                     {msg.media_url && (
                       <div className="mb-2 rounded-xl overflow-hidden">
-                        {msg.media_type === "image" ? (
-                          <img
-                            src={msg.media_url}
-                            alt="Attachment"
-                            className="max-h-60 rounded-lg object-cover"
-                            loading="lazy"
-                          />
-                        ) : msg.media_type === "video" ? (
-                          <video src={msg.media_url} controls className="max-h-60 rounded-lg" />
-                        ) : (
-                          <a
-                            href={msg.media_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="flex items-center gap-2 p-2 bg-background/50 rounded-lg text-xs underline font-medium"
-                          >
-                            <Paperclip className="size-3.5" /> View Attached File
-                          </a>
-                        )}
+                        <ResolvedChatMedia mediaUrl={msg.media_url} mediaType={msg.media_type} />
                       </div>
                     )}
 
-                    {msg.content && <p className="whitespace-pre-wrap">{msg.content}</p>}
+                    {(() => {
+                      const sticker = !msg.media_url ? parseStickerMessage(msg.content) : null;
+                      if (sticker) {
+                        return <ChatStickerBubble sticker={sticker} />;
+                      }
+                      return msg.content ? (
+                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                      ) : null;
+                    })()}
                   </div>
                 </div>
 
@@ -407,21 +494,51 @@ export function DirectMessageChat({ conversation, messages, onBack }: DirectMess
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Upload failure recovery banner */}
+      {uploadError && (
+        <div
+          role="alert"
+          className="px-4 py-2 bg-destructive/10 border-t border-destructive/30 flex items-center justify-between gap-2 text-xs"
+        >
+          <span className="text-destructive truncate">{uploadError}</span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {failedFile && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 rounded-full text-[11px] gap-1"
+                onClick={() => void uploadSelectedFile(failedFile)}
+              >
+                <RotateCcw className="size-3" /> Retry
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-6 rounded-full"
+              onClick={() => {
+                setUploadError(null);
+                setFailedFile(null);
+              }}
+              aria-label="Dismiss attachment error"
+            >
+              <X className="size-3.5" />
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Media upload preview banner */}
       {mediaUrl && (
         <div className="px-4 py-2 bg-secondary/40 border-t border-border/50 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
-            {mediaType === "image" ? (
-              <img
-                src={mediaUrl}
-                alt="Preview"
-                className="size-10 rounded-lg object-cover border border-border"
-              />
-            ) : (
-              <ImageIcon className="size-4 text-primary shrink-0" />
-            )}
+            <div className="max-w-[140px] max-h-12 overflow-hidden rounded-lg">
+              <ResolvedChatMedia mediaUrl={mediaUrl} mediaType={mediaType} />
+            </div>
             <span className="text-xs font-semibold text-primary truncate">
-              Attachment ready to send
+              {mediaPreviewName || "Attachment ready to send"}
             </span>
           </div>
           <Button
@@ -432,6 +549,7 @@ export function DirectMessageChat({ conversation, messages, onBack }: DirectMess
             onClick={() => {
               setMediaUrl(null);
               setMediaType(null);
+              setMediaPreviewName(null);
             }}
             aria-label="Remove attachment"
           >
@@ -443,31 +561,21 @@ export function DirectMessageChat({ conversation, messages, onBack }: DirectMess
       {/* 3. INPUT COMPOSER */}
       <form
         onSubmit={handleSend}
-        className="p-3 border-t border-border/60 bg-card/90 backdrop-blur-md flex items-center gap-2"
+        className="p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t border-border/60 bg-card/90 backdrop-blur-md flex items-center gap-1.5"
       >
-        <input
-          type="file"
-          ref={fileInputRef}
-          className="hidden"
-          accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
-          onChange={handleFileUpload}
+        <ChatAttachmentMenu
+          onFileSelected={uploadSelectedFile}
+          loading={isUploading}
+          disabled={sendMutation.isPending}
         />
-
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="size-9 rounded-full shrink-0 text-muted-foreground hover:text-foreground"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={isUploading}
-          aria-label="Attach file"
-        >
-          {isUploading ? (
-            <Loader2 className="size-4 animate-spin text-primary" />
-          ) : (
-            <ImageIcon className="size-4" />
-          )}
-        </Button>
+        <ChatStickerPicker
+          onSelect={(sticker) => void handleSendSticker(formatStickerToken(sticker))}
+          disabled={sendMutation.isPending || isUploading}
+        />
+        <VoiceNoteButton
+          onRecorded={uploadSelectedFile}
+          disabled={sendMutation.isPending || isUploading}
+        />
 
         <Input
           value={content}
@@ -475,8 +583,11 @@ export function DirectMessageChat({ conversation, messages, onBack }: DirectMess
             setContent(e.target.value);
             notifyTyping(e.target.value.trim().length > 0);
           }}
+          onFocus={(e) => {
+            e.currentTarget.scrollIntoView({ block: "nearest", behavior: "smooth" });
+          }}
           placeholder={`Message ${otherUser?.display_name || ""}…`}
-          className="flex-1 rounded-full bg-secondary/50 border-border/60 px-4 py-2 text-sm focus-visible:ring-primary"
+          className="flex-1 min-w-0 rounded-full bg-secondary/50 border-border/60 px-4 py-2 text-sm focus-visible:ring-primary"
           disabled={sendMutation.isPending}
           maxLength={5000}
         />

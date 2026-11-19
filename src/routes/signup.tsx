@@ -6,9 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthShell, GoogleButton, OrDivider } from "@/components/AuthShell";
+import { PingMark } from "@/components/BrandLogo";
 import { useAuth } from "@/lib/auth";
-import { authDestination } from "@/lib/auth-return";
+import { authDestination, unwrapOnboardingDestination } from "@/lib/auth-return";
+import { getSignupConfirmationRedirectUri } from "@/lib/native";
 import { markWelcomeSeen, needsOnboarding } from "@/lib/pathways";
+import { trackEvent, trackSessionRestoredOnce } from "@/lib/telemetry";
 import { usernameSchema } from "@/lib/validation";
 
 export const Route = createFileRoute("/signup")({
@@ -50,10 +53,13 @@ function Signup() {
   useEffect(() => {
     if (!ready || !user || profileLoading) return;
     markWelcomeSeen();
-    if (needsOnboarding(profile)) {
-      navigate({ to: "/onboarding", search: { next }, replace: true });
+    const isNew = needsOnboarding(profile);
+    const resolvedNext = unwrapOnboardingDestination(next);
+    trackSessionRestoredOnce(isNew);
+    if (isNew) {
+      navigate({ to: "/onboarding", search: { next: resolvedNext }, replace: true });
     } else {
-      navigate({ to: next, replace: true });
+      navigate({ to: resolvedNext, replace: true });
     }
   }, [ready, user, profile, profileLoading, next, navigate]);
 
@@ -66,39 +72,74 @@ function Signup() {
       return setErr("Username: " + (u.error.issues[0]?.message || "Choose a valid username."));
     if (f.password.length < 8) return setErr("Use at least 8 characters for your password.");
     setPending(true);
+    trackEvent("auth_started", { method: "email" });
     try {
       const { data: taken, error: lookupError } = await supabase
         .from("profiles")
         .select("id")
         .eq("username", u.data)
         .maybeSingle();
-      if (lookupError) return setErr("Couldn't check that username. Try again.");
+      if (lookupError) {
+        trackEvent("auth_failed", { method: "email" });
+        return setErr("Couldn't check that username. Try again.");
+      }
       if (taken) {
-        setPending(false);
         return setErr("That username is taken. Try another.");
       }
       const { data, error } = await supabase.auth.signUp({
         email: f.email.trim(),
         password: f.password,
         options: {
-          emailRedirectTo: `${window.location.origin}/login?next=${encodeURIComponent("/onboarding")}`,
+          emailRedirectTo: getSignupConfirmationRedirectUri(next),
           data: { username: u.data, display_name: f.name.trim() },
         },
       });
-      setPending(false);
-      if (error) return setErr(error.message);
+      if (error) {
+        trackEvent("auth_failed", { method: "email" });
+        return setErr(
+          /already registered/i.test(error.message)
+            ? "An account with this email already exists. Try signing in with Google or logging in."
+            : error.message,
+        );
+      }
+      if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+        trackEvent("auth_failed", { method: "email" });
+        return setErr(
+          "An account with this email already exists. Try signing in with Google or logging in.",
+        );
+      }
       markWelcomeSeen();
+      trackEvent("auth_completed", { method: "email", is_new_user: true });
       if (data.session) {
-        navigate({ to: "/onboarding", search: { next }, replace: true });
+        const resolvedNext = unwrapOnboardingDestination(next);
+        navigate({ to: "/onboarding", search: { next: resolvedNext }, replace: true });
         return;
       }
       setSent(true);
     } catch {
+      trackEvent("auth_failed", { method: "email" });
       setErr("Couldn't connect. Please try again.");
     } finally {
       setPending(false);
     }
   };
+
+  if (!ready || user) {
+    return (
+      <div className="bg-hero flex min-h-[calc(100dvh-5rem)] items-center justify-center px-4 pb-24">
+        <div
+          role="status"
+          aria-live="polite"
+          className="surface-card flex flex-col items-center gap-3 rounded-3xl px-8 py-7 text-center shadow-lift"
+        >
+          <PingMark variant="lime" size="lg" alt="Ping by DOT" />
+          <p className="text-sm font-medium text-muted-foreground">
+            {user ? "Opening Ping…" : "Checking your session…"}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (sent)
     return (
@@ -120,9 +161,8 @@ function Signup() {
 
   return (
     <AuthShell
-      title="Join Ping by DOT"
-      subtitle="Free, open to everyone — sign in with Google or email in seconds."
-      sticker="welcome 👋"
+      title="Create your Ping account"
+      subtitle="Continue with Google or set up your account with email."
     >
       <GoogleButton label="Continue with Google" next={next} />
       <OrDivider />
@@ -187,9 +227,9 @@ function Signup() {
         </Button>
       </form>
       <p className="mt-6 text-center text-sm text-muted-foreground">
-        Already on Ping?{" "}
-        <Link to="/login" className="font-semibold text-foreground underline">
-          Log in
+        Already have an account?{" "}
+        <Link to="/login" search={{ next }} className="font-semibold text-foreground underline">
+          Sign in
         </Link>
       </p>
     </AuthShell>

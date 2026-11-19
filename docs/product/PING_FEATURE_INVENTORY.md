@@ -1,0 +1,30 @@
+# PING Feature Inventory
+
+**Project:** Ping by DOT (`GODSON-create/pingbydot`)  
+**Last Updated:** 2026-11-19  
+**Classifications:** `VERIFIED WORKING` | `BROKEN` | `PARTIALLY WORKING` | `UI ONLY` | `BLOCKED BY EXTERNAL DEPENDENCY` | `NOT TESTED`
+
+---
+
+## Phase 1 Core Feature Matrix
+
+| Domain | Feature | Primary Files | Classification | Notes / External Blockers |
+| --- | --- | --- | --- | --- |
+| **Navigation** | Five-destination primary nav (`HOME \| EXPLORE \| CREATE \| HUBS \| INBOX`) | `BottomNav.tsx`, `DesktopSidebar.tsx`, `SiteHeader.tsx`, `nav-overlay.tsx` | `VERIFIED WORKING` | Desktop collapsible sidebar, tablet header, mobile bottom bar + single-overlay coordination |
+| **Navigation** | Unified Create Stack (Ping, Moment, Signal, Hub, Go Live) | `CreateStackModal.tsx` | `VERIFIED WORKING` | All 5 creation entry points wired with auth checks |
+| **Navigation** | Unfinished draft preservation across navigation | `draft-store.ts`, `PingComposer.tsx`, `DirectMessageChat.tsx`, `HubChat.tsx`, `onboarding.tsx` | `VERIFIED WORKING` | Preserves Ping, DM, Hub Chat, and Onboarding drafts in `sessionStorage` |
+| **Home & Feed** | Home Feed (`For You` / `Following`), Intent Filters, Pagination | `src/routes/index.tsx`, `src/lib/pings.ts` | `VERIFIED WORKING` | Reads 18 live public Pings; welcome carousel shown once to new guests |
+| **Pings** | Create, Edit, View, Like, Comment/Nested Reply, Bookmark, Share Card | `create.tsx`, `edit.$id.tsx`, `p.$id.tsx`, `PingComposer.tsx`, `PingCard.tsx`, `ShareCardDialog.tsx` | `VERIFIED WORKING` | Profile auto-recovery (`ensureClientProfileRow`) + Satori PNG share cards |
+| **Explore** | Global discovery search & 6 filters (All, PINGs, People, Moments, Communities, Opportunities) | `src/routes/explore.tsx` | `VERIFIED WORKING` | Live profile/Ping/Hub queries with recoverable error cards |
+| **Moments** | Moments Tray, Composer (photo/video/camera/stickers/audience), Viewer, Highlights, Close Circle | `MomentComposer.tsx`, `MomentsTray.tsx`, `MomentViewerModal.tsx`, `ProfileHighlights.tsx`, `CloseCircleDialog.tsx` | `VERIFIED WORKING` | Media upload retry enabled; Close Circle anti-enumeration enforced in `0020` |
+| **Hubs** | Hub Directory, Create Hub, Hub Detail, Hub Live Chat, Broadcasts | `hubs.tsx`, `hubs.create.tsx`, `hubs.$slug.tsx`, `HubChat.tsx`, `HubForumsAndBroadcasts.tsx` | `PARTIALLY WORKING` | Core Hub & Broadcasts live; Forum discussion threads (`hub_forum_posts`) require remote migration `0022` |
+| **Signals** | Signal 1-on-1 Chats (`/signals`), Institutional Signal Channels (`/signals/channels`, `/signals/create`, `/signals/$slug`) | `signals.tsx`, `signals.channels.tsx`, `signals.create.tsx`, `signals.$slug.tsx` | `PARTIALLY WORKING` | Signal channels & broadcasts live; `signal_messages` subscriber chat requires remote migration `0022` |
+| **Inbox / DM** | Direct Messages Workspace, New Chat Dialog, Voice Notes, Documents, Stickers, Read Receipts, Blocking | `messages.tsx`, `MessagesWorkspace.tsx`, `DirectMessageChat.tsx`, `ChatAttachmentControls.tsx` | `PARTIALLY WORKING` | Private DM messaging works; private `dm-attachments` bucket & `media_meta` require remote migration `0027` |
+| **Auth & Onboarding** | Google OAuth, Email Sign-In/Sign-Up, Password Recovery, Session Restore, 3-Slide Welcome, 4-Step Universal Onboarding | `login.tsx`, `signup.tsx`, `forgot-password.tsx`, `reset-password.tsx`, `onboarding.tsx`, `WelcomeCarousel.tsx`, `OnboardingSteps.tsx` | `PARTIALLY WORKING` | Full flow tested locally with fallback; persistent `country`, `interests`, `onboarding_completed_at` columns require remote migrations `0023`–`0024` |
+| **Account & Profile** | Profile editing, Username, Avatar, Bio, Location, Country, Website, Interests, Connections, Visibility, Followers/Following, Blocked, Muted, Data Export, Account Deletion | `settings.tsx`, `@{$username}.tsx`, `ConnectionsEditor.tsx`, `PingActivityPrivacy.tsx`, `mutes.ts` | `PARTIALLY WORKING` | All UI & fallback logic verified locally; `location`, `website_url`, `profile_visibility`, `user_mutes`, and `export_my_account_data` RPC require remote migration `0028` |
+| **Notifications** | Notifications Sheet (Likes, Comments, Follows) with Unread Indicator | `SiteHeader.tsx` | `VERIFIED WORKING` | Real-time invalidation on actions; persistent notification table scheduled for Phase 2 |
+| **DOT Wallet & Upgrades** | Non-cash DOT Balance, Daily Check-In, Tier Upgrades, Optional Verification, Monetization Catalog | `balance.tsx`, `upgrades.tsx`, `OptionalVerificationSection.tsx`, `economy.ts`, `verification.ts`, `monetization.ts` | `PARTIALLY WORKING` | Strictly non-cash (`live_fiat_payments_enabled = false`); `account_verifications` & `monetization_offerings` require remote migration `0026` |
+| **Analytics** | Creator Analytics (7/30/90-day charts, KPIs, category breakdown, top Pings) | `analytics.tsx`, `analytics.ts` | `VERIFIED WORKING` | Computes metrics from real user Pings, likes, comments, Moments, Hubs, and Signals |
+| **Administration** | Role-verified Admin Dashboard (Pings, Users, Reports, Signal Verification, Account Verifications, Audit Trail) | `admin.tsx`, `admin.functions.ts`, `admin-policy.ts` | `VERIFIED WORKING` | Role verified server-side; `verifications` tab awaits remote migration `0026` |
+| **Reliability & Observability** | Error Boundary & Sanitization, QueryClient Smart Retry, Media Upload Retry, Rate Limits (`PING SHIELD`), Telemetry, Feature Flags | `error-capture.ts`, `error-diagnostics.ts`, `storage.ts`, `shield.ts`, `telemetry.ts`, `feature-flags.ts`, `router.tsx` | `VERIFIED WORKING` | Unit-tested; zero credential/PII leakage |
+| **Native Mobile** | Capacitor 8 Android & iOS Config, Splash, Status Bar, Keyboard, Deep Links, Camera/Media, Share, Opt-In Push | `capacitor.config.ts`, `src/lib/native.ts`, `android/`, `ios/` | `BLOCKED BY EXTERNAL DEPENDENCY` | Code & web-mobile build verified; physical Android emulator/device testing requires Android SDK/ADB, and iOS signing requires macOS + Xcode |

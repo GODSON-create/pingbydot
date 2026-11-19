@@ -1,72 +1,75 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   ArrowLeft,
   ArrowRight,
-  CheckCircle2,
   Compass,
   Globe2,
+  Mail,
   MessageSquare,
   Sparkles,
 } from "lucide-react";
+import { GoogleButton, OrDivider } from "@/components/AuthShell";
 import { PingMark } from "@/components/BrandLogo";
+import { Button } from "@/components/ui/button";
+import { markWelcomeSeen } from "@/lib/pathways";
+import { trackEvent } from "@/lib/telemetry";
+import { cn } from "@/lib/utils";
 
 type BrandVariant = "lime" | "silver" | "gold";
-import { GoogleButton } from "@/components/AuthShell";
-import { Button } from "@/components/ui/button";
-import { PARTICIPATION_PATHWAYS } from "@/lib/pathways";
-import { cn } from "@/lib/utils";
 
 interface WelcomeSlide {
   step: number;
   variant: BrandVariant;
   eyebrow: string;
-  title: string;
+  headline: string;
   description: string;
   highlights: readonly string[];
 }
 
-const WELCOME_SLIDES: readonly WelcomeSlide[] = [
+export const WELCOME_SLIDES: readonly WelcomeSlide[] = [
   {
     step: 1,
     variant: "lime",
-    eyebrow: "Slide 1 of 3 · Welcome to Ping by DOT",
-    title: "A network built for everyone",
+    eyebrow: "Connect & Communicate",
+    headline: "Your world. Your people. Your possibilities.",
     description:
-      "Connect, communicate, discover opportunities, and exchange value on your own terms — whether you're here socially, creating, growing a business, organizing a community, building, or investing.",
+      "Ping helps you connect with people around you, communicate in real time, and discover what is unfolding across an open social network.",
     highlights: [
-      "No forced labels or mandatory categories",
-      "Explore public feeds, people, and communities freely",
-      "Keep your identity and connections portable",
+      "Direct 1-on-1 conversations",
+      "Real-time community spaces",
+      "Open profiles built for everyone",
     ],
   },
   {
     step: 2,
     variant: "silver",
-    eyebrow: "Slide 2 of 3 · Everything in one place",
-    title: "Share Pings, Moments, Hubs & Signal",
+    eyebrow: "Explore & Belong",
+    headline: "Discover what matters.",
     description:
-      "Publish quick Pings and visual Moments, collaborate inside community Hubs and topic Forums, message anyone 1-on-1 in Signal, and collect optional DOT credits as you participate.",
+      "Find inspiring people, creators, fresh ideas, active communities, and real-world opportunities — all organized so the right things find you.",
     highlights: [
-      "Pings & Moments for everyday updates and media",
-      "Hubs & Forums for communities, schools, and teams",
-      "Signal for private 1-on-1 chats and institutional updates",
+      "People & creators to follow",
+      "Topic-driven Hubs & discussions",
+      "Ideas & live opportunities",
     ],
   },
   {
     step: 3,
     variant: "gold",
-    eyebrow: "Slide 3 of 3 · Join your way",
-    title: "Start in seconds — verification is optional",
+    eyebrow: "Participate & Create Value",
+    headline: "Make something happen.",
     description:
-      "Sign in fast with Google or use your email anytime. Ordinary access to Ping is completely free with no compulsory subscription or verification.",
+      "Share Pings and Moments, participate in conversations, build genuine relationships, and create lasting value together on Ping.",
     highlights: [
-      "Returning members go straight to Ping",
-      "New members get a simple, skippable setup",
-      "Choose optional participation pathways anytime",
+      "Share updates, stories & media",
+      "Collaborate with your community",
+      "Build lasting relationships",
     ],
   },
 ];
+
+const SWIPE_THRESHOLD_PX = 40;
 
 export function WelcomeCarousel({
   nextPath = "/",
@@ -78,167 +81,312 @@ export function WelcomeCarousel({
   compact?: boolean;
 }) {
   const [index, setIndex] = useState(0);
+  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const slide = WELCOME_SLIDES[index] ?? WELCOME_SLIDES[0]!;
   const isFirst = index === 0;
   const isLast = index === WELCOME_SLIDES.length - 1;
 
+  useEffect(() => {
+    trackEvent("welcome_slide_viewed", {
+      slide: slide.step,
+      surface: compact ? "modal" : "page",
+    });
+  }, [slide.step, compact]);
+
+  const goPrevious = () => setIndex((i) => Math.max(0, i - 1));
+  const goNext = () => setIndex((i) => Math.min(WELCOME_SLIDES.length - 1, i + 1));
+
+  const handleSkipOrBrowse = () => {
+    markWelcomeSeen();
+    trackEvent("welcome_skipped", {
+      slide: slide.step,
+      surface: compact ? "modal" : "page",
+    });
+    onCompleteOrSkip?.();
+  };
+
+  const beginSwipe = (clientX: number, clientY: number, target: EventTarget | null) => {
+    if (
+      target instanceof Element &&
+      target.closest("button, a, input, textarea, select, [role='tab']")
+    ) {
+      swipeStartRef.current = null;
+      return;
+    }
+    swipeStartRef.current = { x: clientX, y: clientY };
+  };
+
+  const finishSwipe = (clientX: number, clientY: number) => {
+    const start = swipeStartRef.current;
+    swipeStartRef.current = null;
+    if (!start) return;
+    const dx = clientX - start.x;
+    const dy = clientY - start.y;
+    if (Math.abs(dx) >= SWIPE_THRESHOLD_PX && Math.abs(dx) > Math.abs(dy)) {
+      if (dx < 0) goNext();
+      else goPrevious();
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {
+    if (e.target instanceof Element && e.target.closest("input, textarea, select")) {
+      return;
+    }
+    if (e.key === "ArrowRight") {
+      e.preventDefault();
+      goNext();
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      goPrevious();
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      setIndex(0);
+    } else if (e.key === "End") {
+      e.preventDefault();
+      setIndex(WELCOME_SLIDES.length - 1);
+    }
+  };
+
+  const SlideIcon = slide.step === 1 ? Globe2 : slide.step === 2 ? MessageSquare : Sparkles;
+
   return (
     <section
       aria-roledescription="carousel"
-      aria-label="Welcome to Ping introduction"
+      aria-label="Ping welcome slides"
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+      onTouchStart={(e) => {
+        const touch = e.touches[0];
+        if (touch) beginSwipe(touch.clientX, touch.clientY, e.target);
+      }}
+      onTouchEnd={(e) => {
+        const touch = e.changedTouches[0];
+        if (touch) finishSwipe(touch.clientX, touch.clientY);
+      }}
+      onPointerDown={(e) => {
+        if (e.pointerType === "touch") return;
+        beginSwipe(e.clientX, e.clientY, e.target);
+      }}
+      onPointerUp={(e) => {
+        if (e.pointerType === "touch") return;
+        finishSwipe(e.clientX, e.clientY);
+      }}
       className={cn(
-        "surface-card relative overflow-hidden rounded-[2rem] border border-border/80 bg-card shadow-lift",
-        compact ? "p-5 sm:p-7" : "p-5 sm:p-10",
+        "surface-card relative overflow-hidden rounded-[2rem] border border-border/80 bg-card shadow-lift outline-none focus-visible:ring-2 focus-visible:ring-ring touch-pan-y select-none sm:select-auto",
+        compact ? "p-5 sm:p-7" : "p-5 sm:p-8 lg:p-10",
       )}
     >
-      {/* Top progress & skip row */}
-      <div className="flex items-center justify-between gap-3">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-[11px] font-bold text-secondary-foreground">
-          {slide.step === 1 ? (
-            <Globe2 className="size-3.5 text-primary" />
-          ) : slide.step === 2 ? (
-            <MessageSquare className="size-3.5 text-primary" />
-          ) : (
-            <Sparkles className="size-3.5 text-gold" />
-          )}
-          {slide.eyebrow}
-        </span>
-
-        {onCompleteOrSkip && (
-          <button
-            type="button"
-            onClick={onCompleteOrSkip}
-            className="text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Skip
-          </button>
+      <div
+        className={cn(
+          "grid gap-6 lg:gap-9 items-stretch",
+          !compact && "lg:grid-cols-[1.15fr_0.85fr]",
         )}
-      </div>
+      >
+        {/* LEFT COLUMN: 3-SLIDE INTERACTIVE CAROUSEL */}
+        <div className="flex flex-col justify-between min-w-0">
+          <div>
+            {/* Top progress & Skip header */}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-[11px] font-bold text-secondary-foreground">
+                  <SlideIcon
+                    className={cn("size-3.5", slide.step === 3 ? "text-gold" : "text-primary")}
+                  />
+                  Slide {slide.step} of {WELCOME_SLIDES.length}
+                </span>
+                <span className="hidden sm:inline-block text-xs font-medium text-muted-foreground">
+                  {slide.eyebrow}
+                </span>
+              </div>
 
-      {/* Slide Content */}
-      <div className="mt-4 sm:mt-6 flex flex-row items-start sm:items-center gap-3.5 sm:gap-5">
-        <div className="flex size-12 sm:size-20 shrink-0 items-center justify-center rounded-2xl sm:rounded-3xl bg-secondary/70 border border-border/60">
-          <PingMark variant={slide.variant} size="lg" alt={`Ping mark slide ${slide.step}`} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <h2 className="font-display text-xl sm:text-3xl font-extrabold tracking-tight text-foreground">
-            {slide.title}
-          </h2>
-          <p className="mt-1 sm:mt-2 text-xs sm:text-sm leading-relaxed text-muted-foreground">
-            {slide.description}
-          </p>
-        </div>
-      </div>
+              {onCompleteOrSkip ? (
+                <button
+                  type="button"
+                  onClick={handleSkipOrBrowse}
+                  className="rounded-full px-2.5 py-1 text-xs font-semibold text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+                >
+                  Skip
+                </button>
+              ) : (
+                <Link
+                  to="/"
+                  onClick={handleSkipOrBrowse}
+                  className="rounded-full px-2.5 py-1 text-xs font-semibold text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+                >
+                  Skip
+                </Link>
+              )}
+            </div>
 
-      {/* Highlights */}
-      <ul className="mt-4 sm:mt-5 grid gap-1.5 sm:gap-2 sm:grid-cols-3">
-        {slide.highlights.map((item) => (
-          <li
-            key={item}
-            className="flex items-start gap-2 rounded-2xl border border-border/60 bg-secondary/40 px-3 py-2 sm:p-3 text-xs text-foreground/90"
-          >
-            <CheckCircle2 className="size-3.5 sm:size-4 shrink-0 text-primary mt-0.5" />
-            <span>{item}</span>
-          </li>
-        ))}
-      </ul>
-
-      {/* Slide 1 preview of optional pathways */}
-      {index === 0 && (
-        <div className="mt-3 sm:mt-4 flex flex-wrap gap-1.5" aria-label="Optional ways to use Ping">
-          {PARTICIPATION_PATHWAYS.map((p) => (
-            <span
-              key={p.id}
-              className="rounded-full border border-border/70 bg-background/70 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground"
+            {/* Linear progress bar */}
+            <div
+              className="mt-3 h-1 w-full overflow-hidden rounded-full bg-secondary"
+              aria-hidden="true"
             >
-              {p.label}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* Slide Dots & Navigation / Auth CTAs */}
-      <div className="mt-4 sm:mt-6 pt-4 sm:pt-5 border-t border-border/60 flex flex-col gap-3 sm:gap-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2" role="tablist" aria-label="Welcome slides">
-            {WELCOME_SLIDES.map((s, idx) => (
-              <button
-                key={s.step}
-                type="button"
-                role="tab"
-                aria-selected={idx === index}
-                aria-label={`Go to slide ${s.step}`}
-                onClick={() => setIndex(idx)}
-                className={cn(
-                  "h-2.5 rounded-full transition-all",
-                  idx === index
-                    ? "w-7 bg-primary"
-                    : "w-2.5 bg-muted-foreground/35 hover:bg-muted-foreground/60",
-                )}
+              <div
+                className="h-full rounded-full bg-primary transition-all duration-300 motion-reduce:transition-none"
+                style={{ width: `${((index + 1) / WELCOME_SLIDES.length) * 100}%` }}
               />
-            ))}
+            </div>
+
+            {/* Active Slide Content */}
+            <div
+              role="tabpanel"
+              aria-live="polite"
+              aria-label={`Slide ${slide.step} of ${WELCOME_SLIDES.length}`}
+              className="mt-5 sm:mt-7"
+            >
+              <div className="flex items-center gap-3.5 sm:gap-4">
+                <div className="flex size-12 sm:size-16 shrink-0 items-center justify-center rounded-2xl border border-border/60 bg-secondary/70">
+                  <PingMark variant={slide.variant} size="lg" alt={`Ping slide ${slide.step}`} />
+                </div>
+                <span className="sm:hidden text-xs font-semibold uppercase tracking-wider text-primary">
+                  {slide.eyebrow}
+                </span>
+              </div>
+
+              <h1 className="mt-4 font-display text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-foreground leading-[1.12]">
+                {slide.headline}
+              </h1>
+
+              <p className="mt-3 text-sm sm:text-base leading-relaxed text-muted-foreground">
+                {slide.description}
+              </p>
+
+              <ul className="mt-5 grid gap-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+                {slide.highlights.map((highlight) => (
+                  <li
+                    key={highlight}
+                    className="rounded-2xl border border-border/60 bg-secondary/45 px-3.5 py-2.5 text-xs font-medium text-foreground/90"
+                  >
+                    {highlight}
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {!isFirst && (
+          {/* Carousel Controls: Progress dots + Previous / Next */}
+          <div className="mt-6 pt-5 border-t border-border/60 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2" role="tablist" aria-label="Welcome slides">
+              {WELCOME_SLIDES.map((s, idx) => (
+                <button
+                  key={s.step}
+                  type="button"
+                  role="tab"
+                  aria-selected={idx === index}
+                  aria-label={`Go to slide ${s.step}`}
+                  onClick={() => setIndex(idx)}
+                  className={cn(
+                    "h-2.5 rounded-full transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    idx === index
+                      ? "w-7 bg-primary"
+                      : "w-2.5 bg-muted-foreground/35 hover:bg-muted-foreground/60",
+                  )}
+                />
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => setIndex((i) => Math.max(0, i - 1))}
-                className="rounded-full gap-1"
+                disabled={isFirst}
+                aria-label="Previous slide"
+                onClick={goPrevious}
+                className="rounded-full gap-1 px-3.5"
               >
-                <ArrowLeft className="size-3.5" /> Back
+                <ArrowLeft className="size-3.5" /> Previous
               </Button>
-            )}
-            {!isLast && (
               <Button
                 type="button"
-                variant="hero"
+                variant={isLast ? "outline" : "hero"}
                 size="sm"
-                onClick={() => setIndex((i) => Math.min(WELCOME_SLIDES.length - 1, i + 1))}
-                className="rounded-full gap-1.5 px-5"
+                disabled={isLast}
+                aria-label="Next slide"
+                onClick={goNext}
+                className="rounded-full gap-1.5 px-4"
               >
                 Next <ArrowRight className="size-3.5" />
               </Button>
-            )}
+            </div>
           </div>
         </div>
 
-        {/* Slide 3 Action Deck: Primary Google Auth + Email Alternative + Browse */}
-        {isLast && (
-          <div className="space-y-3 pt-1">
-            <GoogleButton label="Continue with Google" next={nextPath} variant="hero" />
-            <div className="grid gap-2 sm:grid-cols-2">
-              <Button
-                asChild
-                variant="outline"
-                size="sm"
-                className="rounded-full w-full"
-                onClick={() => onCompleteOrSkip?.()}
-              >
-                <Link to="/signup">Sign up or log in with Email</Link>
-              </Button>
-              {onCompleteOrSkip ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={onCompleteOrSkip}
-                  className="rounded-full w-full gap-1.5"
-                >
-                  <Compass className="size-3.5" /> Browse Ping first
-                </Button>
-              ) : (
-                <Button asChild variant="ghost" size="sm" className="rounded-full w-full gap-1.5">
-                  <Link to="/">
-                    <Compass className="size-3.5" /> Browse Ping first
-                  </Link>
-                </Button>
-              )}
-            </div>
+        {/* RIGHT COLUMN / AUTH PANEL: ALWAYS ACCESSIBLE WITHOUT COMPLETING ALL SLIDES */}
+        <div
+          className={cn(
+            "flex flex-col justify-center rounded-3xl border border-border/70 bg-secondary/35 p-5 sm:p-6",
+            !compact && "lg:p-7",
+          )}
+        >
+          <div className="mb-4">
+            <p className="text-xs font-bold uppercase tracking-wider text-primary">Join Ping</p>
+            <h2 className="mt-1 font-display text-xl font-extrabold tracking-tight text-foreground">
+              Get started in seconds
+            </h2>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              Continue straight with Google or set up your account using email anytime.
+            </p>
           </div>
-        )}
+
+          <div className="space-y-3">
+            <GoogleButton label="Continue with Google" next={nextPath} variant="hero" />
+
+            <OrDivider />
+
+            <Button asChild variant="outline" size="lg" className="w-full rounded-full gap-2">
+              <Link to="/signup" search={{ next: nextPath }} onClick={() => markWelcomeSeen()}>
+                <Mail className="size-4" /> Continue with email
+              </Link>
+            </Button>
+          </div>
+
+          <div className="mt-4 text-center text-sm text-muted-foreground">
+            Already have an account?{" "}
+            <Link
+              to="/login"
+              search={{ next: nextPath }}
+              onClick={() => markWelcomeSeen()}
+              className="font-semibold text-foreground underline underline-offset-4 hover:text-primary"
+            >
+              Sign in
+            </Link>
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-border/50 flex flex-col items-center gap-2.5">
+            {onCompleteOrSkip ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleSkipOrBrowse}
+                className="rounded-full text-xs text-muted-foreground hover:text-foreground gap-1.5"
+              >
+                <Compass className="size-3.5" /> Explore Ping first
+              </Button>
+            ) : (
+              <Button asChild variant="ghost" size="sm" className="rounded-full text-xs gap-1.5">
+                <Link to="/" onClick={handleSkipOrBrowse}>
+                  <Compass className="size-3.5" /> Explore Ping first
+                </Link>
+              </Button>
+            )}
+
+            <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
+              By continuing, you agree to our{" "}
+              <Link to="/terms" className="underline hover:text-foreground">
+                Terms
+              </Link>{" "}
+              and{" "}
+              <Link to="/privacy" className="underline hover:text-foreground">
+                Privacy Policy
+              </Link>
+              .
+            </p>
+          </div>
+        </div>
       </div>
     </section>
   );

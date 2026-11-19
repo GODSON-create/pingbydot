@@ -3,5 +3,5 @@
     <string name="app_name">Ping by DOT</string>
     <string name="title_activity_main">Ping by DOT</string>
     <string name="package_name">app.lovable.pingbydot</string>
-    <string name="custom_url_scheme">app.lovable.pingbydot</string>
+    <string name="custom_url_scheme">pingbydot</string>
 </resources>

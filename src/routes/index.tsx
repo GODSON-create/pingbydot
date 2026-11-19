@@ -28,12 +28,18 @@ import { FounderAvatar } from "@/components/ping/Avatar";
 import { PingCard, PingCardSkeleton } from "@/components/ping/PingCard";
 import { MomentsTray } from "@/components/moments/MomentsTray";
 import { AriseCallout } from "@/components/AriseCallout";
+import { PingMark } from "@/components/BrandLogo";
 import { useAuth } from "@/lib/auth";
 import { feedQuery, followingFeedQuery, type Ping } from "@/lib/pings";
 import { QueryErrorCard } from "@/components/QueryErrorCard";
 import { WelcomeCarousel } from "@/components/onboarding/WelcomeCarousel";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { hasSeenWelcome, markWelcomeSeen } from "@/lib/pathways";
+import {
+  ONBOARDING_INTERESTS,
+  formatInterestLabel,
+  hasSeenWelcome,
+  markWelcomeSeen,
+} from "@/lib/pathways";
 import { hubsQuery, myHubsQuery, myPendingHubsQuery, hubError } from "@/lib/hub-queries";
 import { HUB_CATEGORIES, type Hub, type HubCategory } from "@/lib/hubs";
 import { userConversationsQuery } from "@/lib/messages";
@@ -220,22 +226,57 @@ function HomeHubCard({
 /*                              HOMEPAGE COMPONENT                            */
 /* -------------------------------------------------------------------------- */
 function HomePage() {
-  const { user, ready, profile } = useAuth();
-  const search = Route.useSearch();
-  const initialForYouPings = Route.useLoaderData();
-  const activeTab = search.tab || "foryou";
-  const categoryFilter = search.c ?? null;
-  const page = search.page || 0;
+  const { user, ready } = useAuth();
   const [hydrated, setHydrated] = useState(false);
   const [welcomeDismissed, setWelcomeDismissed] = useState(false);
-  const [welcomeModalOpen, setWelcomeModalOpen] = useState(false);
 
   useEffect(() => {
     setHydrated(true);
     setWelcomeDismissed(hasSeenWelcome());
   }, []);
 
-  const showFirstVisitWelcome = hydrated && ready && !user && !welcomeDismissed;
+  if (!hydrated || !ready) {
+    return (
+      <div className="bg-hero flex min-h-[calc(100dvh-5rem)] items-center justify-center px-4 pb-24">
+        <div
+          role="status"
+          aria-live="polite"
+          className="surface-card flex flex-col items-center gap-3 rounded-3xl px-8 py-7 text-center shadow-lift"
+        >
+          <PingMark variant="lime" size="lg" alt="Ping by DOT" />
+          <p className="text-sm font-medium text-muted-foreground">Opening Ping…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user && !welcomeDismissed) {
+    return (
+      <div className="bg-hero min-h-[calc(100dvh-5rem)] px-3.5 sm:px-6 py-5 pb-24 sm:py-12">
+        <div className="mx-auto max-w-5xl">
+          <WelcomeCarousel
+            nextPath="/"
+            onCompleteOrSkip={() => {
+              markWelcomeSeen();
+              setWelcomeDismissed(true);
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return <HomeFeedContent />;
+}
+
+function HomeFeedContent() {
+  const { user, profile } = useAuth();
+  const search = Route.useSearch();
+  const initialForYouPings = Route.useLoaderData();
+  const activeTab = search.tab || "foryou";
+  const categoryFilter = search.c ?? null;
+  const page = search.page || 0;
+  const [welcomeModalOpen, setWelcomeModalOpen] = useState(false);
 
   // Real Queries
   const {
@@ -292,9 +333,9 @@ function HomePage() {
           <div>
             <h1 className="font-display text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">
               {user ? (
-                <>Hey {profile?.display_name || profile?.username || "there"}, welcome to Ping.</>
+                <>Hey {profile?.display_name || profile?.username || "there"}, what&apos;s new?</>
               ) : (
-                <>Connect, share, discover &amp; coordinate on Ping.</>
+                <>Your world. Your people. Your possibilities.</>
               )}
             </h1>
           </div>
@@ -312,14 +353,19 @@ function HomePage() {
                 </Link>
               </Button>
             ) : (
-              <Button
-                asChild
-                variant="hero"
-                size="sm"
-                className="rounded-full shadow-lift h-9 px-5"
-              >
-                <Link to="/signup">Join PING</Link>
-              </Button>
+              <>
+                <Button asChild variant="outline" size="sm" className="rounded-full h-9 px-4">
+                  <Link to="/login">Sign in</Link>
+                </Button>
+                <Button
+                  asChild
+                  variant="hero"
+                  size="sm"
+                  className="rounded-full shadow-lift h-9 px-5"
+                >
+                  <Link to="/signup">Create account</Link>
+                </Button>
+              </>
             )}
           </div>
         </div>
@@ -330,48 +376,36 @@ function HomePage() {
         </div>
       </section>
 
-      {/* First-visit non-blocking Welcome Tour banner for signed-out guests */}
-      {showFirstVisitWelcome && (
+      {/* Signed-out prompt for returning guests who skipped the welcome slides */}
+      {!user && (
         <section
-          aria-label="New to Ping welcome banner"
-          className="surface-card mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-3xl border border-primary/30 bg-hero p-5"
+          aria-label="Sign in or join Ping"
+          className="surface-card mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-3xl border border-primary/25 bg-hero p-5"
         >
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-primary">
-              New to Ping by DOT?
-            </p>
+            <p className="text-xs font-bold uppercase tracking-wider text-primary">Ping by DOT</p>
             <h2 className="mt-0.5 font-display text-lg font-extrabold text-foreground">
-              Take our 3-slide introduction — open to everyone
+              Connect, communicate, and make something happen
             </h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              Sign in fast with Google or Email, or explore public Pings, Hubs, and Signals right
-              away.
+              Sign in with Google or email to post Pings, join Hubs, and message people 1-on-1.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <Button
-              type="button"
-              variant="hero"
-              size="sm"
-              onClick={() => setWelcomeModalOpen(true)}
-              className="rounded-full gap-1.5"
-            >
-              Start 3-Slide Tour <ArrowRight className="size-3.5" />
+            <Button asChild variant="hero" size="sm" className="rounded-full gap-1.5">
+              <Link to="/login">Sign in</Link>
             </Button>
             <Button asChild variant="outline" size="sm" className="rounded-full">
-              <Link to="/welcome">Open Welcome</Link>
+              <Link to="/signup">Create account</Link>
             </Button>
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() => {
-                markWelcomeSeen();
-                setWelcomeDismissed(true);
-              }}
+              onClick={() => setWelcomeModalOpen(true)}
               className="rounded-full text-xs text-muted-foreground"
             >
-              Dismiss
+              Intro slides
             </Button>
           </div>
         </section>
@@ -383,11 +417,10 @@ function HomePage() {
           setWelcomeModalOpen(open);
           if (!open) {
             markWelcomeSeen();
-            setWelcomeDismissed(true);
           }
         }}
       >
-        <DialogContent className="max-w-2xl border-none bg-transparent p-0 shadow-none">
+        <DialogContent className="max-w-2xl max-h-[90dvh] overflow-y-auto border-none bg-transparent p-0 shadow-none">
           <DialogHeader className="sr-only">
             <DialogTitle>Welcome to Ping by DOT</DialogTitle>
           </DialogHeader>
@@ -396,7 +429,6 @@ function HomePage() {
             nextPath="/"
             onCompleteOrSkip={() => {
               markWelcomeSeen();
-              setWelcomeDismissed(true);
               setWelcomeModalOpen(false);
             }}
           />
@@ -478,26 +510,61 @@ function HomePage() {
             ))}
           </nav>
 
-          {/* Quick Post Banner for Desktop Logged-In Users */}
+          {/* Recommended First Actions & Interest Shortcuts for Logged-In Users */}
           {user && (
-            <div className="surface-card hidden md:flex items-center justify-between gap-3 rounded-2xl p-3 sm:p-4 border border-border/80">
-              <Link
-                to="/@{$username}"
-                params={{ username: profile?.username || "" }}
-                className="flex items-center gap-2.5 min-w-0"
-              >
-                <FounderAvatar
-                  name={profile?.display_name || profile?.username || "You"}
-                  src={profile?.avatar_url}
+            <div className="surface-card space-y-3 rounded-2xl p-3.5 sm:p-4 border border-border/80">
+              <div className="flex items-center justify-between gap-3">
+                <Link
+                  to="/@{$username}"
+                  params={{ username: profile?.username || "" }}
+                  className="flex items-center gap-2.5 min-w-0"
+                >
+                  <FounderAvatar
+                    name={profile?.display_name || profile?.username || "You"}
+                    src={profile?.avatar_url}
+                    size="sm"
+                  />
+                  <span className="text-xs text-muted-foreground truncate font-medium">
+                    Share an update, question, or idea with Ping…
+                  </span>
+                </Link>
+                <Button
+                  asChild
+                  variant="hero"
                   size="sm"
-                />
-                <span className="text-xs text-muted-foreground truncate font-medium">
-                  Share an intention, need, or opportunity…
-                </span>
-              </Link>
-              <Button asChild variant="hero" size="sm" className="rounded-xl h-8 px-3 text-xs">
-                <Link to="/create">Create Ping</Link>
-              </Button>
+                  className="rounded-xl h-8 px-3 text-xs shrink-0"
+                >
+                  <Link to="/create">Create Ping</Link>
+                </Button>
+              </div>
+              {profile?.interests && profile.interests.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 border-t border-border/50 pt-2.5">
+                  <span className="text-[11px] font-semibold text-muted-foreground mr-1">
+                    Recommended:
+                  </span>
+                  {profile.interests.slice(0, 5).map((interestId) => {
+                    const mapped = ONBOARDING_INTERESTS.find((item) => item.id === interestId);
+                    const catTarget = mapped?.pingCategory ?? "progress";
+                    return (
+                      <Link
+                        key={interestId}
+                        to="/"
+                        search={{ tab: activeTab, c: catTarget as any, page: 0 }}
+                        className="rounded-full border border-border/80 bg-secondary/60 px-2.5 py-0.5 text-[11px] font-medium text-foreground hover:border-primary/50 hover:bg-primary/10 transition-colors"
+                      >
+                        {formatInterestLabel(interestId)}
+                      </Link>
+                    );
+                  })}
+                  <Link
+                    to="/explore"
+                    search={{ filter: "people" }}
+                    className="ml-auto text-[11px] font-semibold text-primary hover:underline"
+                  >
+                    Find people & Hubs &rarr;
+                  </Link>
+                </div>
+              )}
             </div>
           )}
 
@@ -516,7 +583,8 @@ function HomePage() {
                   See updates from people you follow
                 </h3>
                 <p className="mt-1 text-xs text-muted-foreground max-w-sm mx-auto">
-                  Log in to create a tailored timeline of founders and collaborators you care about.
+                  Sign in to build a tailored feed of people, creators, and communities you care
+                  about.
                 </p>
                 <Button asChild variant="hero" size="sm" className="mt-4 rounded-xl">
                   <Link to="/login" search={{ next: "/?tab=following" }}>

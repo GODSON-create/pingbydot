@@ -169,6 +169,41 @@
       "when": 1795600000000,
       "tag": "0023_onboarding_and_pathways",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1795700000000,
+      "tag": "0024_universal_onboarding_identity_interests",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1795800000000,
+      "tag": "0025_economic_activity_measurement",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1795900000000,
+      "tag": "0026_verification_and_monetization_foundations",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1796000000000,
+      "tag": "0027_full_audit_repairs_media_privacy",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1796100000000,
+      "tag": "0028_phase1_profile_controls_and_mutes",
+      "breakpoints": true
     }
   ]
 }

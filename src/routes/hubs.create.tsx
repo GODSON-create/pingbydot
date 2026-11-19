@@ -5,7 +5,9 @@ import { Plus, Trash2, Globe, Lock, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { ensureClientProfileRow } from "@/lib/ensure-profile";
 import { slugify, hubSchema, HUB_CATEGORIES, type HubCategory, type HubResource } from "@/lib/hubs";
+import { ImageUploadField } from "@/components/media/ImageUploadField";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -45,8 +47,29 @@ function CreateHub() {
   const [category, setCategory] = useState<HubCategory>("community");
   const [access, setAccess] = useState<"public" | "private">("public");
   const [rules, setRules] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState("");
   const [resources, setResources] = useState<HubResource[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const HUB_LEGACY_CATEGORY_MAP: Partial<Record<HubCategory, HubCategory>> = {
+    university: "school",
+    company: "organization",
+    government: "organization",
+    ngo: "organization",
+    association: "organization",
+    other: "community",
+  };
+
+  const focusFirstError = (fieldErrors: Record<string, string>) => {
+    const order = ["name", "slug", "tagline", "category", "description", "rules", "resources"];
+    const firstKey = order.find((k) => fieldErrors[k]) ?? Object.keys(fieldErrors)[0];
+    if (firstKey && typeof document !== "undefined") {
+      const el = document.getElementById(firstKey);
+      el?.focus?.();
+      el?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    }
+  };
 
   const onNameChange = (val: string) => {
     setName(val);
@@ -95,10 +118,16 @@ function CreateHub() {
           fieldErrors[key] = issue.message;
         });
         setErrors(fieldErrors);
+        setFormError("Please fix the highlighted fields below before creating your Hub.");
+        focusFirstError(fieldErrors);
         throw new Error("Validation failed. Please correct the highlighted fields.");
       }
 
       setErrors({});
+      setFormError(null);
+
+      // Ensure authenticated profile row exists even if migration 0022 is not applied yet
+      await ensureClientProfileRow(user);
 
       // Check slug uniqueness
       const { data: existing, error: checkError } = await supabase
@@ -111,82 +140,132 @@ function CreateHub() {
         throw checkError;
       }
       if (existing) {
-        setErrors({ slug: "This URL handle is already taken. Please pick another." });
+        const slugErr = { slug: "This URL handle is already taken. Please pick another." };
+        setErrors(slugErr);
+        setFormError(slugErr.slug);
+        focusFirstError(slugErr);
         throw new Error("Slug taken.");
       }
 
-      // Attempt creation via secure RPC first
-      const { data: rpcHub, error: rpcError } = await (supabase.rpc as any)("create_hub", {
-        _name: parsed.data.name,
-        _slug: parsed.data.slug,
-        _tagline: parsed.data.tagline || "",
-        _description: parsed.data.description || "",
-        _rules: parsed.data.rules || "",
-        _category: parsed.data.category,
-        _access: parsed.data.access,
-        _resources: parsed.data.resources,
-      });
+      const invokeCreateHub = (cat: HubCategory) =>
+        (supabase.rpc as any)("create_hub", {
+          _name: parsed.data.name,
+          _slug: parsed.data.slug,
+          _tagline: parsed.data.tagline || "",
+          _description: parsed.data.description || "",
+          _rules: parsed.data.rules || "",
+          _category: cat,
+          _access: parsed.data.access,
+          _resources: parsed.data.resources,
+        });
 
-      if (!rpcError && rpcHub && typeof rpcHub === "object" && "slug" in rpcHub) {
-        return (rpcHub as { slug: string }).slug;
+      let mappedNotice: string | null = null;
+      let { data: rpcHub, error: rpcError } = await invokeCreateHub(parsed.data.category);
+
+      // If remote DB has legacy pre-0022 hubs_category_check, map cleanly to legacy parent category
+      if (
+        rpcError &&
+        (rpcError.code === "23514" || /hubs_category_check/i.test(rpcError.message || "")) &&
+        HUB_LEGACY_CATEGORY_MAP[parsed.data.category]
+      ) {
+        const fallbackCategory = HUB_LEGACY_CATEGORY_MAP[parsed.data.category]!;
+        const retry = await invokeCreateHub(fallbackCategory);
+        rpcHub = retry.data;
+        rpcError = retry.error;
+        if (!rpcError) {
+          mappedNotice = `Created under '${fallbackCategory}' category (legacy database category schema).`;
+        }
       }
 
-      // Only fall back to direct insert if create_hub RPC is not present on this database
-      const rpcErrMsg = (rpcError as { message?: string; code?: string } | null)?.message ?? "";
-      const rpcErrCode = (rpcError as { code?: string } | null)?.code ?? "";
-      const rpcMissing =
-        rpcErrCode === "42883" ||
-        rpcErrCode === "PGRST202" ||
-        /could not find the function|function .* does not exist/i.test(rpcErrMsg);
-
-      if (rpcError && !rpcMissing) {
-        throw rpcError;
+      // Recover missing profile row on 23503 and retry RPC once
+      if (rpcError && rpcError.code === "23503") {
+        const recovered = await ensureClientProfileRow(user);
+        if (recovered) {
+          const retry = await invokeCreateHub(parsed.data.category);
+          rpcHub = retry.data;
+          rpcError = retry.error;
+        }
       }
 
-      // Legacy fallback: direct insert (trigger seeds owner membership)
-      const { data: newHub, error: insertError } = await supabase
-        .from("hubs")
-        .insert({
+      let createdSlug: string | null =
+        !rpcError && rpcHub && typeof rpcHub === "object" && "slug" in rpcHub
+          ? String((rpcHub as { slug: string }).slug)
+          : null;
+
+      if (!createdSlug) {
+        // Only fall back to direct insert if create_hub RPC is absent on this database
+        const rpcErrMsg = (rpcError as { message?: string; code?: string } | null)?.message ?? "";
+        const rpcErrCode = (rpcError as { code?: string } | null)?.code ?? "";
+        const rpcMissing =
+          rpcErrCode === "42883" ||
+          rpcErrCode === "PGRST202" ||
+          /could not find the function|function .* does not exist/i.test(rpcErrMsg);
+
+        if (rpcError && !rpcMissing) {
+          throw rpcError;
+        }
+
+        const insertPayload = (cat: HubCategory) => ({
           name: parsed.data.name,
           slug: parsed.data.slug,
           tagline: parsed.data.tagline,
           description: parsed.data.description,
           rules: parsed.data.rules,
-          category: parsed.data.category,
+          category: cat,
           access: parsed.data.access,
           resources: parsed.data.resources,
           owner_id: user.id,
-        })
-        .select("id, slug")
-        .single();
-
-      if (insertError) {
-        throw insertError;
-      }
-
-      // Ensure owner membership exists only if trigger did not already insert it
-      const { data: existingMember } = await supabase
-        .from("hub_members")
-        .select("role")
-        .eq("hub_id", newHub.id)
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (!existingMember) {
-        await supabase.from("hub_members").insert({
-          hub_id: newHub.id,
-          user_id: user.id,
-          role: "owner",
-          status: "active",
         });
+
+        let { data: newHub, error: insertError } = await supabase
+          .from("hubs")
+          .insert(insertPayload(parsed.data.category))
+          .select("id, slug")
+          .single();
+
+        if (
+          insertError &&
+          (insertError.code === "23514" ||
+            /hubs_category_check/i.test(insertError.message || "")) &&
+          HUB_LEGACY_CATEGORY_MAP[parsed.data.category]
+        ) {
+          const fallbackCategory = HUB_LEGACY_CATEGORY_MAP[parsed.data.category]!;
+          const retry = await supabase
+            .from("hubs")
+            .insert(insertPayload(fallbackCategory))
+            .select("id, slug")
+            .single();
+          newHub = retry.data;
+          insertError = retry.error;
+        }
+
+        if (insertError || !newHub) {
+          throw insertError ?? new Error("Hub creation returned no record.");
+        }
+
+        createdSlug = newHub.slug;
       }
 
-      return newHub.slug;
+      if (avatarUrl.trim() && createdSlug) {
+        const { error: avatarErr } = await supabase
+          .from("hubs")
+          .update({ avatar_url: avatarUrl.trim() } as any)
+          .eq("slug", createdSlug);
+        if (avatarErr && avatarErr.code !== "42703" && avatarErr.code !== "PGRST204") {
+          console.warn("Hub created, but hub image metadata could not be saved yet:", avatarErr);
+        }
+      }
+
+      return { slug: createdSlug, mappedNotice };
     },
-    onSuccess: (newSlug) => {
+    onSuccess: ({ slug: newSlug, mappedNotice }) => {
       qc.invalidateQueries({ queryKey: ["hubs"] });
       qc.invalidateQueries({ queryKey: ["my-hubs"] });
-      toast.success("Hub created successfully! 🎉");
+      if (mappedNotice) {
+        toast.success(`Hub created! ${mappedNotice}`);
+      } else {
+        toast.success("Hub created successfully!");
+      }
       navigate({ to: "/hubs/$slug", params: { slug: newSlug } });
     },
     onError: (err: any) => {
@@ -194,7 +273,9 @@ function CreateHub() {
         err.message !== "Slug taken." &&
         err.message !== "Validation failed. Please correct the highlighted fields."
       ) {
-        toast.error(hubError(err, "Couldn't create hub. Please try again."));
+        const msg = hubError(err, "Couldn't create hub. Please try again.");
+        setFormError(msg);
+        toast.error(msg);
       }
     },
   });
@@ -461,6 +542,29 @@ function CreateHub() {
             ))}
           </div>
         </div>
+
+        {/* Hub Emblem / Image (optional) */}
+        <ImageUploadField
+          folder="hubs"
+          userId={user.id}
+          value={avatarUrl}
+          onChange={setAvatarUrl}
+          label="Hub Emblem / Image (optional)"
+          placeholder="https://…/hub-logo.png"
+          fallbackName={name || "Hub"}
+          shape="rounded"
+          inputId="hub-avatar"
+          disabled={mutation.isPending}
+        />
+
+        {formError && (
+          <div
+            role="alert"
+            className="rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-xs font-medium text-destructive"
+          >
+            {formError}
+          </div>
+        )}
 
         {/* Actions */}
         <div className="pt-4 flex items-center justify-end gap-3 border-t border-border">

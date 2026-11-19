@@ -1,11 +1,12 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { formatDistanceToNowStrict } from "date-fns";
-import { ArrowUpRight, Bookmark, CheckCircle2, MessageCircle, MessageSquare } from "lucide-react";
+import { ArrowUpRight, Bookmark, MessageCircle, MessageSquare } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { mySavedPingsQuery, replyCount, useToggleSavePing, type Ping } from "@/lib/pings";
 import { CATEGORIES, parseStructuredPing } from "@/lib/validation";
 import { useAuth } from "@/lib/auth";
+import { LEAD_ELIGIBLE_PING_CATEGORIES, recordNetworkEvent } from "@/lib/economic-events";
 import { useGetOrCreateDirectConversation } from "@/lib/messages";
 import { FounderAvatar } from "./Avatar";
 import { LikeButton, PingMenu, ShareMenu } from "./PingActions";
@@ -44,6 +45,7 @@ export function CategoryTag({ value, labelOverride }: { value: string; labelOver
 }
 
 export function CtaLink({ ping }: { ping: Ping }) {
+  const { user } = useAuth();
   if (!ping.cta_url) return null;
   let host = "";
   try {
@@ -56,7 +58,18 @@ export function CtaLink({ ping }: { ping: Ping }) {
       href={ping.cta_url}
       target="_blank"
       rel="noopener noreferrer nofollow ugc"
-      onClick={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (user?.id && user.id !== ping.user_id) {
+          void recordNetworkEvent({
+            eventType: "business_lead_generated",
+            targetType: "ping",
+            targetId: ping.id,
+            source: "ping_cta",
+            metadata: { ping_category: ping.category, cta_host: host },
+          });
+        }
+      }}
       className="group/cta mt-3.5 flex items-center justify-between gap-3 rounded-2xl border border-border bg-secondary/50 px-4 py-3 text-sm transition-colors hover:border-primary hover:bg-accent"
     >
       <span className="min-w-0">
@@ -91,6 +104,7 @@ export function PingCard({
 
   const name = ping.author?.display_name || ping.author?.username || "Founder";
   const [actions, setActions] = useState(false);
+  const [failedMedia, setFailedMedia] = useState<Set<string>>(() => new Set());
   const press = useLongPress(() => setActions(true));
 
   const structured = parseStructuredPing(ping);
@@ -105,6 +119,20 @@ export function PingCard({
     }
   }
 
+  const isSharePageUrl = (url: string) => /^https?:\/\/photos\.app\.goo\.gl\//i.test(url);
+  const markMediaFailed = (url: string) => {
+    setFailedMedia((prev) => {
+      if (prev.has(url)) return prev;
+      const next = new Set(prev);
+      next.add(url);
+      return next;
+    });
+  };
+  const visibleMedia = mediaList
+    .slice(0, 2)
+    .filter((url) => !failedMedia.has(url) && !isSharePageUrl(url));
+  const shareLinks = mediaList.slice(0, 2).filter((url) => isSharePageUrl(url));
+
   const handleRespondConnect = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!user) {
@@ -116,6 +144,15 @@ export function PingCard({
       return;
     }
     try {
+      if (LEAD_ELIGIBLE_PING_CATEGORIES.has(ping.category.toLowerCase())) {
+        void recordNetworkEvent({
+          eventType: "business_lead_generated",
+          targetType: "ping",
+          targetId: ping.id,
+          source: "ping_direct_reply",
+          metadata: { ping_category: ping.category },
+        });
+      }
       const convId = await startChatMutation.mutateAsync(ping.user_id);
       navigate({ to: "/messages", search: { conversationId: convId } });
     } catch {
@@ -160,10 +197,6 @@ export function PingCard({
                 <span className="truncate font-semibold text-foreground hover:underline">
                   {name}
                 </span>
-                <CheckCircle2
-                  className="size-3.5 shrink-0 text-primary"
-                  aria-label="Verified builder"
-                />
               </span>
               <span className="block truncate text-xs text-muted-foreground">
                 @{ping.author.username} ·{" "}
@@ -259,31 +292,48 @@ export function PingCard({
         )}
 
         {/* Responsive Media Preview (Image or Video) */}
-        {mediaList.length > 0 && (
+        {visibleMedia.length > 0 && (
           <div className="relative z-10 mt-3.5 overflow-hidden rounded-2xl border border-border/60 bg-secondary/30">
-            {mediaList
-              .slice(0, 2)
-              .map((url) =>
-                isVideoUrl(url) ? (
-                  <video
-                    key={url}
-                    src={url}
-                    controls
-                    playsInline
-                    preload="metadata"
-                    onClick={(e) => e.stopPropagation()}
-                    className="max-h-80 w-full object-cover"
-                  />
-                ) : (
-                  <img
-                    key={url}
-                    src={url}
-                    alt={structured.headline || `Media shared by ${name}`}
-                    loading="lazy"
-                    className="max-h-80 w-full object-cover"
-                  />
-                ),
-              )}
+            {visibleMedia.map((url) =>
+              isVideoUrl(url) ? (
+                <video
+                  key={url}
+                  src={url}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  onClick={(e) => e.stopPropagation()}
+                  onError={() => markMediaFailed(url)}
+                  className="max-h-80 w-full object-cover"
+                />
+              ) : (
+                <img
+                  key={url}
+                  src={url}
+                  alt={structured.headline || `Media shared by ${name}`}
+                  loading="lazy"
+                  onError={() => markMediaFailed(url)}
+                  className="max-h-80 w-full object-cover"
+                />
+              ),
+            )}
+          </div>
+        )}
+        {shareLinks.length > 0 && (
+          <div className="relative z-10 mt-3 flex flex-wrap gap-2">
+            {shareLinks.map((url) => (
+              <a
+                key={url}
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-secondary/40 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Open attached photo album
+                <ArrowUpRight className="size-3.5" />
+              </a>
+            ))}
           </div>
         )}
 

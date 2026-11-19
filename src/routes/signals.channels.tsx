@@ -58,36 +58,36 @@ function SignalChannelsDirectory() {
     <div className="mx-auto max-w-6xl w-full min-w-0 px-4 sm:px-6 py-8 pb-24 overflow-x-clip">
       {/* Community + Channel Navigation Header */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex max-w-full flex-wrap sm:flex-nowrap items-center gap-1 rounded-2xl sm:rounded-full bg-secondary/80 p-1">
+        <div className="inline-flex lg:hidden max-w-full flex-nowrap overflow-x-auto scrollbar-none items-center gap-1 rounded-full bg-secondary/80 p-1">
           <Link
             to="/hubs"
             search={{}}
-            className="inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 sm:px-3.5 py-1.5 text-[11px] sm:text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+            className="inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
           >
             <Building2 className="size-3.5" /> Hub
           </Link>
           <Link
             to="/signals"
-            className="inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 sm:px-3.5 py-1.5 text-[11px] sm:text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+            className="inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
           >
-            <MessageSquare className="size-3.5" /> Signal 1-on-1
+            <MessageSquare className="size-3.5" /> Signal
           </Link>
           <Link
             to="/signals/channels"
-            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-foreground text-background shadow-sm px-2.5 sm:px-3.5 py-1.5 text-[11px] sm:text-xs font-semibold transition-colors"
+            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-foreground text-background shadow-sm px-3 py-1.5 text-xs font-semibold transition-colors"
           >
             <Radio className="size-3.5" /> Channels
           </Link>
           <Link
             to="/hubs"
             search={{ view: "moments" }}
-            className="inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 sm:px-3.5 py-1.5 text-[11px] sm:text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+            className="inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
           >
             <Sparkles className="size-3.5" /> Moment
           </Link>
         </div>
 
-        <Button asChild variant="hero" size="sm" className="rounded-full gap-1.5">
+        <Button asChild variant="hero" size="sm" className="rounded-full gap-1.5 lg:ml-auto">
           <Link to="/signals/create">
             <Plus className="size-4" /> Register Signal Channel
           </Link>

@@ -5,10 +5,24 @@ export const Route = createFileRoute("/_authenticated")({
   staticData: { sitemap: "exclude-subtree" },
   ssr: false,
   beforeLoad: async ({ location }) => {
-    const { data: sessionData } = await supabase.auth.getSession();
+    const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
     let activeUser = sessionData.session?.user ?? null;
+    let expired = Boolean(sessionErr);
 
-    if (!activeUser) {
+    if (
+      activeUser &&
+      sessionData.session?.expires_at &&
+      sessionData.session.expires_at * 1000 <= Date.now()
+    ) {
+      const { data: userData, error: userErr } = await supabase.auth.getUser();
+      if (userErr || !userData.user) {
+        expired = true;
+        activeUser = null;
+        await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+      } else {
+        activeUser = userData.user;
+      }
+    } else if (!activeUser && !sessionErr) {
       const { data: userData } = await supabase.auth.getUser();
       activeUser = userData.user ?? null;
     }
@@ -17,7 +31,10 @@ export const Route = createFileRoute("/_authenticated")({
       const intended = `${location.pathname}${location.searchStr || ""}`;
       throw redirect({
         to: "/login",
-        search: intended && intended !== "/" ? { next: intended } : { next: "/" },
+        search: {
+          next: intended && intended !== "/" ? intended : "/",
+          ...(expired ? { reason: "expired" as const } : {}),
+        },
       });
     }
   },

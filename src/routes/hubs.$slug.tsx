@@ -114,31 +114,32 @@ function MemberRow({
   currentUserId?: string | undefined;
   onRefetch: () => void | Promise<any>;
 }) {
+  const qc = useQueryClient();
   const profile = member.profile;
-  const name = profile?.display_name || profile?.username || "Builder";
-  const [following, setFollowing] = useState(false);
+  const name = profile?.display_name || profile?.username || "Member";
   const [followLoading, setFollowLoading] = useState(false);
 
   // Check initial follow state
-  const { data: followData } = useQuery({
+  const { data: followData = false } = useQuery({
     queryKey: ["follow-status", profile?.id, currentUserId],
     enabled: !!currentUserId && !!profile?.id && profile?.id !== currentUserId,
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("follows")
         .select("follower_id")
         .eq("follower_id", currentUserId!)
         .eq("following_id", profile.id)
         .maybeSingle();
+      if (error) throw error;
       return !!data;
     },
   });
 
-  const isFollowing = following || !!followData;
+  const isFollowing = followData;
 
   const toggleFollow = async () => {
     if (!currentUserId || !profile?.id) {
-      toast("Sign in to follow founders", {
+      toast("Sign in to follow people", {
         action: { label: "Log in", onClick: () => (window.location.href = "/login") },
       });
       return;
@@ -146,20 +147,25 @@ function MemberRow({
     setFollowLoading(true);
     try {
       if (isFollowing) {
-        await supabase
+        const { error } = await supabase
           .from("follows")
           .delete()
           .eq("follower_id", currentUserId)
           .eq("following_id", profile.id);
-        setFollowing(false);
+        if (error) throw error;
         toast.success(`Unfollowed @${profile.username}`);
       } else {
-        await supabase
+        const { error } = await supabase
           .from("follows")
           .insert({ follower_id: currentUserId, following_id: profile.id });
-        setFollowing(true);
+        if (error && error.code !== "23505") throw error;
         toast.success(`Following @${profile.username}!`);
       }
+      qc.invalidateQueries({ queryKey: ["follow-status", profile.id, currentUserId] });
+      qc.invalidateQueries({ queryKey: ["follow", profile.id] });
+      qc.invalidateQueries({ queryKey: ["following-feed"] });
+      qc.invalidateQueries({ queryKey: ["explore-followed"] });
+      qc.invalidateQueries({ queryKey: ["header-notifications"] });
     } catch {
       toast.error("Couldn't update follow status.");
     } finally {
@@ -814,9 +820,10 @@ function HubDetail() {
     refetch: refetchPrivateFeed,
   } = useQuery(memberFeedQuery(hub?.id ?? "", activeIntent, isPrivate && isMember));
 
-  // Members list query
+  // Members list query (private hub members only fetched for active members)
+  const canViewMembers = !isPrivate || isMember;
   const { data: members, refetch: refetchMembers } = useQuery(
-    hubMembersQuery(hub?.id ?? "", deferredMemberSearch, 0, "active"),
+    hubMembersQuery(hub?.id ?? "", deferredMemberSearch, 0, "active", canViewMembers),
   );
 
   // Join mutation
@@ -834,6 +841,7 @@ function HubDetail() {
       qc.invalidateQueries({ queryKey: ["hub-membership", hub?.id] });
       qc.invalidateQueries({ queryKey: ["hub", slug] });
       qc.invalidateQueries({ queryKey: ["my-hubs"] });
+      qc.invalidateQueries({ queryKey: ["my-pending-hubs"] });
       if (status === "active") {
         toast.success(`You joined ${hub?.name}! 🎉`);
       } else {
@@ -856,6 +864,7 @@ function HubDetail() {
       qc.invalidateQueries({ queryKey: ["hub-membership", hub?.id] });
       qc.invalidateQueries({ queryKey: ["hub", slug] });
       qc.invalidateQueries({ queryKey: ["my-hubs"] });
+      qc.invalidateQueries({ queryKey: ["my-pending-hubs"] });
       toast.success("You left the hub.");
     },
     onError: (e) => {
@@ -911,7 +920,7 @@ function HubDetail() {
     feedItems.map((i) => i.ping).filter((p): p is NonNullable<typeof p> => Boolean(p)),
     5,
   );
-  const canViewFeed = canSeeHubContent(hub.access, membership?.role);
+  const canViewFeed = canSeeHubContent(hub.access, isMember ? membership?.role : null);
 
   return (
     <div className="pb-24">

@@ -831,9 +831,11 @@ export type Database = {
         Row: {
           avatar_url: string | null;
           bio: string;
+          country: string;
           created_at: string;
           display_name: string;
           id: string;
+          interests: string[];
           onboarding_completed_at: string | null;
           participation_pathways: string[];
           username: string;
@@ -841,9 +843,11 @@ export type Database = {
         Insert: {
           avatar_url?: string | null;
           bio?: string;
+          country?: string;
           created_at?: string;
           display_name?: string;
           id: string;
+          interests?: string[];
           onboarding_completed_at?: string | null;
           participation_pathways?: string[];
           username: string;
@@ -851,9 +855,11 @@ export type Database = {
         Update: {
           avatar_url?: string | null;
           bio?: string;
+          country?: string;
           created_at?: string;
           display_name?: string;
           id?: string;
+          interests?: string[];
           onboarding_completed_at?: string | null;
           participation_pathways?: string[];
           username?: string;
@@ -2065,6 +2071,223 @@ export type Database = {
         };
         Relationships: [];
       };
+      economic_events: {
+        Row: {
+          id: string;
+          event_type: string;
+          event_category: string;
+          actor_user_id: string | null;
+          subject_user_id: string | null;
+          target_type: string | null;
+          target_id: string | null;
+          source: string;
+          attribution: Json;
+          actor_segments: string[];
+          verification_tier: string;
+          dedupe_key: string | null;
+          metadata: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_type: string;
+          event_category: string;
+          actor_user_id?: string | null;
+          subject_user_id?: string | null;
+          target_type?: string | null;
+          target_id?: string | null;
+          source?: string;
+          attribution?: Json;
+          actor_segments?: string[];
+          verification_tier?: string;
+          dedupe_key?: string | null;
+          metadata?: Json;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          event_type?: string;
+          event_category?: string;
+          actor_user_id?: string | null;
+          subject_user_id?: string | null;
+          target_type?: string | null;
+          target_id?: string | null;
+          source?: string;
+          attribution?: Json;
+          actor_segments?: string[];
+          verification_tier?: string;
+          dedupe_key?: string | null;
+          metadata?: Json;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      verified_economic_outcomes: {
+        Row: {
+          id: string;
+          outcome_type: string;
+          settlement_status: string;
+          payer_user_id: string | null;
+          beneficiary_user_id: string | null;
+          currency: string;
+          gross_amount_minor: number;
+          platform_fee_minor: number;
+          net_amount_minor: number | null;
+          provider: string;
+          external_reference: string;
+          lead_event_id: string | null;
+          target_type: string | null;
+          target_id: string | null;
+          verified_at: string | null;
+          verified_by: string;
+          metadata: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          outcome_type: string;
+          settlement_status?: string;
+          payer_user_id?: string | null;
+          beneficiary_user_id?: string | null;
+          currency?: string;
+          gross_amount_minor: number;
+          platform_fee_minor?: number;
+          provider: string;
+          external_reference: string;
+          lead_event_id?: string | null;
+          target_type?: string | null;
+          target_id?: string | null;
+          verified_at?: string | null;
+          verified_by: string;
+          metadata?: Json;
+          created_at?: string;
+        };
+        Update: {
+          settlement_status?: string;
+          verified_at?: string | null;
+          metadata?: Json;
+        };
+        Relationships: [];
+      };
+      account_verifications: {
+        Row: {
+          id: string;
+          user_id: string;
+          verification_domain: string;
+          pathway_type: string;
+          status: string;
+          organization_name: string;
+          evidence_url: string | null;
+          submission_note: string;
+          reviewer_id: string | null;
+          reviewer_note: string;
+          verified_at: string | null;
+          reviewed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          verification_domain: string;
+          pathway_type: string;
+          status?: string;
+          organization_name?: string;
+          evidence_url?: string | null;
+          submission_note?: string;
+          reviewer_id?: string | null;
+          reviewer_note?: string;
+          verified_at?: string | null;
+          reviewed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          pathway_type?: string;
+          status?: string;
+          organization_name?: string;
+          evidence_url?: string | null;
+          submission_note?: string;
+          reviewer_id?: string | null;
+          reviewer_note?: string;
+          verified_at?: string | null;
+          reviewed_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      verification_audit: {
+        Row: {
+          id: string;
+          verification_id: string | null;
+          user_id: string;
+          actor_id: string | null;
+          verification_domain: string;
+          pathway_type: string;
+          previous_status: string | null;
+          new_status: string;
+          reason: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          verification_id?: string | null;
+          user_id: string;
+          actor_id?: string | null;
+          verification_domain: string;
+          pathway_type: string;
+          previous_status?: string | null;
+          new_status: string;
+          reason?: string;
+          created_at?: string;
+        };
+        Update: {
+          reason?: string;
+        };
+        Relationships: [];
+      };
+      monetization_offerings: {
+        Row: {
+          slug: string;
+          category: string;
+          title: string;
+          summary: string;
+          billing_mode: string;
+          dot_credit_cost: number | null;
+          is_compulsory: boolean;
+          live_payment_enabled: boolean;
+          linked_tier: string | null;
+          features: Json;
+          display_order: number;
+          updated_at: string;
+        };
+        Insert: {
+          slug: string;
+          category: string;
+          title: string;
+          summary: string;
+          billing_mode: string;
+          dot_credit_cost?: number | null;
+          is_compulsory?: boolean;
+          live_payment_enabled?: boolean;
+          linked_tier?: string | null;
+          features?: Json;
+          display_order?: number;
+          updated_at?: string;
+        };
+        Update: {
+          category?: string;
+          title?: string;
+          summary?: string;
+          billing_mode?: string;
+          dot_credit_cost?: number | null;
+          linked_tier?: string | null;
+          features?: Json;
+          display_order?: number;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -2342,6 +2565,9 @@ export type Database = {
           _avatar_url?: string | null;
           _participation_pathways?: string[] | null;
           _skip?: boolean;
+          _country?: string | null;
+          _interests?: string[] | null;
+          _mark_complete?: boolean;
         };
         Returns: Database["public"]["Tables"]["profiles"]["Row"];
       };
@@ -2350,6 +2576,77 @@ export type Database = {
           _limit?: number;
           _offset?: number;
         };
+        Returns: Json;
+      };
+      record_network_event: {
+        Args: {
+          _event_type: string;
+          _target_type?: string | null;
+          _target_id?: string | null;
+          _source?: string;
+          _attribution?: Json;
+          _metadata?: Json;
+          _dedupe_key?: string | null;
+        };
+        Returns: string;
+      };
+      record_verified_economic_outcome: {
+        Args: {
+          _outcome_type: string;
+          _payer_user_id: string | null;
+          _beneficiary_user_id: string | null;
+          _currency: string;
+          _gross_amount_minor: number;
+          _platform_fee_minor?: number;
+          _provider?: string;
+          _external_reference?: string | null;
+          _settlement_status?: string;
+          _lead_event_id?: string | null;
+          _target_type?: string | null;
+          _target_id?: string | null;
+          _verified_by?: string;
+          _metadata?: Json;
+        };
+        Returns: string;
+      };
+      get_creator_economic_summary: {
+        Args: {
+          _days?: number;
+        };
+        Returns: Json;
+      };
+      admin_economic_readiness: {
+        Args: {
+          _days?: number;
+        };
+        Returns: Json;
+      };
+      submit_verification_request: {
+        Args: {
+          _verification_domain: string;
+          _pathway_type: string;
+          _organization_name?: string;
+          _evidence_url?: string | null;
+          _submission_note?: string;
+        };
+        Returns: Database["public"]["Tables"]["account_verifications"]["Row"];
+      };
+      review_verification_request: {
+        Args: {
+          _verification_id: string;
+          _status: string;
+          _reviewer_note?: string;
+        };
+        Returns: Database["public"]["Tables"]["account_verifications"]["Row"];
+      };
+      get_public_verification_badges: {
+        Args: {
+          _user_id: string;
+        };
+        Returns: Json;
+      };
+      get_monetization_foundation: {
+        Args: Record<PropertyKey, never>;
         Returns: Json;
       };
     };

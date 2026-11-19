@@ -257,7 +257,7 @@ async function runSchemaVerification(sql, releaseEntries) {
     throw new Error("Schema Verification FAILED — missing storage.buckets row 'media' (migration 0021)");
   }
 
-  const [{ pathways_col_present: pathwaysColPresent, onboarding_col_present: onboardingColPresent, anon_onb_exec: anonOnbExec }] = await sql`
+  const [{ pathways_col_present: pathwaysColPresent, onboarding_col_present: onboardingColPresent, country_col_present: countryColPresent, interests_col_present: interestsColPresent, anon_onb_exec: anonOnbExec }] = await sql`
     SELECT
       EXISTS (
         SELECT 1 FROM information_schema.columns
@@ -267,11 +267,74 @@ async function runSchemaVerification(sql, releaseEntries) {
         SELECT 1 FROM information_schema.columns
         WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'onboarding_completed_at'
       ) AS onboarding_col_present,
-      has_function_privilege('anon', 'public.complete_my_onboarding(text, text, text, text, text[], boolean)', 'EXECUTE') AS anon_onb_exec
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'country'
+      ) AS country_col_present,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'interests'
+      ) AS interests_col_present,
+      has_function_privilege('anon', 'public.complete_my_onboarding(text, text, text, text, text[], boolean, text, text[], boolean)', 'EXECUTE') AS anon_onb_exec
   `;
-  if (!pathwaysColPresent || !onboardingColPresent || anonOnbExec) {
+  if (!pathwaysColPresent || !onboardingColPresent || !countryColPresent || !interestsColPresent || anonOnbExec) {
     throw new Error(
-      `Schema Verification FAILED — onboarding schema/privilege mismatch (pathways=${pathwaysColPresent}, onboarding=${onboardingColPresent}, anon_onb_exec=${anonOnbExec})`,
+      `Schema Verification FAILED — onboarding schema/privilege mismatch (pathways=${pathwaysColPresent}, onboarding=${onboardingColPresent}, country=${countryColPresent}, interests=${interestsColPresent}, anon_onb_exec=${anonOnbExec})`,
+    );
+  }
+
+  const [{ ev_rls, out_rls, anon_ev_ins, auth_ev_ins, auth_ver_exec }] = await sql`
+    SELECT
+      coalesce((SELECT relrowsecurity FROM pg_class WHERE oid = 'public.economic_events'::regclass), false) AS ev_rls,
+      coalesce((SELECT relrowsecurity FROM pg_class WHERE oid = 'public.verified_economic_outcomes'::regclass), false) AS out_rls,
+      has_table_privilege('anon', 'public.economic_events', 'INSERT') AS anon_ev_ins,
+      has_table_privilege('authenticated', 'public.economic_events', 'INSERT') AS auth_ev_ins,
+      has_function_privilege(
+        'authenticated',
+        'public.record_verified_economic_outcome(text, uuid, uuid, char, bigint, bigint, text, text, text, uuid, text, text, text, jsonb)',
+        'EXECUTE'
+      ) AS auth_ver_exec
+  `;
+  if (!ev_rls || !out_rls || anon_ev_ins || auth_ev_ins || auth_ver_exec) {
+    throw new Error(
+      `Schema Verification FAILED — economic measurement security mismatch (ev_rls=${ev_rls}, out_rls=${out_rls}, anon_ev_ins=${anon_ev_ins}, auth_ev_ins=${auth_ev_ins}, auth_ver_exec=${auth_ver_exec})`,
+    );
+  }
+
+  const [{ av_rls, va_rls, mo_rls, anon_av_ins, auth_av_ins }] = await sql`
+    SELECT
+      coalesce((SELECT relrowsecurity FROM pg_class WHERE oid = 'public.account_verifications'::regclass), false) AS av_rls,
+      coalesce((SELECT relrowsecurity FROM pg_class WHERE oid = 'public.verification_audit'::regclass), false) AS va_rls,
+      coalesce((SELECT relrowsecurity FROM pg_class WHERE oid = 'public.monetization_offerings'::regclass), false) AS mo_rls,
+      has_table_privilege('anon', 'public.account_verifications', 'INSERT') AS anon_av_ins,
+      has_table_privilege('authenticated', 'public.account_verifications', 'INSERT') AS auth_av_ins
+  `;
+  if (!av_rls || !va_rls || !mo_rls || anon_av_ins || auth_av_ins) {
+    throw new Error(
+      `Schema Verification FAILED — verification foundation security mismatch (av_rls=${av_rls}, va_rls=${va_rls}, mo_rls=${mo_rls}, anon_av_ins=${anon_av_ins}, auth_av_ins=${auth_av_ins})`,
+    );
+  }
+
+  const [{ mutes_rls, anon_export_exec, location_col, website_col, vis_col }] = await sql`
+    SELECT
+      coalesce((SELECT relrowsecurity FROM pg_class WHERE oid = 'public.user_mutes'::regclass), false) AS mutes_rls,
+      has_function_privilege('anon', 'public.export_my_account_data()', 'EXECUTE') AS anon_export_exec,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'location'
+      ) AS location_col,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'website_url'
+      ) AS website_col,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'profile_visibility'
+      ) AS vis_col
+  `;
+  if (!mutes_rls || anon_export_exec || !location_col || !website_col || !vis_col) {
+    throw new Error(
+      `Schema Verification FAILED — Phase 1 profile/mute/export schema mismatch (mutes_rls=${mutes_rls}, anon_export_exec=${anon_export_exec}, location=${location_col}, website=${website_col}, visibility=${vis_col})`,
     );
   }
 
@@ -522,11 +585,14 @@ async function runFeatureAuthTests(sql) {
       });
       await actAs(userC);
       const [onboardedC] = await tx`
-        SELECT onboarding_completed_at, participation_pathways
+        SELECT onboarding_completed_at, participation_pathways, country, interests
         FROM public.complete_my_onboarding(
           _display_name := 'Verify Member C',
           _participation_pathways := ARRAY['general', 'creator']::text[],
-          _skip := false
+          _skip := false,
+          _country := 'Canada',
+          _interests := ARRAY['technology', 'creativity']::text[],
+          _mark_complete := true
         )
       `;
       await actAs(userA);
@@ -537,12 +603,64 @@ async function runFeatureAuthTests(sql) {
       if (
         !onboardedC?.onboarding_completed_at ||
         (onboardedC?.participation_pathways ?? []).length !== 2 ||
+        onboardedC?.country !== "Canada" ||
+        (onboardedC?.interests ?? []).length !== 2 ||
         !skippedA?.onboarding_completed_at ||
         (skippedA?.participation_pathways ?? []).length !== 0
       ) {
-        throw new Error("Onboarding RPC check failed for pathway selection or skip flow");
+        throw new Error("Onboarding RPC check failed for pathway/interest selection or skip flow");
       }
       results.push("Onboarding & Optional Pathways: PASS (anon blocked, pathways optional, skip supported)");
+
+      // 5. Economic Activity Measurement Integrity & Authorization (0025)
+      await actAs(userA);
+      await assertExpectThrow(tx, "client cannot fabricate transaction_completed via record_network_event", () =>
+        tx`SELECT public.record_network_event('transaction_completed', 'settlement', 'fake', 'web_app', '{}'::jsonb, '{"amount":999}'::jsonb)`,
+      );
+      await assertExpectThrow(tx, "client cannot call server-only record_verified_economic_outcome", () =>
+        tx`SELECT public.record_verified_economic_outcome('cash_subscription', ${userA}::uuid, ${userB}::uuid, 'USD', 5000, 500, 'stripe', 'pi_forged_client')`,
+      );
+      const [evId] = await tx`
+        SELECT public.record_network_event(
+          'business_lead_generated',
+          'profile',
+          ${userB}::text,
+          'ping_cta',
+          '{"utm_source":"explore"}'::jsonb,
+          '{"amount":10000,"revenue":999,"ping_category":"offer"}'::jsonb,
+          'lead_probe_0025'
+        ) AS id
+      `;
+      const [storedEv] = await tx`
+        SELECT event_category, verification_tier, metadata
+        FROM public.economic_events
+        WHERE id = ${evId.id}::uuid
+      `;
+      if (
+        storedEv?.event_category !== "lead" ||
+        storedEv?.verification_tier !== "system_observed" ||
+        "amount" in (storedEv?.metadata ?? {}) ||
+        "revenue" in (storedEv?.metadata ?? {})
+      ) {
+        throw new Error("Economic event scrubbing/classification check failed");
+      }
+      results.push("Economic Measurement Integrity: PASS (revenue fabrication blocked, sensitive metadata scrubbed)");
+
+      // 6. Optional Verification Authorization & Non-Self-Approval (0026)
+      await actAs(userA);
+      await assertExpectThrow(tx, "client cannot directly insert into account_verifications", () =>
+        tx`INSERT INTO public.account_verifications (user_id, verification_domain, pathway_type, status) VALUES (${userA}::uuid, 'identity', 'identity_standard', 'verified')`,
+      );
+      const [submittedReq] = await tx`
+        SELECT id, status FROM public.submit_verification_request('professional', 'investor', 'Test Fund', 'https://example.com', 'Optional check')
+      `;
+      if (submittedReq?.status !== "pending") {
+        throw new Error("Verification submission must always force pending status");
+      }
+      await assertExpectThrow(tx, "non-admin cannot approve own verification", () =>
+        tx`SELECT public.review_verification_request(${submittedReq.id}::uuid, 'verified', 'self-approve attempt')`,
+      );
+      results.push("Verification Authorization: PASS (optional flow pending by default, self-approval and role escalation blocked)");
 
       throw new VerificationRollbackSignal(results);
     });

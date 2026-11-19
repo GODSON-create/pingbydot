@@ -357,7 +357,7 @@ export function useSendPrivateMessage() {
 }
 
 /**
- * Mutation: Mark conversation as read.
+ * Mutation: Mark conversation as read (optimistically zeroes unread badge and refreshes cleanly).
  */
 export function useMarkConversationRead() {
   const qc = useQueryClient();
@@ -367,9 +367,26 @@ export function useMarkConversationRead() {
       const { error } = await supabase.rpc("mark_conversation_read", {
         p_conversation_id: conversationId,
       });
-      if (error) console.warn("Failed to mark conversation read:", error);
+      if (error) throw error;
     },
-    onSuccess: (_, conversationId) => {
+    onMutate: async (conversationId: string) => {
+      await qc.cancelQueries({ queryKey: ["user-conversations"] });
+      const previousLists = qc.getQueriesData<Conversation[]>({
+        queryKey: ["user-conversations"],
+      });
+      qc.setQueriesData<Conversation[]>({ queryKey: ["user-conversations"] }, (old) =>
+        old?.map((c) => (c.id === conversationId ? { ...c, unread_count: 0 } : c)),
+      );
+      return { previousLists };
+    },
+    onError: (_err, _conversationId, context) => {
+      if (context?.previousLists) {
+        for (const [key, data] of context.previousLists) {
+          qc.setQueryData(key, data);
+        }
+      }
+    },
+    onSettled: (_data, _err, conversationId) => {
       qc.invalidateQueries({ queryKey: ["user-conversations"] });
       qc.invalidateQueries({
         queryKey: ["conversation-messages", conversationId],
@@ -538,6 +555,48 @@ export function useConversationRealtime(
       supabase.removeChannel(channel);
     };
   }, [conversationId, qc, onNewMessage]);
+}
+
+/**
+ * Global inbox realtime subscription keeping unread counts synced across header, sidebar & lists.
+ */
+export function useInboxRealtime(currentUserId?: string) {
+  const qc = useQueryClient();
+
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    const channel = supabase
+      .channel(`dm_inbox:${currentUserId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "private_messages",
+        },
+        () => {
+          qc.invalidateQueries({ queryKey: ["user-conversations"] });
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "conversation_members",
+          filter: `user_id=eq.${currentUserId}`,
+        },
+        () => {
+          qc.invalidateQueries({ queryKey: ["user-conversations"] });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUserId, qc]);
 }
 
 /**

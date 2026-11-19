@@ -5,7 +5,9 @@ import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { PingComposer, type PingDraft } from "@/components/ping/PingComposer";
+import { clearPingComposerDraft } from "@/lib/draft-store";
 import { pingSchema } from "@/lib/validation";
+import { ensureClientProfileRow } from "@/lib/ensure-profile";
 import { sanitizeErrorMessage } from "@/lib/error-diagnostics";
 
 function describePublishError(error: unknown): string {
@@ -86,7 +88,8 @@ function Create() {
       // Recover automatically if OAuth/signup triggered before public.profiles row finished syncing
       if (error && error.code === "23503") {
         const { error: profileErr } = await supabase.rpc("ensure_my_profile");
-        if (!profileErr) {
+        const recovered = profileErr ? await ensureClientProfileRow(user) : true;
+        if (recovered) {
           const retry = await supabase.from("pings").insert(insertPayload).select("id").single();
           data = retry.data;
           error = retry.error;
@@ -112,6 +115,7 @@ function Create() {
       return { id: data.id, hubShareError };
     },
     onSuccess: ({ id, hubShareError }) => {
+      clearPingComposerDraft(initialHubId ? `hub:${initialHubId}` : "new");
       qc.invalidateQueries();
       if (hubShareError) {
         toast.warning(`Ping published, but sharing to the Hub failed: ${hubShareError}`);
@@ -133,6 +137,7 @@ function Create() {
       <div className="mt-6">
         <PingComposer
           initial={initialHubId ? { hub_id: initialHubId } : undefined}
+          draftKey={initialHubId ? `hub:${initialHubId}` : "new"}
           submitLabel="Publish Ping"
           pending={m.isPending}
           onSubmit={(d) => m.mutate(d)}

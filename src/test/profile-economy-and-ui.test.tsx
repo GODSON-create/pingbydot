@@ -71,7 +71,7 @@ describe("PING Human Coordination Redesign, Economy, and Navigation Architecture
     expect(parsed.desiredOutcome).toBe("Ship v1 prototype in Q2");
   });
 
-  it("enforces 5 primary navigation items and 4 contextual Community navigation items", () => {
+  it("enforces 5 primary navigation items (Home, Explore, Create, Hubs, Inbox) and 4 contextual Community navigation items", () => {
     expect(isCommunityPath("/")).toBe(false);
     expect(isCommunityPath("/explore")).toBe(false);
     expect(isCommunityPath("/messages")).toBe(false);
@@ -85,15 +85,15 @@ describe("PING Human Coordination Redesign, Economy, and Navigation Architecture
     expect(navSrc).toContain("<span>Home</span>");
     expect(navSrc).toContain("<span>Explore</span>");
     expect(navSrc).toContain(">Create</span>");
-    expect(navSrc).toContain("<span>Community</span>");
-    expect(navSrc).toContain("<span>Profile</span>");
+    expect(navSrc).toContain("<span>Hubs</span>");
+    expect(navSrc).toContain("<span>Inbox</span>");
     expect(navSrc).toContain("<span>Back</span>");
     expect(navSrc).toContain("<span>Hub</span>");
     expect(navSrc).toContain("<span>Signal</span>");
     expect(navSrc).toContain("<span>Moment</span>");
   });
 
-  it("wires the 3-card Create Stack modal with exact required copy", () => {
+  it("wires the unified Create Stack modal with Ping, Moment, Signal, Hub, and Go Live", () => {
     const createStackSrc = readRel("src/components/layout/CreateStackModal.tsx");
     expect(createStackSrc).toContain("Create a Ping");
     expect(createStackSrc).toContain(
@@ -101,6 +101,8 @@ describe("PING Human Coordination Redesign, Economy, and Navigation Architecture
     );
     expect(createStackSrc).toContain("Create a Moment");
     expect(createStackSrc).toContain("Share what's happening around you.");
+    expect(createStackSrc).toContain("Create a Signal");
+    expect(createStackSrc).toContain("Create a Hub");
     expect(createStackSrc).toContain("Go Live");
     expect(createStackSrc).toContain("Bring people together in real time.");
   });

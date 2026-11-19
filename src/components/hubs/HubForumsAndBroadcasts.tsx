@@ -23,6 +23,7 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { ensureClientProfileRow } from "@/lib/ensure-profile";
 import { slugify, type Hub } from "@/lib/hubs";
 import { FounderAvatar } from "@/components/ping/Avatar";
 import { QueryErrorCard } from "@/components/QueryErrorCard";
@@ -180,7 +181,14 @@ export function HubForumsAndBroadcasts({
         .order("created_at", { ascending: true })
         .limit(200);
 
-      if (error) throw error;
+      if (error) {
+        if (error.code === "PGRST205" || /could not find the table/i.test(error.message || "")) {
+          throw new Error(
+            "Hub Forum discussion threads require database migration 0022 to be applied.",
+          );
+        }
+        throw error;
+      }
       return (data ?? []) as unknown as HubForumPostItem[];
     },
   });
@@ -263,13 +271,18 @@ export function HubForumsAndBroadcasts({
 
       let { error } = await supabase.from("hub_forum_posts").insert(insertPayload);
       if (error && error.code === "23503") {
-        const { error: profileErr } = await supabase.rpc("ensure_my_profile");
-        if (!profileErr) {
+        const recovered = await ensureClientProfileRow(user);
+        if (recovered) {
           const retry = await supabase.from("hub_forum_posts").insert(insertPayload);
           error = retry.error;
         }
       }
-      if (error) throw error;
+      if (error) {
+        if (error.code === "PGRST205" || /could not find the table/i.test(error.message || "")) {
+          throw new Error("Posting in Hub Forums requires database migration 0022.");
+        }
+        throw error;
+      }
     },
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["hub-forum-posts", hub.id] });

@@ -2,6 +2,8 @@ import { siteUrl } from "@/lib/site";
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { RepingSource } from "@/lib/comments";
+import { isNative } from "@/lib/native";
+import { fetchPublicPings } from "@/lib/public-queries";
 import { readPublicPings } from "@/lib/public-pings.functions";
 
 export type Profile = {
@@ -11,6 +13,11 @@ export type Profile = {
   bio: string;
   avatar_url: string | null;
   created_at: string;
+  location?: string | null;
+  country?: string | null;
+  website_url?: string | null;
+  profile_visibility?: "public" | "followers" | "private" | null;
+  interests?: string[];
   participation_pathways?: string[];
   onboarding_completed_at?: string | null;
 };
@@ -86,12 +93,21 @@ const DB_CATEGORY_MAP: Record<string, string> = {
   collaboration: "opportunity",
 };
 
+async function queryPublicPings(data: {
+  kind: "feed" | "ping" | "profile";
+  value: string | null;
+  page: number;
+}) {
+  if (isNative) return fetchPublicPings(supabase, data);
+  return readPublicPings({ data });
+}
+
 export const feedQuery = (category: string | null, page = 0) =>
   queryOptions({
     queryKey: ["feed", category, page],
     queryFn: async () => {
       const dbCat = category ? (DB_CATEGORY_MAP[category] ?? category) : null;
-      const result = await readPublicPings({ data: { kind: "feed", value: dbCat, page } });
+      const result = await queryPublicPings({ kind: "feed", value: dbCat, page });
       return result.pings as unknown as Ping[];
     },
   });
@@ -100,7 +116,7 @@ export const pingQuery = (id: string) =>
   queryOptions({
     queryKey: ["ping", id],
     queryFn: async () => {
-      const result = await readPublicPings({ data: { kind: "ping", value: id, page: 0 } });
+      const result = await queryPublicPings({ kind: "ping", value: id, page: 0 });
       return (result.pings[0] ?? null) as unknown as Ping | null;
     },
   });
@@ -109,7 +125,7 @@ export const profileQuery = (username: string) =>
   queryOptions({
     queryKey: ["profile", username],
     queryFn: async () => {
-      const result = await readPublicPings({ data: { kind: "profile", value: username, page: 0 } });
+      const result = await queryPublicPings({ kind: "profile", value: username, page: 0 });
       if (!result.profile) return null;
       return {
         profile: result.profile as Profile,

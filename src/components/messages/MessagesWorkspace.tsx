@@ -9,6 +9,7 @@ import {
   Search,
   Shield,
   Sparkles,
+  X,
 } from "lucide-react";
 import { useDeferredValue, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -27,10 +28,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { setFocusedWorkspaceActive } from "@/lib/draft-store";
+import { useKeyboardOpen } from "@/lib/native";
+import { useNavOverlay } from "@/lib/nav-overlay";
 import {
   conversationByIdQuery,
   conversationMessagesQuery,
   useGetOrCreateDirectConversation,
+  useInboxRealtime,
   userConversationsQuery,
 } from "@/lib/messages";
 import type { Profile } from "@/lib/pings";
@@ -170,9 +175,12 @@ export function MessagesWorkspace({
   redirectUnauthenticated?: boolean;
 }) {
   const { user, ready } = useAuth();
+  const keyboardOpen = useKeyboardOpen();
   const navigate = useNavigate();
+  const { isOpen, openOverlay, closeOverlays } = useNavOverlay();
   const [newChatOpen, setNewChatOpen] = useState(false);
   const handledUserParamRef = useRef<string | null>(null);
+  const peerProfileOpen = isOpen("chat-peer-profile");
 
   const { mutateAsync: getOrCreateConversation } = useGetOrCreateDirectConversation();
 
@@ -223,10 +231,13 @@ export function MessagesWorkspace({
 
   const {
     data: conversations = [],
+    isLoading: isConversationsLoading,
     isError: isConversationsError,
     error: conversationsError,
     refetch: refetchConversations,
   } = useQuery(userConversationsQuery(user?.id));
+
+  useInboxRealtime(user?.id);
 
   // If user opens page with no selected conversation on desktop, default to the first one
   useEffect(() => {
@@ -245,13 +256,25 @@ export function MessagesWorkspace({
   }, [activeConversationId, conversationId, userIdParam, conversations]);
 
   const listedConversation = conversations.find((c) => c.id === activeConversationId);
-  const { data: fetchedConversation, isLoading: isSingleConvLoading } = useQuery(
+  const {
+    data: fetchedConversation,
+    isLoading: isSingleConvLoading,
+    isError: isSingleConvError,
+    error: singleConvError,
+    refetch: refetchSingleConv,
+  } = useQuery(
     conversationByIdQuery(listedConversation ? undefined : activeConversationId, user?.id),
   );
   const activeConversation = listedConversation ?? fetchedConversation ?? undefined;
 
+  useEffect(() => {
+    if (!activeConversationId) return;
+    return setFocusedWorkspaceActive(true);
+  }, [activeConversationId]);
+
   const {
     data: messages = [],
+    isLoading: isMessagesLoading,
     isError: isMessagesError,
     error: messagesError,
     refetch: refetchMessages,
@@ -269,49 +292,50 @@ export function MessagesWorkspace({
     }
   };
 
-  const communitySwitcher = showCommunityHeader ? (
-    <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-3">
-      <div className="inline-flex items-center gap-1.5 rounded-full bg-secondary/80 p-1">
-        <Link
-          to="/hubs"
-          search={{}}
-          className="inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <Building2 className="size-3.5" /> Hub
-        </Link>
-        <Link
-          to="/signals"
-          className="inline-flex items-center gap-1.5 rounded-full bg-foreground text-background shadow-sm px-4 py-1.5 text-xs font-semibold transition-colors"
-        >
-          <Radio className="size-3.5" /> Signal
-        </Link>
-        <Link
-          to="/hubs"
-          search={{ view: "moments" }}
-          className="inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <Sparkles className="size-3.5" /> Moment
-        </Link>
-      </div>
+  const communitySwitcher =
+    showCommunityHeader && !activeConversationId ? (
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2.5 border-b border-border/60 pb-2.5">
+        <div className="inline-flex lg:hidden max-w-full items-center gap-1 overflow-x-auto scrollbar-none rounded-full bg-secondary/80 p-1">
+          <Link
+            to="/hubs"
+            search={{}}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Building2 className="size-3.5" /> Hub
+          </Link>
+          <Link
+            to="/signals"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-foreground text-background shadow-sm px-3.5 py-1.5 text-xs font-semibold transition-colors"
+          >
+            <Radio className="size-3.5" /> Signal
+          </Link>
+          <Link
+            to="/hubs"
+            search={{ view: "moments" }}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Sparkles className="size-3.5" /> Moment
+          </Link>
+        </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/15 px-3 py-1 text-xs font-semibold text-primary">
-          <MessageSquare className="size-3.5" />
-          Community Destination · Signal
-        </span>
-        <span className="inline-flex items-center gap-1 rounded-full bg-gold/15 text-gold border border-gold/30 px-2.5 py-0.5 text-[11px] font-bold">
-          1-on-1 Chats
-        </span>
-        <Link
-          to="/signals/channels"
-          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold text-foreground hover:bg-secondary transition-colors"
-        >
-          <Radio className="size-3.5 text-primary" />
-          Institutional Channels
-        </Link>
+        <div className="flex flex-wrap items-center gap-2 ml-auto">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/15 px-3 py-1 text-xs font-semibold text-primary">
+            <MessageSquare className="size-3.5" />
+            Community Destination · Signal
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-full bg-gold/15 text-gold border border-gold/30 px-2.5 py-0.5 text-[11px] font-bold">
+            1-on-1 Chats
+          </span>
+          <Link
+            to="/signals/channels"
+            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold text-foreground hover:bg-secondary transition-colors"
+          >
+            <Radio className="size-3.5 text-primary" />
+            Institutional Channels
+          </Link>
+        </div>
       </div>
-    </div>
-  ) : null;
+    ) : null;
 
   if (ready && !user && !redirectUnauthenticated) {
     return (
@@ -347,19 +371,24 @@ export function MessagesWorkspace({
     <div
       className={cn(
         "w-full max-w-7xl mx-auto flex flex-col",
-        showCommunityHeader
-          ? "px-3 sm:px-4 lg:px-6 pt-3 pb-2 h-[calc(100dvh-9.25rem)] md:h-[calc(100dvh-4.75rem)] lg:h-[calc(100dvh-0.75rem)]"
-          : "px-2 sm:px-4 lg:px-6 pt-2 pb-2 h-[calc(100dvh-9.25rem)] md:h-[calc(100dvh-4.75rem)] lg:h-[calc(100dvh-0.75rem)]",
+        keyboardOpen
+          ? "px-2 sm:px-4 lg:px-6 pt-2 pb-1 h-[calc(100dvh-1rem)]"
+          : activeConversationId
+            ? "px-2 sm:px-4 lg:px-6 pt-2 pb-2 h-[calc(100dvh-0.75rem)] md:h-[calc(100dvh-4.75rem)] lg:h-[calc(100dvh-0.75rem)]"
+            : showCommunityHeader
+              ? "px-3 sm:px-4 lg:px-6 pt-3 pb-2 h-[calc(100dvh-9.25rem)] md:h-[calc(100dvh-4.75rem)] lg:h-[calc(100dvh-0.75rem)]"
+              : "px-2 sm:px-4 lg:px-6 pt-2 pb-2 h-[calc(100dvh-9.25rem)] md:h-[calc(100dvh-4.75rem)] lg:h-[calc(100dvh-0.75rem)]",
       )}
     >
       {communitySwitcher}
 
-      <div className="flex-1 min-h-0 flex gap-4">
-        {/* 1. LEFT CONVERSATION LIST (Hidden on mobile if a chat is active) */}
+      <div className="relative flex-1 min-h-0 flex gap-4">
+        {/* 1. LEFT CONVERSATION LIST (Hidden on mobile if a chat is active, or on laptop when Peer Profile drawer is open) */}
         <div
           className={cn(
             "w-full lg:w-80 xl:w-96 shrink-0 h-full",
             activeConversationId ? "hidden lg:block" : "block",
+            peerProfileOpen && "lg:hidden xl:block",
           )}
         >
           {isConversationsError ? (
@@ -372,12 +401,19 @@ export function MessagesWorkspace({
                 onRetry={() => void refetchConversations()}
               />
             </div>
+          ) : isConversationsLoading && conversations.length === 0 ? (
+            <div className="space-y-2 rounded-3xl border border-border/70 bg-card/40 p-4 h-full">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-14 animate-pulse rounded-2xl bg-muted/40" />
+              ))}
+            </div>
           ) : (
             <ConversationList
               conversations={conversations}
               selectedId={activeConversationId}
               onNewChat={() => setNewChatOpen(true)}
               onSelect={(c) => {
+                closeOverlays();
                 setActiveConversationId(c.id);
                 navigate({
                   to: basePath,
@@ -409,7 +445,13 @@ export function MessagesWorkspace({
               <DirectMessageChat
                 conversation={activeConversation}
                 messages={messages}
+                isLoading={isMessagesLoading}
+                peerProfileOpen={peerProfileOpen}
+                onTogglePeerProfile={() =>
+                  peerProfileOpen ? closeOverlays() : openOverlay("chat-peer-profile")
+                }
                 onBack={() => {
+                  closeOverlays();
                   clearedByUserRef.current = true;
                   setActiveConversationId(undefined);
                   navigate({ to: basePath, search: {} as any });
@@ -419,6 +461,50 @@ export function MessagesWorkspace({
           ) : activeConversationId && isSingleConvLoading ? (
             <div className="flex-1 bg-card/40 rounded-3xl border border-border/70 flex flex-col items-center justify-center p-8 text-xs text-muted-foreground">
               Opening conversation…
+            </div>
+          ) : activeConversationId && isSingleConvError ? (
+            <div className="p-4 flex flex-col gap-3">
+              <QueryErrorCard
+                title="Couldn't open conversation"
+                description="You may not have access to this private conversation, or your connection dropped."
+                error={singleConvError}
+                onRetry={() => void refetchSingleConv()}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="self-center rounded-full"
+                onClick={() => {
+                  clearedByUserRef.current = true;
+                  setActiveConversationId(undefined);
+                  navigate({ to: basePath, search: {} as any });
+                }}
+              >
+                Back to conversations
+              </Button>
+            </div>
+          ) : activeConversationId ? (
+            <div className="flex-1 bg-card/40 rounded-3xl border border-border/70 flex flex-col items-center justify-center text-center p-8">
+              <p className="font-display font-bold text-base text-foreground">
+                Conversation unavailable
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground max-w-sm">
+                This conversation doesn&apos;t exist or is restricted to its participants.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-4 rounded-full"
+                onClick={() => {
+                  clearedByUserRef.current = true;
+                  setActiveConversationId(undefined);
+                  navigate({ to: basePath, search: {} as any });
+                }}
+              >
+                Back to inbox
+              </Button>
             </div>
           ) : (
             <div className="flex-1 bg-card/40 rounded-3xl border border-border/70 flex flex-col items-center justify-center text-center p-8 text-muted-foreground">
@@ -456,9 +542,28 @@ export function MessagesWorkspace({
           )}
         </div>
 
-        {/* 3. RIGHT CONTEXTUAL USER DETAILS (Desktop only: >= 1280px) */}
-        {activeConversation && otherUser && (
-          <div className="hidden xl:flex flex-col w-72 shrink-0 h-full bg-card/40 rounded-3xl border border-border/70 p-5 overflow-y-auto">
+        {/* 3. RIGHT CONTEXTUAL USER DETAILS (Closed by default; opened cleanly on demand) */}
+        {peerProfileOpen && activeConversation && otherUser && (
+          <aside
+            aria-label="Participant profile details"
+            data-testid="chat-peer-profile-drawer"
+            className="fixed inset-0 z-50 lg:static lg:z-auto flex flex-col w-full lg:w-72 shrink-0 h-full bg-card lg:bg-card/60 lg:rounded-3xl border border-border/70 p-5 overflow-y-auto shadow-lift lg:shadow-none"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                Participant
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-7 rounded-full"
+                onClick={closeOverlays}
+                aria-label="Close participant profile"
+              >
+                <X className="size-4" />
+              </Button>
+            </div>
             <div className="flex flex-col items-center text-center pb-5 border-b border-border/50">
               <FounderAvatar
                 name={otherUser.display_name || otherUser.username}
@@ -482,7 +587,11 @@ export function MessagesWorkspace({
                 variant="outline"
                 className="rounded-full mt-4 text-xs w-full"
               >
-                <Link to="/@{$username}" params={{ username: otherUser.username }}>
+                <Link
+                  to="/@{$username}"
+                  params={{ username: otherUser.username }}
+                  onClick={closeOverlays}
+                >
                   <ExternalLink className="size-3.5 mr-1.5" /> View Profile
                 </Link>
               </Button>
@@ -498,7 +607,7 @@ export function MessagesWorkspace({
                 <span>Real-time presence and read states are synchronized.</span>
               </div>
             </div>
-          </div>
+          </aside>
         )}
       </div>
 

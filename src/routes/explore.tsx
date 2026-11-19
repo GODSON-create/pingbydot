@@ -1,7 +1,7 @@
 import { useDeferredValue, useState } from "react";
 import { pageHead } from "@/lib/site";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { QueryErrorCard } from "@/components/QueryErrorCard";
 import {
   ArrowRight,
@@ -82,13 +82,18 @@ export const Route = createFileRoute("/explore")({
 function PeopleDiscoveryCard({
   person,
   currentUserId,
+  followed,
+  onFollowChanged,
 }: {
   person: Profile;
   currentUserId?: string | undefined;
+  followed: boolean;
+  onFollowChanged: () => void;
 }) {
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const startChat = useGetOrCreateDirectConversation();
-  const [followed, setFollowed] = useState(false);
+  const [followPending, setFollowPending] = useState(false);
   const name = person.display_name || person.username;
 
   const handleFollow = async () => {
@@ -96,23 +101,31 @@ function PeopleDiscoveryCard({
       navigate({ to: "/login", search: { next: `/@${person.username}` } });
       return;
     }
+    setFollowPending(true);
     try {
       if (followed) {
-        await supabase
+        const { error } = await supabase
           .from("follows")
           .delete()
           .eq("follower_id", currentUserId)
           .eq("following_id", person.id);
-        setFollowed(false);
+        if (error) throw error;
+        toast.success(`Unfollowed @${person.username}`);
       } else {
-        await supabase
+        const { error } = await supabase
           .from("follows")
           .insert({ follower_id: currentUserId, following_id: person.id });
-        setFollowed(true);
+        if (error && error.code !== "23505") throw error;
         toast.success(`Following @${person.username}`);
       }
+      onFollowChanged();
+      qc.invalidateQueries({ queryKey: ["follow", person.id] });
+      qc.invalidateQueries({ queryKey: ["following-feed"] });
+      qc.invalidateQueries({ queryKey: ["header-notifications"] });
     } catch {
       toast.error("Could not update follow status.");
+    } finally {
+      setFollowPending(false);
     }
   };
 
@@ -150,6 +163,7 @@ function PeopleDiscoveryCard({
           type="button"
           size="sm"
           variant={followed ? "outline" : "hero"}
+          disabled={followPending}
           onClick={handleFollow}
           className="h-8 flex-1 rounded-full text-xs font-semibold"
         >
@@ -187,7 +201,13 @@ function Explore() {
   const initialExplorePings = Route.useLoaderData();
   const cat = c ?? null;
   const pageNum = page ?? 0;
-  const { data = [] } = useQuery({
+  const {
+    data = [],
+    isLoading: isFeedLoading,
+    isError: isFeedError,
+    error: feedError,
+    refetch: refetchFeed,
+  } = useQuery({
     ...feedQuery(cat, pageNum),
     initialData: initialExplorePings,
     initialDataUpdatedAt: 0,
@@ -202,6 +222,7 @@ function Explore() {
   // Fetch real People & Communities for network discovery
   const {
     data: people = [],
+    isLoading: isPeopleLoading,
     isError: isPeopleError,
     error: peopleError,
     refetch: refetchPeople,
@@ -227,6 +248,20 @@ function Explore() {
       const { data: rows, error } = await query;
       if (error) throw error;
       return (rows ?? []) as Profile[];
+    },
+  });
+
+  const { data: followedIds = new Set<string>(), refetch: refetchFollowed } = useQuery({
+    queryKey: ["explore-followed", user?.id],
+    enabled: Boolean(user?.id),
+    queryFn: async (): Promise<Set<string>> => {
+      if (!user?.id) return new Set();
+      const { data: rows, error } = await supabase
+        .from("follows")
+        .select("following_id")
+        .eq("follower_id", user.id);
+      if (error) throw error;
+      return new Set((rows ?? []).map((r) => r.following_id));
     },
   });
 
@@ -373,7 +408,7 @@ function Explore() {
 
       {/* D1. People You Should Know */}
       {(activeFilter === "all" || activeFilter === "people") &&
-        (isPeopleError || people.length > 0) && (
+        (activeFilter === "people" || isPeopleError || people.length > 0) && (
           <section className="mt-8" aria-labelledby="explore-people-heading">
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -398,17 +433,53 @@ function Explore() {
                 </button>
               )}
             </div>
-            {isPeopleError ? (
+            {isPeopleLoading ? (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="surface-card h-44 animate-pulse rounded-3xl p-5" />
+                ))}
+              </div>
+            ) : isPeopleError ? (
               <QueryErrorCard
                 compact
                 title="Couldn't load people directory"
                 error={peopleError}
                 onRetry={() => void refetchPeople()}
               />
+            ) : people.length === 0 ? (
+              <div className="surface-card rounded-3xl p-8 text-center">
+                <p className="font-display text-base font-bold">
+                  {deferredQuery
+                    ? `No people matching "${searchQuery.trim()}"`
+                    : "No other people to show yet"}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {deferredQuery
+                    ? "Try a different name, @handle, or clear your search filter."
+                    : "Explore public Pings or join a Hub to meet members across the network."}
+                </p>
+                {deferredQuery && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSearchQuery("")}
+                    className="mt-4 rounded-full"
+                  >
+                    Clear search
+                  </Button>
+                )}
+              </div>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {(activeFilter === "people" ? people : people.slice(0, 4)).map((person) => (
-                  <PeopleDiscoveryCard key={person.id} person={person} currentUserId={user?.id} />
+                  <PeopleDiscoveryCard
+                    key={person.id}
+                    person={person}
+                    currentUserId={user?.id}
+                    followed={followedIds.has(person.id)}
+                    onFollowChanged={() => void refetchFollowed()}
+                  />
                 ))}
               </div>
             )}
@@ -591,7 +662,20 @@ function Explore() {
               </div>
             </div>
 
-            {filteredPings.length === 0 ? (
+            {isFeedLoading && allPings.length === 0 ? (
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="surface-card h-48 animate-pulse rounded-3xl p-5" />
+                ))}
+              </div>
+            ) : isFeedError ? (
+              <QueryErrorCard
+                title="Couldn't load Explore Pings"
+                description="A connection issue prevented loading public Pings. Try again below."
+                error={feedError}
+                onRetry={() => void refetchFeed()}
+              />
+            ) : filteredPings.length === 0 ? (
               <div className="surface-card mx-auto mt-4 max-w-lg rounded-3xl p-10 text-center">
                 <h3 className="font-display text-xl font-bold">
                   {deferredQuery

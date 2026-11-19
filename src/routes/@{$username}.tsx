@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { pageHead, siteUrl, NOINDEX } from "@/lib/site";
 import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
 import { useSuspenseQuery, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -32,6 +32,9 @@ import {
   Lock,
   Wallet,
   Activity,
+  MapPin,
+  Globe,
+  VolumeX,
 } from "lucide-react";
 import { toast } from "sonner";
 import { profileQuery, likeCount, replyCount, type Profile, type Ping } from "@/lib/pings";
@@ -42,8 +45,10 @@ import {
   useBlockUser,
   useUnblockUser,
 } from "@/lib/messages";
+import { mutedUsersQuery, useMuteUser, useUnmuteUser } from "@/lib/mutes";
 import { FounderAvatar } from "@/components/ping/Avatar";
 import { PingCard } from "@/components/ping/PingCard";
+import { QueryErrorCard } from "@/components/QueryErrorCard";
 import { ErrorComponent } from "@/routes/__root";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -68,7 +73,7 @@ import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
 import { useSignOut } from "@/components/layout/SiteHeader";
 import { useNavOverlay } from "@/lib/nav-overlay";
-import { formatPathwayLabel } from "@/lib/pathways";
+import { formatInterestLabel, formatPathwayLabel } from "@/lib/pathways";
 import { PingMark } from "@/components/BrandLogo";
 import { PublicConnections } from "@/components/connections/PublicConnections";
 import { ProfileHighlights } from "@/components/moments/ProfileHighlights";
@@ -81,6 +86,7 @@ import {
 } from "@/lib/moments";
 import { MomentViewerModal } from "@/components/moments/MomentViewerModal";
 import { dotSummaryQuery, publicAccountTierQuery } from "@/lib/economy";
+import { formatProfessionalBadgeLabel, publicVerificationQuery } from "@/lib/verification";
 import { followQuery, myHubsQuery } from "@/lib/hub-queries";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -96,7 +102,7 @@ export const Route = createFileRoute("/@{$username}")({
   notFoundComponent: () => (
     <div className="px-5 py-20 text-center">
       <h1 className="font-display text-4xl font-extrabold">No one here yet</h1>
-      <p>That founder profile doesn't exist.</p>
+      <p className="mt-2 text-sm text-muted-foreground">That Ping profile doesn&apos;t exist.</p>
       <Button asChild className="mt-6">
         <Link to="/explore">Explore Pings</Link>
       </Button>
@@ -166,6 +172,9 @@ function FollowButton({
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ["follow", profileId] });
       qc.invalidateQueries({ queryKey: ["profile-follow-list", profileId] });
+      qc.invalidateQueries({ queryKey: ["following-feed"] });
+      qc.invalidateQueries({ queryKey: ["explore-followed"] });
+      qc.invalidateQueries({ queryKey: ["header-notifications"] });
     },
   });
 
@@ -179,7 +188,7 @@ function FollowButton({
       disabled={followMutation.isPending}
       onClick={() => {
         if (!currentUserId) {
-          toast("Sign in to follow founders", {
+          toast("Sign in to follow people", {
             action: { label: "Log in", onClick: () => (window.location.href = "/login") },
           });
           return;
@@ -215,12 +224,22 @@ function FollowListDialog({
 }) {
   const [mode, setMode] = useState<"followers" | "following">(initialMode);
 
-  const { data: rows = [], isLoading } = useQuery({
+  useEffect(() => {
+    if (open) setMode(initialMode);
+  }, [open, initialMode]);
+
+  const {
+    data: rows = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["profile-follow-list", profileId, mode],
     enabled: open && Boolean(profileId),
     queryFn: async (): Promise<Profile[]> => {
       if (mode === "followers") {
-        const { data, error } = await supabase
+        const { data, error: queryError } = await supabase
           .from("follows")
           .select(
             "follower:profiles!follows_follower_id_fkey(id, username, display_name, bio, avatar_url, created_at)",
@@ -228,12 +247,12 @@ function FollowListDialog({
           .eq("following_id", profileId)
           .order("created_at", { ascending: false })
           .limit(60);
-        if (error || !data) return [];
-        return data
+        if (queryError) throw queryError;
+        return (data ?? [])
           .map((r) => (r as unknown as { follower: Profile | null }).follower)
           .filter((p): p is Profile => Boolean(p));
       }
-      const { data, error } = await supabase
+      const { data, error: queryError } = await supabase
         .from("follows")
         .select(
           "following:profiles!follows_following_id_fkey(id, username, display_name, bio, avatar_url, created_at)",
@@ -241,26 +260,20 @@ function FollowListDialog({
         .eq("follower_id", profileId)
         .order("created_at", { ascending: false })
         .limit(60);
-      if (error || !data) return [];
-      return data
+      if (queryError) throw queryError;
+      return (data ?? [])
         .map((r) => (r as unknown as { following: Profile | null }).following)
         .filter((p): p is Profile => Boolean(p));
     },
   });
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (next) setMode(initialMode);
-        onOpenChange(next);
-      }}
-    >
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md rounded-3xl p-6 max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="font-display text-xl">{displayName}</DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
-            Browse builders connected with this profile.
+            Browse people connected with this profile.
           </DialogDescription>
         </DialogHeader>
 
@@ -298,6 +311,13 @@ function FollowListDialog({
                 <div key={i} className="h-14 animate-pulse rounded-2xl bg-muted/40" />
               ))}
             </div>
+          ) : isError ? (
+            <QueryErrorCard
+              compact
+              title="Couldn't load connections"
+              error={error}
+              onRetry={() => void refetch()}
+            />
           ) : rows.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
               {mode === "followers" ? "No followers yet." : "Not following anyone yet."}
@@ -460,6 +480,8 @@ function ProfileContent({
   const removeCloseCircle = useRemoveCloseCircleMember();
   const blockUser = useBlockUser();
   const unblockUser = useUnblockUser();
+  const muteUser = useMuteUser();
+  const unmuteUser = useUnmuteUser();
 
   const { isOpen, openOverlay, onOpenChangeFor, closeOverlays } = useNavOverlay();
   const [momentModalOpen, setMomentModalOpen] = useState(false);
@@ -478,15 +500,18 @@ function ProfileContent({
   const { data: joinedHubs = [] } = useQuery(myHubsQuery(profile.id));
   const { data: activeMoments = [] } = useQuery(userActiveMomentsQuery(profile.id, user?.id));
   const { data: accountTier = "free" } = useQuery(publicAccountTierQuery(profile.id));
+  const { data: verificationBadges } = useQuery(publicVerificationQuery(profile.id));
   // Retrieve DOT balance from the authenticated user's real wallet/account query
   const { data: dotSummary } = useQuery(dotSummaryQuery(user?.id));
   const { data: closeCircleMembers = [] } = useQuery(closeCircleQuery(user?.id));
   const { data: blockedUsers = [] } = useQuery(blockedUsersQuery(user?.id));
+  const { data: mutedUsers = [] } = useQuery(mutedUsersQuery(user?.id));
 
   const hasActiveMoments = activeMoments.length > 0;
   const hasUnseenMoments = activeMoments.some((m) => !m.has_viewed);
   const inCloseCircle = closeCircleMembers.some((m) => m.member_id === profile.id);
   const isBlocked = blockedUsers.some((b) => b.blocked_id === profile.id);
+  const isMuted = mutedUsers.some((m) => m.muted_id === profile.id);
 
   // Extract relevant skills / interests from the creator's structured Pings & bio hashtags
   const skillTags = (() => {
@@ -527,22 +552,37 @@ function ProfileContent({
     }
   };
 
-  const verificationBadge =
-    accountTier === "institution" ? (
-      <span className="inline-flex items-center gap-1 rounded-full bg-gold/15 text-gold border border-gold/30 px-2.5 py-0.5 text-[11px] font-bold">
-        <ShieldCheck className="size-3" /> Verified Institution
-      </span>
-    ) : accountTier === "pro" ? (
-      <span className="inline-flex items-center gap-1 rounded-full bg-gold/15 text-gold border border-gold/30 px-2.5 py-0.5 text-[11px] font-bold">
-        <Crown className="size-3" /> Founder Pro
-      </span>
-    ) : accountTier === "plus" ? (
-      <span className="inline-flex items-center gap-1 rounded-full bg-lime/20 dark:bg-lime/15 text-lime-foreground dark:text-lime border border-lime/30 px-2.5 py-0.5 text-[11px] font-bold">
-        <Sparkles className="size-3" /> Builder Plus
-      </span>
-    ) : (
-      <CheckCircle2 className="size-4 text-primary shrink-0" aria-label="Verified PING profile" />
-    );
+  const professionalBadgeLabel = verificationBadges?.professional_verified
+    ? formatProfessionalBadgeLabel(verificationBadges.professional_pathway)
+    : null;
+
+  const verificationBadge = (
+    <>
+      {verificationBadges?.identity_verified && (
+        <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 text-primary border border-primary/30 px-2.5 py-0.5 text-[11px] font-bold">
+          <CheckCircle2 className="size-3" /> Verified Identity
+        </span>
+      )}
+      {professionalBadgeLabel && (
+        <span className="inline-flex items-center gap-1 rounded-full bg-gold/15 text-gold border border-gold/30 px-2.5 py-0.5 text-[11px] font-bold">
+          <ShieldCheck className="size-3" /> {professionalBadgeLabel}
+        </span>
+      )}
+      {accountTier === "institution" ? (
+        <span className="inline-flex items-center gap-1 rounded-full bg-secondary text-secondary-foreground border border-border px-2.5 py-0.5 text-[11px] font-bold">
+          <Building2 className="size-3" /> Organization Plan
+        </span>
+      ) : accountTier === "pro" ? (
+        <span className="inline-flex items-center gap-1 rounded-full bg-gold/15 text-gold border border-gold/30 px-2.5 py-0.5 text-[11px] font-bold">
+          <Crown className="size-3" /> Founder Pro
+        </span>
+      ) : accountTier === "plus" ? (
+        <span className="inline-flex items-center gap-1 rounded-full bg-lime/20 dark:bg-lime/15 text-lime-foreground dark:text-lime border border-lime/30 px-2.5 py-0.5 text-[11px] font-bold">
+          <Sparkles className="size-3" /> Builder Plus
+        </span>
+      ) : null}
+    </>
+  );
 
   const drawerLinkClass =
     "flex w-full items-center justify-between gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -630,6 +670,44 @@ function ProfileContent({
                   </p>
                 )}
 
+                {/* Optional Location, Country & Website */}
+                {(profile.location || profile.country || profile.website_url) && (
+                  <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                    {(profile.location || profile.country) && (
+                      <span className="inline-flex items-center gap-1.5">
+                        <MapPin className="size-3.5 text-primary" />
+                        {[profile.location, profile.country].filter(Boolean).join(", ")}
+                      </span>
+                    )}
+                    {profile.website_url && /^https?:\/\//i.test(profile.website_url) && (
+                      <a
+                        href={profile.website_url}
+                        target="_blank"
+                        rel="noopener noreferrer nofollow ugc"
+                        className="inline-flex items-center gap-1.5 text-primary hover:underline"
+                      >
+                        <Globe className="size-3.5" />
+                        {profile.website_url
+                          .replace(/^https?:\/\/(www\.)?/i, "")
+                          .replace(/\/$/, "")}
+                      </a>
+                    )}
+                  </div>
+                )}
+
+                {profile.interests && profile.interests.length > 0 && (
+                  <div className="mt-2.5 flex flex-wrap gap-1.5" aria-label="Interests">
+                    {profile.interests.map((id) => (
+                      <span
+                        key={id}
+                        className="rounded-full border border-border bg-secondary/70 px-2.5 py-0.5 text-[11px] font-medium text-secondary-foreground"
+                      >
+                        {formatInterestLabel(id)}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
                 {/* Optional Participation Pathways */}
                 {profile.participation_pathways && profile.participation_pathways.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Participation pathways">
@@ -703,7 +781,11 @@ function ProfileContent({
               </div>
             </div>
 
-            <PublicConnections connections={connections} />
+            <PublicConnections
+              connections={connections}
+              ownerId={profile.id}
+              currentUserId={user?.id}
+            />
           </div>
         </div>
       </section>
@@ -998,6 +1080,39 @@ function ProfileContent({
                       <span className="flex items-center gap-3">
                         <UserCheck className="size-4" />
                         {inCloseCircle ? "Remove from Close Circle" : "Add to Close Circle"}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        closeOverlays();
+                        if (!user) return;
+                        if (isMuted) {
+                          unmuteUser.mutate(
+                            { userId: user.id, targetUserId: profile.id },
+                            {
+                              onSuccess: () => toast.success(`Unmuted @${profile.username}`),
+                              onError: (e: any) =>
+                                toast.error(e?.message || "Could not unmute user."),
+                            },
+                          );
+                        } else {
+                          muteUser.mutate(
+                            { userId: user.id, targetUserId: profile.id },
+                            {
+                              onSuccess: () => toast.success(`Muted @${profile.username}`),
+                              onError: (e: any) =>
+                                toast.error(e?.message || "Could not mute user."),
+                            },
+                          );
+                        }
+                      }}
+                      className={drawerLinkClass}
+                    >
+                      <span className="flex items-center gap-3">
+                        <VolumeX className="size-4" />
+                        {isMuted ? "Unmute Account" : "Mute Account"}
                       </span>
                     </button>
 

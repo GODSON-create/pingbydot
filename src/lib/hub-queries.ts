@@ -1,7 +1,9 @@
 import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { isNative } from "@/lib/native";
 import type { Ping } from "@/lib/pings";
 import { PUBLIC_PING_SELECT } from "@/lib/public-pings.functions";
+import { fetchPublicHub, fetchPublicHubs } from "@/lib/public-queries";
 import { readPublicHub, readPublicHubs } from "@/lib/public-hubs.functions";
 import { safeResources, type Hub, type HubIntent, type HubRole } from "@/lib/hubs";
 
@@ -20,14 +22,21 @@ const toHub = (h: unknown) => {
 export const hubsQuery = (q: string, category: string | null, page: number) =>
   queryOptions({
     queryKey: ["hubs", q, category, page],
-    queryFn: async () => (await readPublicHubs({ data: { q, category, page } })).map(toHub),
+    queryFn: async () => {
+      const rows = isNative
+        ? await fetchPublicHubs(supabase, { q, category, page })
+        : await readPublicHubs({ data: { q, category, page } });
+      return rows.map(toHub);
+    },
   });
 
 export const hubQuery = (slug: string, intent: string | null) =>
   queryOptions({
     queryKey: ["hub", slug, intent],
     queryFn: async () => {
-      const r = await readPublicHub({ data: { slug, intent } });
+      const r = isNative
+        ? await fetchPublicHub(supabase, { slug, intent })
+        : await readPublicHub({ data: { slug, intent } });
       return r.hub ? { hub: toHub(r.hub), feed: r.feed as unknown as HubFeedItem[] } : null;
     },
   });
@@ -88,10 +97,11 @@ export const hubMembersQuery = (
   search: string,
   page: number,
   status: "active" | "pending" = "active",
+  enabled = true,
 ) =>
   queryOptions({
     queryKey: ["hub-members", hubId, search, page, status],
-    enabled: Boolean(hubId),
+    enabled: Boolean(hubId) && enabled,
     queryFn: async () => {
       let q = supabase
         .from("hub_members")
@@ -186,8 +196,11 @@ export const followQuery = (profileId: string, userId: string | undefined) =>
               .eq("follower_id", userId)
               .eq("following_id", profileId)
               .maybeSingle()
-          : Promise.resolve({ data: null }),
+          : Promise.resolve({ data: null, error: null }),
       ]);
+      if (followers.error) throw followers.error;
+      if (following.error) throw following.error;
+      if (mine.error) throw mine.error;
       return {
         followers: followers.count ?? 0,
         following: following.count ?? 0,

@@ -5,24 +5,31 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthShell, GoogleButton, OrDivider } from "@/components/AuthShell";
+import { PingMark } from "@/components/BrandLogo";
 import { useAuth } from "@/lib/auth";
-import { authDestination } from "@/lib/auth-return";
+import {
+  authDestination,
+  extractAuthCallbackParams,
+  unwrapOnboardingDestination,
+} from "@/lib/auth-return";
 import { sanitizeErrorMessage } from "@/lib/error-diagnostics";
 import { markWelcomeSeen, needsOnboarding } from "@/lib/pathways";
+import { trackEvent, trackSessionRestoredOnce } from "@/lib/telemetry";
 
 export const Route = createFileRoute("/login")({
   staticData: { sitemap: false },
-  validateSearch: (search: SearchSchemaInput & { next?: unknown }) => ({
+  validateSearch: (search: SearchSchemaInput & { next?: unknown; reason?: unknown }) => ({
     next:
       typeof search.next === "string" && search.next.trim() ? authDestination(search.next) : "/",
+    reason: search.reason === "expired" ? ("expired" as const) : undefined,
   }),
   head: () => ({
     meta: [
       { name: "robots", content: "noindex, nofollow" },
-      { title: "Log in — Ping" },
-      { name: "description", content: "Log in to Ping to connect, discover, and share." },
-      { property: "og:title", content: "Log in — Ping" },
-      { property: "og:description", content: "Log in to Ping." },
+      { title: "Sign in — Ping" },
+      { name: "description", content: "Sign in to Ping to connect, communicate, and discover." },
+      { property: "og:title", content: "Sign in — Ping" },
+      { property: "og:description", content: "Sign in to Ping." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -32,79 +39,175 @@ export const Route = createFileRoute("/login")({
 
 function Login() {
   const navigate = useNavigate();
-  const { next } = Route.useSearch();
-  const { ready, user, profile, profileLoading } = useAuth();
+  const { next, reason } = Route.useSearch();
+  const { ready, user, profile, profileLoading, sessionExpired, clearSessionExpired } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [callbackPending, setCallbackPending] = useState(false);
+  const isExpiredNotice = reason === "expired" || sessionExpired;
 
-  // Handle OAuth redirect tokens (including token-only hash responses) or errors cleanly
+  // Handle OAuth redirect tokens (both PKCE ?code= and hash #access_token=) or URL errors cleanly
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const searchParams = new URLSearchParams(window.location.search);
-    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    let active = true;
+    const {
+      code,
+      accessToken,
+      refreshToken,
+      error: oauthError,
+    } = extractAuthCallbackParams(window.location.search, window.location.hash);
 
-    const oauthError =
-      hashParams.get("error_description") ||
-      hashParams.get("error") ||
-      searchParams.get("error_description") ||
-      searchParams.get("error");
     if (oauthError) {
+      trackEvent("auth_failed", { method: "oauth_callback" });
       setErr(sanitizeErrorMessage(oauthError));
+      return;
     }
 
-    const accessToken = hashParams.get("access_token");
-    const refreshToken = hashParams.get("refresh_token");
+    const cleanSearch = () => {
+      const cleaned = new URLSearchParams(window.location.search);
+      cleaned.delete("code");
+      cleaned.delete("state");
+      const nextQs = cleaned.toString();
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `${window.location.pathname}${nextQs ? `?${nextQs}` : ""}`,
+      );
+    };
+
     if (accessToken && refreshToken) {
+      setCallbackPending(true);
       void supabase.auth
         .setSession({ access_token: accessToken, refresh_token: refreshToken })
         .then(({ error }) => {
+          if (!active) return;
           if (error) {
+            trackEvent("auth_failed", { method: "oauth_callback" });
             setErr(sanitizeErrorMessage(error.message));
           } else {
-            window.history.replaceState(
-              window.history.state,
-              "",
-              `${window.location.pathname}${window.location.search}`,
-            );
+            cleanSearch();
           }
+        })
+        .finally(() => {
+          if (active) setCallbackPending(false);
         });
+      return () => {
+        active = false;
+      };
     }
+
+    if (code) {
+      setCallbackPending(true);
+      void (async () => {
+        try {
+          const { data: sessionData } = await supabase.auth.getSession();
+          if (!sessionData.session) {
+            const { error } = await supabase.auth.exchangeCodeForSession(code);
+            if (!active) return;
+            if (error) {
+              const { data: retrySession } = await supabase.auth.getSession();
+              if (!retrySession.session) {
+                trackEvent("auth_failed", { method: "oauth_callback" });
+                setErr(sanitizeErrorMessage(error.message));
+                return;
+              }
+            }
+          }
+          if (active) cleanSearch();
+        } catch (callbackErr) {
+          if (!active) return;
+          trackEvent("auth_failed", { method: "oauth_callback" });
+          setErr(sanitizeErrorMessage(callbackErr));
+        } finally {
+          if (active) setCallbackPending(false);
+        }
+      })();
+    }
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
-    if (!ready || !user || profileLoading) return;
+    if (!ready || !user || profileLoading || callbackPending) return;
     markWelcomeSeen();
-    if (needsOnboarding(profile)) {
-      navigate({ to: "/onboarding", search: { next }, replace: true });
+    const isNew = needsOnboarding(profile);
+    const resolvedNext = unwrapOnboardingDestination(next);
+    trackSessionRestoredOnce(isNew);
+    if (isNew) {
+      navigate({ to: "/onboarding", search: { next: resolvedNext }, replace: true });
     } else {
-      navigate({ to: next, replace: true });
+      navigate({ to: resolvedNext, replace: true });
     }
-  }, [ready, user, profile, profileLoading, next, navigate]);
+  }, [ready, user, profile, profileLoading, callbackPending, next, navigate]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr(null);
     setPending(true);
+    trackEvent("auth_started", { method: "email" });
     try {
       const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-      if (error)
+      if (error) {
+        trackEvent("auth_failed", { method: "email" });
         return setErr(
           error.message.includes("confirm")
             ? "Please verify your email first — check your inbox."
             : "Couldn't log in. Check your email and password, then try again.",
         );
+      }
       markWelcomeSeen();
+      clearSessionExpired();
+      trackEvent("auth_completed", { method: "email", is_new_user: false });
     } catch {
+      trackEvent("auth_failed", { method: "email" });
       setErr("Couldn't connect. Please try again.");
     } finally {
       setPending(false);
     }
   };
 
+  if (!ready || user) {
+    return (
+      <div className="bg-hero flex min-h-[calc(100dvh-5rem)] items-center justify-center px-4 pb-24">
+        <div
+          role="status"
+          aria-live="polite"
+          className="surface-card flex flex-col items-center gap-3 rounded-3xl px-8 py-7 text-center shadow-lift"
+        >
+          <PingMark variant="lime" size="lg" alt="Ping by DOT" />
+          <p className="text-sm font-medium text-muted-foreground">
+            {user ? "Opening Ping…" : "Restoring your session…"}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <AuthShell title="Welcome back" subtitle="Pick up where you left off.">
+    <AuthShell
+      title="Sign in to Ping"
+      subtitle="Continue with Google or use your email and password."
+    >
+      {isExpiredNotice && !err ? (
+        <div
+          role="alert"
+          className="mb-5 rounded-2xl border border-gold/40 bg-gold/10 px-4 py-3 text-sm text-foreground"
+        >
+          Your session expired. Sign in again to continue.
+        </div>
+      ) : null}
+      {callbackPending ? (
+        <div
+          role="status"
+          className="mb-5 rounded-2xl border border-primary/25 bg-primary/10 px-4 py-3 text-center text-sm font-medium text-foreground"
+        >
+          Completing sign-in…
+        </div>
+      ) : null}
       <GoogleButton label="Continue with Google" next={next} />
       <OrDivider />
       <form onSubmit={submit} className="grid gap-4">
@@ -145,13 +248,13 @@ function Login() {
             {err}
           </p>
         )}
-        <Button type="submit" variant="hero" size="lg" disabled={pending}>
-          {pending ? "Logging in…" : "Log in"}
+        <Button type="submit" variant="outline" size="lg" disabled={pending || callbackPending}>
+          {pending ? "Signing in…" : "Log in with Email"}
         </Button>
       </form>
       <p className="mt-6 text-center text-sm text-muted-foreground">
-        New here?{" "}
-        <Link to="/signup" className="font-semibold text-foreground underline">
+        New to Ping?{" "}
+        <Link to="/signup" search={{ next }} className="font-semibold text-foreground underline">
           Create an account
         </Link>
       </p>

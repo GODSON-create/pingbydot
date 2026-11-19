@@ -18,6 +18,7 @@ import {
   getAdminOverview,
   getAdminList,
   moderatePing,
+  reviewVerification,
   verifySignal,
 } from "@/lib/admin.functions";
 import { ADMIN_PAGE_SIZE, moderationSchema } from "@/lib/admin-policy";
@@ -94,7 +95,10 @@ function AdminDashboard() {
   const listFn = useServerFn(getAdminList);
   const moderateFn = useServerFn(moderatePing);
   const verifySignalFn = useServerFn(verifySignal);
-  const [view, setView] = useState<"pings" | "users" | "reports" | "signals" | "audit">("pings");
+  const reviewVerificationFn = useServerFn(reviewVerification);
+  const [view, setView] = useState<
+    "pings" | "users" | "reports" | "signals" | "verifications" | "audit"
+  >("pings");
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState("");
   const [draftSearch, setDraftSearch] = useState("");
@@ -137,6 +141,19 @@ function AdminDashboard() {
       toast.success("Signal verification status updated.");
     },
     onError: (e: any) => toast.error(e?.message || "Couldn't update Signal verification status."),
+  });
+  const reviewVerificationMutation = useMutation({
+    mutationFn: (data: {
+      id: string;
+      status: "verified" | "rejected" | "revoked" | "pending";
+      reviewerNote?: string;
+    }) => reviewVerificationFn({ data: { reviewerNote: "", ...data } }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["admin-list"] });
+      await qc.invalidateQueries({ queryKey: ["public-verification"] });
+      toast.success("Account verification status updated.");
+    },
+    onError: (e: any) => toast.error(e?.message || "Couldn't update account verification status."),
   });
   const metric = (key: string) => {
     const data = overview.data;
@@ -207,7 +224,7 @@ function AdminDashboard() {
         </p>
       </section>
       <div className="flex flex-wrap gap-2" role="tablist" aria-label="Administration views">
-        {(["pings", "users", "reports", "signals", "audit"] as const).map((v) => (
+        {(["pings", "users", "reports", "signals", "verifications", "audit"] as const).map((v) => (
           <Button
             key={v}
             role="tab"
@@ -226,9 +243,11 @@ function AdminDashboard() {
                 ? "Moderation queue"
                 : v === "signals"
                   ? "Signal verification"
-                  : v === "users"
-                    ? "Users"
-                    : "Pings"}
+                  : v === "verifications"
+                    ? "Account verifications"
+                    : v === "users"
+                      ? "Users"
+                      : "Pings"}
           </Button>
         ))}
       </div>
@@ -251,7 +270,9 @@ function AdminDashboard() {
                   ? "Search report reason"
                   : view === "signals"
                     ? "Search signal name or status"
-                    : "Search audit action"
+                    : view === "verifications"
+                      ? "Search pathway, organization, or status"
+                      : "Search audit action"
           }
           value={draftSearch}
           maxLength={100}
@@ -408,10 +429,78 @@ function AdminDashboard() {
               </article>
             ))
           ))}
+        {list.data?.view === "verifications" &&
+          (list.data.unmigrated ? (
+            <p className="py-8 text-sm text-muted-foreground">
+              Account verification table is not yet present on the connected database (migration
+              0026 pending).
+            </p>
+          ) : (
+            list.data.rows.map((vr) => (
+              <article
+                key={vr.id}
+                className="flex flex-wrap items-center justify-between gap-3 py-5"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-semibold">
+                      {vr.profile?.display_name || `@${vr.profile?.username || "member"}`}
+                    </h3>
+                    <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium capitalize">
+                      {vr.verification_domain} · {vr.pathway_type}
+                    </span>
+                    <span className="rounded-full bg-gold/15 text-gold border border-gold/30 px-2 py-0.5 text-xs font-bold capitalize">
+                      {vr.status}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {vr.profile?.username ? `@${vr.profile.username} · ` : ""}
+                    {vr.organization_name ? `${vr.organization_name} · ` : ""}
+                    {vr.evidence_url ? `${vr.evidence_url} · ` : ""}
+                    Updated {new Date(vr.updated_at).toLocaleDateString()}
+                  </p>
+                  {vr.submission_note && (
+                    <p className="mt-1.5 text-xs text-foreground/90 break-words">
+                      {vr.submission_note}
+                    </p>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {vr.status !== "verified" && (
+                    <Button
+                      size="sm"
+                      disabled={reviewVerificationMutation.isPending}
+                      onClick={() =>
+                        reviewVerificationMutation.mutate({ id: vr.id, status: "verified" })
+                      }
+                    >
+                      Approve Verified
+                    </Button>
+                  )}
+                  {vr.status !== "rejected" && vr.status !== "revoked" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={reviewVerificationMutation.isPending}
+                      onClick={() =>
+                        reviewVerificationMutation.mutate({
+                          id: vr.id,
+                          status: vr.status === "verified" ? "revoked" : "rejected",
+                        })
+                      }
+                    >
+                      {vr.status === "verified" ? "Revoke" : "Reject"}
+                    </Button>
+                  )}
+                </div>
+              </article>
+            ))
+          ))}
         {list.data?.rows.length === 0 &&
-          !(list.data.view === "signals" && list.data.unmigrated) && (
-            <p className="py-10 text-muted-foreground">No matching entries.</p>
-          )}
+          !(
+            (list.data.view === "signals" || list.data.view === "verifications") &&
+            list.data.unmigrated
+          ) && <p className="py-10 text-muted-foreground">No matching entries.</p>}
       </div>
       <div className="mt-5 flex items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">

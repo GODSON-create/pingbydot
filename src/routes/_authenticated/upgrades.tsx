@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Check, Coins, Crown, Info, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowLeft, Check, Coins, Crown, Info, Lock, ShieldCheck, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 import {
@@ -9,6 +9,8 @@ import {
   useUpgradeWithDots,
   type AccountTier,
 } from "@/lib/economy";
+import { monetizationCatalogQuery } from "@/lib/monetization";
+import { OptionalVerificationSection } from "@/components/verification/OptionalVerificationSection";
 import { Button } from "@/components/ui/button";
 import { PingMark } from "@/components/BrandLogo";
 import { cn } from "@/lib/utils";
@@ -38,6 +40,7 @@ const TIER_ORDER: Record<AccountTier, number> = {
 function UpgradesPage() {
   const { user, profile } = useAuth();
   const { data: summary, isLoading } = useQuery(dotSummaryQuery(user?.id));
+  const { data: foundation } = useQuery(monetizationCatalogQuery());
   const upgradeMutation = useUpgradeWithDots();
 
   const currentTier: AccountTier = summary?.subscription.tier ?? "free";
@@ -52,7 +55,7 @@ function UpgradesPage() {
       { tier, billingCycle: "dot_credits" },
       {
         onSuccess: () => {
-          toast.success(`Welcome to ${name}! Your badge is now active.`);
+          toast.success(`Welcome to ${name}! Your plan badge is now active.`);
         },
         onError: (err: any) => {
           toast.error(err?.message || "Could not complete account upgrade.");
@@ -84,11 +87,11 @@ function UpgradesPage() {
           )}
           <div>
             <h1 className="font-display text-3xl font-extrabold tracking-tight">
-              Account Upgrades
+              Account Upgrades &amp; Verification
             </h1>
             <p className="text-sm text-muted-foreground">
-              Redeem earned DOT credits for Creator Pro badges, extended analytics, and
-              institutional tools.
+              Redeem earned non-cash DOT credits for optional plans, or request optional trust
+              verification. Core Ping access is always free.
             </p>
           </div>
         </div>
@@ -101,6 +104,16 @@ function UpgradesPage() {
             </span>
           </Link>
         </Button>
+      </div>
+
+      {/* Explicit DOT vs Cash & Compulsory Payment Separation Banner */}
+      <div className="mt-6 flex items-start gap-3 rounded-2xl border border-border/70 bg-secondary/40 p-4 text-xs text-muted-foreground">
+        <Info className="mt-0.5 size-4 shrink-0 text-primary" />
+        <p>
+          DOT credits are virtual activity credits earned on Ping — not cash, stored value, or
+          financial deposits. Real-money checkout is not active until payment provider integration
+          and security verification are completed.
+        </p>
       </div>
 
       {summary && !summary.migrated && (
@@ -216,6 +229,65 @@ function UpgradesPage() {
           );
         })}
       </div>
+
+      {/* Optional Identity & Professional Account-Type Verification */}
+      <OptionalVerificationSection />
+
+      {/* Monetization & Commerce Foundation Catalog (Non-Compulsory, Payment Gateway Inactive) */}
+      <section aria-labelledby="monetization-foundation-heading" className="mt-10">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2
+              id="monetization-foundation-heading"
+              className="font-display text-2xl font-extrabold tracking-tight"
+            >
+              Commercial &amp; Creator Service Foundations
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Prepared service tiers across personal, creator, business, and verification pathways.
+            </p>
+          </div>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/70 px-3 py-1 text-[11px] font-semibold text-muted-foreground self-start">
+            <Lock className="size-3" /> Cash Checkout Not Active Yet
+          </span>
+        </div>
+
+        <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {(foundation?.offerings ?? []).map((offering) => (
+            <article
+              key={offering.slug}
+              className="surface-card rounded-3xl p-5 flex flex-col justify-between"
+            >
+              <div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="rounded-full bg-secondary px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-secondary-foreground">
+                    {offering.category.replace("_", " ")}
+                  </span>
+                  <span className="text-[11px] font-semibold text-muted-foreground">
+                    {offering.billing_mode === "free"
+                      ? "Free · Optional"
+                      : offering.billing_mode === "dot_credits"
+                        ? `${offering.dot_credit_cost ?? 0} DOT (non-cash)`
+                        : "Planned (Payment Audit Pending)"}
+                  </span>
+                </div>
+                <h3 className="mt-3 font-display text-base font-bold">{offering.title}</h3>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  {offering.summary}
+                </p>
+              </div>
+              <ul className="mt-4 space-y-1.5 border-t border-border/50 pt-3 text-[11px] text-muted-foreground">
+                {offering.features.map((feat) => (
+                  <li key={feat} className="flex items-start gap-1.5">
+                    <Check className="mt-0.5 size-3 shrink-0 text-primary" />
+                    <span>{feat}</span>
+                  </li>
+                ))}
+              </ul>
+            </article>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }

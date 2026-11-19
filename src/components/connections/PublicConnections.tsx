@@ -7,9 +7,18 @@ import {
   type Connection,
 } from "@/lib/connections";
 import { Button } from "@/components/ui/button";
+import { recordNetworkEvent } from "@/lib/economic-events";
 import { PlatformIcon } from "./PlatformIcon";
 
-export function PublicConnections({ connections }: { connections: Connection[] }) {
+export function PublicConnections({
+  connections,
+  ownerId,
+  currentUserId,
+}: {
+  connections: Connection[];
+  ownerId?: string | undefined;
+  currentUserId?: string | undefined;
+}) {
   const visible = publicConnections(connections);
   if (!visible.length) return null;
   return (
@@ -32,6 +41,17 @@ export function PublicConnections({ connections }: { connections: Connection[] }
                 target="_blank"
                 rel="noopener noreferrer"
                 referrerPolicy="no-referrer"
+                onClick={() => {
+                  if (currentUserId && ownerId && currentUserId !== ownerId) {
+                    void recordNetworkEvent({
+                      eventType: "business_lead_generated",
+                      targetType: "profile",
+                      targetId: ownerId,
+                      source: "profile_contact_click",
+                      metadata: { platform: connection.platform },
+                    });
+                  }
+                }}
                 aria-label={`Open ${label} ${connectionDisplay(connection.platform, connection.handle)}${connection.is_primary ? ", primary contact" : ""} (opens in a new tab)`}
               >
                 <PlatformIcon platform={connection.platform} />

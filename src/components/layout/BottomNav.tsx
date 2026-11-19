@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Building2,
@@ -8,12 +9,13 @@ import {
   MessageSquare,
   Plus,
   Sparkles,
-  User,
   Users,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { useFocusedWorkspace } from "@/lib/draft-store";
+import { userConversationsQuery } from "@/lib/messages";
+import { useKeyboardOpen } from "@/lib/native";
 import { useNavOverlay } from "@/lib/nav-overlay";
-import { FounderAvatar } from "@/components/ping/Avatar";
 import { cn } from "@/lib/utils";
 
 const item =
@@ -31,22 +33,44 @@ export function isCommunityPath(pathname: string): boolean {
   );
 }
 
+const HIDE_BOTTOM_NAV_PREFIXES = [
+  "/login",
+  "/signup",
+  "/forgot-password",
+  "/reset-password",
+  "/welcome",
+  "/onboarding",
+];
+
+export function shouldHideBottomNav(pathname: string): boolean {
+  return HIDE_BOTTOM_NAV_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
+
 /**
  * Mobile persistent bottom navigation:
- * - Primary 5-item bar: Home, Explore, Create (elevated central +), Community, Profile
- * - Contextual 4-item bar when inside Community: Back, Hub, Signal, Moment
- * Only one bottom navigation bar is ever rendered at a time.
+ * - Primary 5-destination bar: Home, Explore, Create (elevated central +), Hubs, Inbox
+ * - Contextual 4-item bar when inside Hubs/Community sub-views: Back, Hub, Signal, Moment
+ * Only one bottom navigation bar is ever rendered at a time, and automatically yields
+ * on auth/onboarding screens, open soft keyboards, or active full-screen chat threads.
  */
 export function BottomNav() {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const { openOverlay, closeOverlays } = useNavOverlay();
+  const keyboardOpen = useKeyboardOpen();
+  const focusedWorkspace = useFocusedWorkspace();
   const location = useLocation();
   const navigate = useNavigate();
   const [prevMainRoute, setPrevMainRoute] = useState<string>("/");
 
+  const { data: conversations = [] } = useQuery(userConversationsQuery(user?.id));
+  const unreadInbox = conversations.reduce((sum, c) => sum + (c.unread_count ?? 0), 0);
+
   const { pathname, searchStr } = location;
   const inCommunity = isCommunityPath(pathname);
   const isCommunityMomentsView = pathname === "/hubs" && searchStr.includes("view=moments");
+  const isInboxActive = pathname.startsWith("/messages");
 
   useEffect(() => {
     if (!inCommunity) {
@@ -75,8 +99,7 @@ export function BottomNav() {
     navigate({ to: target as any });
   };
 
-  const isProfileActive =
-    (user && profile && pathname === `/@${profile.username}`) || (!user && pathname === "/login");
+  if (keyboardOpen || focusedWorkspace || shouldHideBottomNav(pathname)) return null;
 
   return (
     <>
@@ -141,7 +164,7 @@ export function BottomNav() {
           </div>
         </nav>
       ) : (
-        /* PRIMARY 5-DESTINATION NAVIGATION BAR: Home, Explore, Create (+), Community, Profile */
+        /* PRIMARY 5-DESTINATION NAVIGATION BAR: Home, Explore, Create (+), Hubs, Inbox */
         <nav
           aria-label="Primary"
           data-nav-mode="primary"
@@ -172,7 +195,7 @@ export function BottomNav() {
             <button
               type="button"
               onClick={() => openOverlay("create")}
-              aria-label="Create a Ping, Moment, or Live session"
+              aria-label="Create a Ping, Moment, Signal, Hub, or Live session"
               className="flex min-h-14 min-w-12 flex-1 flex-col items-center justify-center gap-0.5"
             >
               <span className="-mt-3 flex size-12 items-center justify-center rounded-full bg-lime text-lime-foreground shadow-lift ring-4 ring-background transition-transform active:scale-95 motion-reduce:active:scale-100">
@@ -189,36 +212,26 @@ export function BottomNav() {
               className={cn(item, inCommunity && activeClass)}
             >
               <Users className="size-5" />
-              <span>Community</span>
+              <span>Hubs</span>
             </Link>
 
-            {user && profile ? (
-              <Link
-                to="/@{$username}"
-                params={{ username: profile.username }}
-                onClick={closeOverlays}
-                aria-current={isProfileActive ? "page" : undefined}
-                className={cn(item, isProfileActive && activeClass)}
-              >
-                <FounderAvatar
-                  name={profile.display_name || profile.username}
-                  src={profile.avatar_url}
-                  size="sm"
-                  className="size-5 text-[9px]"
-                />
-                <span>Profile</span>
-              </Link>
-            ) : (
-              <Link
-                to="/login"
-                onClick={closeOverlays}
-                aria-current={isProfileActive ? "page" : undefined}
-                className={cn(item, isProfileActive && activeClass)}
-              >
-                <User className="size-5" />
-                <span>Profile</span>
-              </Link>
-            )}
+            <Link
+              to={user ? "/messages" : "/login"}
+              search={user ? {} : ({ next: "/messages" } as any)}
+              onClick={closeOverlays}
+              aria-current={isInboxActive ? "page" : undefined}
+              className={cn(item, "relative", isInboxActive && activeClass)}
+            >
+              <span className="relative inline-flex">
+                <MessageSquare className="size-5" />
+                {unreadInbox > 0 && (
+                  <span className="absolute -top-1.5 -right-2 inline-flex min-w-4 h-4 px-1 items-center justify-center rounded-full bg-primary text-primary-foreground text-[9px] font-bold tabular-nums">
+                    {unreadInbox > 99 ? "99+" : unreadInbox}
+                  </span>
+                )}
+              </span>
+              <span>Inbox</span>
+            </Link>
           </div>
         </nav>
       )}

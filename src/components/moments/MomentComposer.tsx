@@ -14,6 +14,7 @@ import {
   AtSign,
   Clock,
   Settings2,
+  Video,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -30,6 +31,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { ensureClientProfileRow } from "@/lib/ensure-profile";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { myHubsQuery } from "@/lib/hub-queries";
 import {
@@ -38,7 +40,12 @@ import {
   type MomentMediaType,
   type MomentSticker,
 } from "@/lib/moments";
-import { checkShieldRateLimit, sanitizeUserText, validateMediaUpload } from "@/lib/shield";
+import {
+  checkShieldRateLimit,
+  detectMediaKind,
+  sanitizeUserText,
+  validateMediaUpload,
+} from "@/lib/shield";
 import { CloseCircleDialog } from "./CloseCircleDialog";
 
 interface MomentDraft {
@@ -76,43 +83,44 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
   const { data: closeCircle = [] } = useQuery(closeCircleQuery(user?.id));
 
   const [drafts, setDrafts] = useState<MomentDraft[]>([]);
+  const draftsRef = useRef<MomentDraft[]>([]);
+  draftsRef.current = drafts;
   const [activeDraftIdx, setActiveDraftIdx] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [publishError, setPublishError] = useState<string | null>(null);
   const [closeCircleOpen, setCloseCircleOpen] = useState(false);
 
   const activeDraft: MomentDraft | undefined = drafts[activeDraftIdx];
 
   useEffect(() => {
-    if (!open && drafts.length > 0) {
-      drafts.forEach((d) => {
+    if (!open && draftsRef.current.length > 0) {
+      draftsRef.current.forEach((d) => {
         if (d.mediaUrl.startsWith("blob:")) URL.revokeObjectURL(d.mediaUrl);
       });
       setDrafts([]);
       setActiveDraftIdx(0);
+      setPublishError(null);
     }
   }, [open]);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
+  const appendFiles = (files: FileList | File[]) => {
+    setPublishError(null);
     const newDrafts: MomentDraft[] = [];
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       if (!file) continue;
 
-      const isVideo = file.type.startsWith("video/");
-      const isImage = file.type.startsWith("image/");
-      if (!isVideo && !isImage) {
-        toast.error(`Unsupported file type: ${file.type || file.name}`);
+      const mediaKind = detectMediaKind(file);
+      if (mediaKind !== "video" && mediaKind !== "image") {
+        toast.error(`Unsupported file type: ${file.type || file.name}. Choose a photo or video.`);
         continue;
       }
 
       const check = validateMediaUpload(
         { type: file.type, size: file.size, name: file.name },
-        isVideo ? "video" : "image",
+        mediaKind,
       );
       if (!check.valid) {
         toast.error(check.error || "Invalid media file.");
@@ -123,13 +131,13 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
       newDrafts.push({
         mediaFile: file,
         mediaUrl: previewUrl,
-        mediaType: isVideo ? "video" : "image",
+        mediaType: mediaKind,
         caption: "",
         overlayText: "",
         stickers: [],
         mentionsText: "",
         location: "",
-        duration: isVideo ? 15 : 5,
+        duration: mediaKind === "video" ? 15 : 5,
         audience: "public",
         hubId: null,
         isDiscoverable: true,
@@ -146,7 +154,26 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
         return next;
       });
     }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      appendFiles(files);
+    }
     e.target.value = "";
+  };
+
+  const handleTakePhoto = async () => {
+    const { takePhoto } = await import("@/lib/native");
+    const file = await takePhoto();
+    if (file) appendFiles([file]);
+  };
+
+  const handleRecordVideo = async () => {
+    const { recordVideo } = await import("@/lib/native");
+    const file = await recordVideo();
+    if (file) appendFiles([file]);
   };
 
   const updateActiveDraft = (patch: Partial<MomentDraft>) => {
@@ -220,6 +247,7 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
 
     setIsUploading(true);
     setUploadProgress(10);
+    setPublishError(null);
 
     try {
       for (let i = 0; i < drafts.length; i++) {
@@ -280,8 +308,8 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
         let { error: insertErr } = await supabase.from("moments").insert(momentPayload);
 
         if (insertErr && insertErr.code === "23503") {
-          const { error: profileErr } = await supabase.rpc("ensure_my_profile");
-          if (!profileErr) {
+          const recovered = await ensureClientProfileRow(user);
+          if (recovered) {
             const retry = await supabase.from("moments").insert(momentPayload);
             insertErr = retry.error;
           }
@@ -305,12 +333,15 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
         if (d.mediaUrl.startsWith("blob:")) URL.revokeObjectURL(d.mediaUrl);
       });
       setDrafts([]);
+      setPublishError(null);
       onOpenChange(false);
       onPublished?.();
     } catch (err: unknown) {
       console.error("Publish moment error:", err);
       const { formatStorageUploadError } = await import("@/lib/storage");
-      toast.error(formatStorageUploadError(err, "Failed to publish Moment."));
+      const msg = formatStorageUploadError(err, "Failed to publish Moment.");
+      setPublishError(msg);
+      toast.error(msg);
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
@@ -352,14 +383,30 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
                 Upload photos (up to 10MB) or short vertical videos (up to 50MB). Add captions,
                 overlays, stickers, locations, and audience controls.
               </p>
-              <div className="mt-6 flex gap-3">
+              <div className="mt-6 flex flex-wrap justify-center gap-2.5">
                 <Button
                   type="button"
                   variant="hero"
+                  onClick={() => void handleTakePhoto()}
+                  className="rounded-2xl gap-2"
+                >
+                  <Camera className="size-4" /> Take Photo
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void handleRecordVideo()}
+                  className="rounded-2xl gap-2"
+                >
+                  <Video className="size-4" /> Record Video
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
                   onClick={() => fileInputRef.current?.click()}
                   className="rounded-2xl gap-2"
                 >
-                  <Upload className="size-4" /> Choose from files
+                  <Upload className="size-4" /> Choose from Gallery
                 </Button>
               </div>
             </div>
@@ -703,6 +750,16 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
                       )}
                     </div>
                   </div>
+                </div>
+              )}
+
+              {publishError && (
+                <div
+                  role="alert"
+                  className="rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-xs text-destructive"
+                >
+                  <p className="font-semibold">Couldn&apos;t publish Moment</p>
+                  <p className="mt-0.5 text-foreground/85">{publishError}</p>
                 </div>
               )}
 

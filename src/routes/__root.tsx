@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import {
   Outlet,
   Link,
@@ -14,15 +14,16 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { sanitizeErrorMessage } from "../lib/error-diagnostics";
-import { initializeNativeApp } from "@/lib/native";
+import { initializeNativeApp, useNetworkStatus } from "@/lib/native";
 import { useNavigate } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth";
+import { useFocusedWorkspace } from "@/lib/draft-store";
 import { NavOverlayProvider, useNavOverlay } from "@/lib/nav-overlay";
 import { ThemeProvider } from "@/lib/theme";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { DesktopSidebar } from "@/components/layout/DesktopSidebar";
 import { SiteFooter } from "@/components/layout/SiteFooter";
-import { BottomNav } from "@/components/layout/BottomNav";
+import { BottomNav, shouldHideBottomNav } from "@/components/layout/BottomNav";
 import { CreateStackModal } from "@/components/layout/CreateStackModal";
 import { BootSplashScreen } from "@/components/layout/BootSplashScreen";
 import { GestureLayer } from "@/components/layout/GestureLayer";
@@ -30,7 +31,7 @@ import { PingMark } from "@/components/BrandLogo";
 import { Toaster } from "@/components/ui/sonner";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Keyboard } from "lucide-react";
+import { Keyboard, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SITE_NAME, siteJsonLd, siteUrl } from "@/lib/site";
 
@@ -102,12 +103,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      {
+        name: "viewport",
+        content:
+          "width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content",
+      },
       { title: "Ping — Build in public. Share your story." },
       {
         name: "description",
         content:
-          "Ping is where founders share progress, ideas, launches and milestones with a public link anyone can open.",
+          "Social, communication, discovery, and economic network for everyone. Share Pings, Moments, join Hubs, and message 1-on-1 in Signal.",
       },
       { property: "og:title", content: "Ping — Build in public. Share your story." },
       {
@@ -163,14 +168,37 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootShellContent() {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const { connected } = useNetworkStatus();
   const { helpOpen, setHelpOpen } = useKeyboardShortcuts();
-  const { isOpen, onOpenChangeFor, closeOverlays } = useNavOverlay();
+  const { activeOverlay, isOpen, onOpenChangeFor, closeOverlays } = useNavOverlay();
+
+  useEffect(() => {
+    void initializeNativeApp(
+      (path) => navigate({ to: path as any }),
+      () => {
+        if (helpOpen) {
+          setHelpOpen(false);
+          return true;
+        }
+        if (activeOverlay !== "none") {
+          closeOverlays();
+          return true;
+        }
+        return false;
+      },
+    );
+  }, [navigate, helpOpen, setHelpOpen, activeOverlay, closeOverlays]);
 
   useEffect(() => {
     if (helpOpen) closeOverlays();
   }, [helpOpen, closeOverlays]);
 
-  const hideFooter = pathname.startsWith("/messages") || pathname === "/signals";
+  const focusedWorkspace = useFocusedWorkspace();
+  const hideBottomBar = shouldHideBottomNav(pathname) || focusedWorkspace;
+  const hideFooter =
+    pathname.startsWith("/messages") || pathname === "/signals" || shouldHideBottomNav(pathname);
 
   return (
     <>
@@ -182,9 +210,35 @@ function RootShellContent() {
         Skip to content
       </a>
       <SiteHeader />
+      {!connected && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs text-foreground"
+        >
+          <span className="inline-flex items-center gap-2 font-medium">
+            <WifiOff className="size-3.5 text-amber-500 shrink-0" />
+            You appear to be offline. Cached views stay readable and updates resume automatically on
+            reconnect.
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void qc.invalidateQueries()}
+            className="h-7 rounded-full px-3 text-[11px] shrink-0"
+          >
+            Retry
+          </Button>
+        </div>
+      )}
       <div className="mx-auto w-full max-w-7xl flex flex-col lg:flex-row items-start min-h-screen overflow-x-clip">
         <DesktopSidebar />
-        <div className="flex-1 min-w-0 w-full flex flex-col min-h-screen">
+        <div
+          className={`flex-1 min-w-0 w-full flex flex-col min-h-screen${
+            !hideBottomBar ? " pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-0" : ""
+          }`}
+        >
           <main
             id="main"
             key={pathname}
@@ -192,11 +246,7 @@ function RootShellContent() {
           >
             <Outlet />
           </main>
-          {!hideFooter && (
-            <div className="pb-24 lg:pb-0">
-              <SiteFooter />
-            </div>
-          )}
+          {!hideFooter && <SiteFooter />}
         </div>
       </div>
       <BottomNav />
@@ -261,16 +311,12 @@ function RootShellContent() {
         </DialogContent>
       </Dialog>
 
-      <Toaster position="bottom-center" />
+      <Toaster />
     </>
   );
 }
 
 function RootComponent() {
-  const navigate = useNavigate();
-  useEffect(() => {
-    initializeNativeApp((path) => navigate({ to: path as any }));
-  }, [navigate]);
   const { queryClient } = Route.useRouteContext();
   return (
     <QueryClientProvider client={queryClient}>

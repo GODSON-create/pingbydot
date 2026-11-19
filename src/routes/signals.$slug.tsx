@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { ImageUploadField } from "@/components/media/ImageUploadField";
 import {
   signalBySlugQuery,
   signalPostsQuery,
@@ -629,6 +630,7 @@ function EditSignalDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const { user } = useAuth();
   const updateMutation = useUpdateSignal(signal.id);
   const [name, setName] = useState(signal.name || "");
   const [tagline, setTagline] = useState(signal.tagline || "");
@@ -732,15 +734,17 @@ function EditSignalDialog({
             />
           </div>
 
-          <div>
-            <Label className="text-xs font-semibold">Avatar / Seal Logo URL</Label>
-            <Input
-              value={avatarUrl}
-              onChange={(e) => setAvatarUrl(e.target.value)}
-              placeholder="https://…/logo.png"
-              className="mt-1 rounded-xl"
-            />
-          </div>
+          <ImageUploadField
+            folder="signals"
+            userId={user?.id}
+            value={avatarUrl}
+            onChange={setAvatarUrl}
+            label="Avatar / Seal Logo"
+            placeholder="https://…/logo.png"
+            fallbackName={name || "Signal"}
+            shape="rounded"
+            disabled={updateMutation.isPending}
+          />
 
           <div className="pt-2 flex justify-end gap-2">
             <Button
