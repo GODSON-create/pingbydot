@@ -7,10 +7,14 @@ import {
   ArrowLeft,
   CheckCircle2,
   ClipboardCheck,
+  Compass,
+  Crown,
+  Eye,
   FileEdit,
   Flame,
   History,
   Info,
+  Plus,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
@@ -19,13 +23,16 @@ import { useAuth } from "@/lib/auth";
 import {
   checkSpotlightEditorAccess,
   decideSpotlightCandidate,
+  discoverSpotlightCandidates,
   getSpotlightEditorialWorkspace,
   publishSpotlightFeature,
+  queueDiscoveredSpotlightCandidate,
 } from "@/lib/admin.functions";
 import {
   DEFAULT_SPOTLIGHT_RUBRIC,
   computeSpotlightMeritScore,
   generateAdvisoryEditorialSummary,
+  type SpotlightTemplateLayout,
 } from "@/lib/spotlight";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -85,10 +92,17 @@ function SpotlightEditorialGate() {
 function SpotlightEditorialDashboard() {
   const qc = useQueryClient();
   const workspaceFn = useServerFn(getSpotlightEditorialWorkspace);
+  const discoverFn = useServerFn(discoverSpotlightCandidates);
+  const queueDiscoveryFn = useServerFn(queueDiscoveredSpotlightCandidate);
   const decideFn = useServerFn(decideSpotlightCandidate);
   const publishFn = useServerFn(publishSpotlightFeature);
 
-  const [tab, setTab] = useState<"candidates" | "publish" | "publications" | "audit">("candidates");
+  const [tab, setTab] = useState<"discover" | "candidates" | "publish" | "publications" | "audit">(
+    "candidates",
+  );
+  const [discoverFilter, setDiscoverFilter] = useState<
+    "all" | "ping" | "clip" | "business" | "hub"
+  >("all");
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
   const [scores, setScores] = useState<Record<string, number>>(() =>
     Object.fromEntries(DEFAULT_SPOTLIGHT_RUBRIC.map((d) => [d.key, 7])),
@@ -103,6 +117,7 @@ function SpotlightEditorialDashboard() {
   // Publication Composer state
   const [pubSlug, setPubSlug] = useState("");
   const [pubFounderId, setPubFounderId] = useState("");
+  const [pubBusinessId, setPubBusinessId] = useState("");
   const [pubTitle, setPubTitle] = useState("");
   const [pubIntro, setPubIntro] = useState("");
   const [pubStory, setPubStory] = useState("");
@@ -110,17 +125,65 @@ function SpotlightEditorialDashboard() {
   const [pubSolution, setPubSolution] = useState("");
   const [pubBizDesc, setPubBizDesc] = useState("");
   const [pubAchievements, setPubAchievements] = useState("");
+  const [pubPingIds, setPubPingIds] = useState("");
   const [pubClipIds, setPubClipIds] = useState("");
+  const [pubVideoUrl, setPubVideoUrl] = useState("");
+  const [pubPortraitUrl, setPubPortraitUrl] = useState("");
   const [pubTags, setPubTags] = useState("africa, startups");
-  const [pubStatus, setPubStatus] = useState<"draft" | "published" | "corrected" | "retracted">(
-    "published",
-  );
+  const [pubLayout, setPubLayout] = useState<SpotlightTemplateLayout>("editorial_feature");
+  const [pubStatus, setPubStatus] = useState<
+    "draft" | "scheduled" | "published" | "corrected" | "retracted"
+  >("published");
+  const [pubScheduledFor, setPubScheduledFor] = useState("");
   const [pubCorrectionNote, setPubCorrectionNote] = useState("");
+  const [distHome, setDistHome] = useState(true);
+  const [distExplore, setDistExplore] = useState(true);
+  const [distOfficial, setDistOfficial] = useState(true);
+  const [distNotify, setDistNotify] = useState(false);
+  const [distCapDays, setDistCapDays] = useState(7);
 
   const workspace = useQuery({
     queryKey: ["spotlight-editorial-workspace"],
     queryFn: () => workspaceFn(),
     retry: false,
+  });
+
+  const discovery = useQuery({
+    queryKey: ["spotlight-editorial-discovery"],
+    enabled: tab === "discover",
+    queryFn: () => discoverFn(),
+    retry: false,
+  });
+
+  const queueDiscoveryMutation = useMutation({
+    mutationFn: (item: {
+      founderId: string;
+      sourceType: "ping" | "clip" | "business" | "hub";
+      sourceRefId: string;
+      businessId: string | null;
+      title: string;
+      excerpt: string;
+    }) =>
+      queueDiscoveryFn({
+        data: {
+          founderId: item.founderId,
+          sourceType: item.sourceType,
+          sourceRefId: item.sourceRefId,
+          businessId: item.businessId,
+          headline: item.title.length >= 3 ? item.title : "Discovered Founder Story",
+          storyPitch:
+            item.excerpt.length >= 10
+              ? item.excerpt
+              : `Discovered organically via Ping ${item.sourceType}.`,
+        },
+      }),
+    onSuccess: async () => {
+      toast.success("Builder queued into Spotlight candidate review.");
+      await qc.invalidateQueries({ queryKey: ["spotlight-editorial-workspace"] });
+      setTab("candidates");
+    },
+    onError: (err) =>
+      toast.error(err instanceof Error ? err.message : "Could not queue discovered builder."),
   });
 
   const decideMutation = useMutation({
@@ -154,7 +217,7 @@ function SpotlightEditorialDashboard() {
           slug: pubSlug.trim().toLowerCase(),
           candidateId: selectedCandidateId,
           founderId: pubFounderId.trim(),
-          businessId: null,
+          businessId: pubBusinessId.trim() || null,
           title: pubTitle.trim(),
           editorialIntro: pubIntro.trim(),
           founderStory: pubStory.trim(),
@@ -165,17 +228,34 @@ function SpotlightEditorialDashboard() {
             .split("\n")
             .map((s) => s.trim())
             .filter(Boolean),
-          featuredPingIds: [],
+          mediaUrls: [],
+          featuredPingIds: pubPingIds
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
           featuredClipIds: pubClipIds
             .split(",")
             .map((s) => s.trim())
             .filter(Boolean),
+          featuredMomentIds: [],
           dotTags: pubTags
             .split(",")
             .map((s) => s.trim().replace(/^\./, "").toLowerCase())
             .filter(Boolean),
-          videoInterviewUrl: null,
-          founderPortraitUrl: null,
+          templateLayout: pubLayout,
+          distributionConfig: {
+            home_feed: distHome,
+            explore: distExplore,
+            official_account: distOfficial,
+            notify_eligible: distNotify,
+            frequency_cap_days: distCapDays,
+          },
+          scheduledFor:
+            pubStatus === "scheduled" && pubScheduledFor
+              ? new Date(pubScheduledFor).toISOString()
+              : null,
+          videoInterviewUrl: pubVideoUrl.trim() || null,
+          founderPortraitUrl: pubPortraitUrl.trim() || null,
           status: pubStatus,
           correctionNote: pubCorrectionNote.trim(),
         },
@@ -192,6 +272,9 @@ function SpotlightEditorialDashboard() {
   const candidates = workspace.data?.candidates ?? [];
   const publications = workspace.data?.publications ?? [];
   const auditLogs = workspace.data?.auditLogs ?? [];
+  const discoveredItems = (discovery.data?.items ?? []).filter(
+    (item) => discoverFilter === "all" || item.sourceType === discoverFilter,
+  );
   const weightedScore = computeSpotlightMeritScore(scores);
 
   return (
@@ -207,8 +290,9 @@ function SpotlightEditorialDashboard() {
             <Flame className="size-7 text-amber-500" /> Ping Spotlight Editorial Desk
           </h1>
           <p className="text-xs text-muted-foreground mt-1">
-            Merit-based candidate evaluation, human selection approval, official Ping publication,
-            corrections/retractions, and editorial audit trail. Separated from financial admin.
+            Organic Ping discovery, 8-dimension merit scoring, mandatory human selection approval,
+            official @ping publication, distribution controls, corrections/retractions, and audit
+            history. Separated from financial admin.
           </p>
         </div>
       </div>
@@ -227,6 +311,7 @@ function SpotlightEditorialDashboard() {
       <div className="flex flex-wrap gap-2" role="tablist" aria-label="Editorial desk views">
         {(
           [
+            { id: "discover", label: "Discover Activity", icon: Compass },
             { id: "candidates", label: `Candidates (${candidates.length})`, icon: ClipboardCheck },
             { id: "publish", label: "Story Composer", icon: FileEdit },
             { id: "publications", label: `Published (${publications.length})`, icon: CheckCircle2 },
@@ -251,14 +336,100 @@ function SpotlightEditorialDashboard() {
         })}
       </div>
 
+      {/* TAB 0: ORGANIC EDITORIAL DISCOVERY (Pings, Clips, Businesses, Hubs) */}
+      {tab === "discover" && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap gap-1.5">
+              {(["all", "ping", "clip", "business", "hub"] as const).map((f) => (
+                <Button
+                  key={f}
+                  type="button"
+                  size="sm"
+                  variant={discoverFilter === f ? "default" : "outline"}
+                  onClick={() => setDiscoverFilter(f)}
+                  className="rounded-full text-xs capitalize"
+                >
+                  {f === "all" ? "All Activity" : `${f}s`}
+                </Button>
+              ))}
+            </div>
+            <span className="text-[11px] text-muted-foreground">
+              Only builders with active Builder Pro membership can enter the eligible review queue.
+            </span>
+          </div>
+
+          {discovery.isPending ? (
+            <p className="py-8 text-xs text-muted-foreground" role="status">
+              Scanning recent public Ping activity…
+            </p>
+          ) : discoveredItems.length === 0 ? (
+            <div className="surface-card rounded-3xl p-8 text-center text-xs text-muted-foreground">
+              No recent public activity matched this filter.
+            </div>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2">
+              {discoveredItems.map((item) => (
+                <article
+                  key={`${item.sourceType}-${item.sourceRefId}`}
+                  className="surface-card rounded-2xl p-4 border border-border/70 flex flex-col justify-between gap-3"
+                >
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-foreground truncate">
+                        {item.founderLabel}
+                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold uppercase">
+                          {item.sourceType}
+                        </span>
+                        {item.hasActivePro ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-gold/15 border border-gold/40 px-2 py-0.5 text-[10px] font-bold text-gold">
+                            <Crown className="size-3" /> Pro Eligible
+                          </span>
+                        ) : (
+                          <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground">
+                            Not Pro
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-xs font-semibold text-foreground line-clamp-1">
+                      {item.title}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground line-clamp-2">{item.excerpt}</p>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/50">
+                    <span className="text-[10px] text-muted-foreground">
+                      {format(new Date(item.createdAt), "MMM d, yyyy")}
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={item.hasActivePro ? "hero" : "outline"}
+                      disabled={!item.hasActivePro || queueDiscoveryMutation.isPending}
+                      onClick={() => queueDiscoveryMutation.mutate(item)}
+                      className="h-7 rounded-full text-[11px] gap-1"
+                    >
+                      <Plus className="size-3" />
+                      {item.hasActivePro ? "Queue for Review" : "Pro Required"}
+                    </Button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* TAB 1: CANDIDATE EVALUATION & HUMAN APPROVAL */}
       {tab === "candidates" && (
         <div className="grid gap-6 lg:grid-cols-5">
           <div className="lg:col-span-2 space-y-3">
             {candidates.length === 0 ? (
               <div className="surface-card rounded-3xl p-8 text-center text-xs text-muted-foreground">
-                No Spotlight candidates in queue yet. Eligible Builder Pro founders can submit
-                stories or be discovered from Pings, Clips, and Hubs.
+                No Spotlight candidates in queue yet. Use <strong>Discover Activity</strong> or let
+                eligible Builder Pro founders submit stories.
               </div>
             ) : (
               candidates.map((c) => {
@@ -271,6 +442,7 @@ function SpotlightEditorialDashboard() {
                       setSelectedCandidateId(c.id);
                       setAdvisoryBrief(null);
                       setPubFounderId(c.founder_id);
+                      setPubBusinessId(c.business_id ?? "");
                       setPubTitle(c.headline);
                       setPubProblem(c.problem_statement);
                       setPubStory(c.story_pitch);
@@ -439,7 +611,7 @@ function SpotlightEditorialDashboard() {
         </div>
       )}
 
-      {/* TAB 2: OFFICIAL STORY COMPOSER, CORRECTION & RETRACTION */}
+      {/* TAB 2: OFFICIAL STORY COMPOSER, LAYOUTS, DISTRIBUTION, SCHEDULING, CORRECTION & RETRACTION */}
       {tab === "publish" && (
         <form
           onSubmit={(e) => {
@@ -463,11 +635,31 @@ function SpotlightEditorialDashboard() {
               />
             </div>
             <div>
+              <Label className="text-xs">Editorial Template Layout</Label>
+              <select
+                value={pubLayout}
+                onChange={(e) => setPubLayout(e.target.value as SpotlightTemplateLayout)}
+                className="mt-1 w-full rounded-xl border border-input bg-background px-3 py-2 text-xs"
+              >
+                <option value="editorial_feature">Editorial Feature (Standard)</option>
+                <option value="video_interview">Video Interview Showcase</option>
+                <option value="builder_case_study">Builder Execution Case Study</option>
+              </select>
+            </div>
+            <div>
               <Label className="text-xs">Founder User ID (UUID)</Label>
               <Input
                 required
                 value={pubFounderId}
                 onChange={(e) => setPubFounderId(e.target.value)}
+                className="mt-1 rounded-xl text-xs font-mono"
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Business Profile ID (Optional UUID)</Label>
+              <Input
+                value={pubBusinessId}
+                onChange={(e) => setPubBusinessId(e.target.value)}
                 className="mt-1 rounded-xl text-xs font-mono"
               />
             </div>
@@ -536,7 +728,15 @@ function SpotlightEditorialDashboard() {
                 className="mt-1 rounded-xl text-xs"
               />
             </div>
-            <div className="space-y-3">
+            <div className="space-y-2.5">
+              <div>
+                <Label className="text-xs">Featured Ping IDs (comma-separated UUIDs)</Label>
+                <Input
+                  value={pubPingIds}
+                  onChange={(e) => setPubPingIds(e.target.value)}
+                  className="mt-1 rounded-xl text-xs font-mono"
+                />
+              </div>
               <div>
                 <Label className="text-xs">Featured Clip IDs (comma-separated UUIDs)</Label>
                 <Input
@@ -555,29 +755,120 @@ function SpotlightEditorialDashboard() {
               </div>
             </div>
             <div>
+              <Label className="text-xs">Founder Portrait URL (optional)</Label>
+              <Input
+                type="url"
+                value={pubPortraitUrl}
+                onChange={(e) => setPubPortraitUrl(e.target.value)}
+                placeholder="https://…"
+                className="mt-1 rounded-xl text-xs"
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Video Interview URL (optional)</Label>
+              <Input
+                type="url"
+                value={pubVideoUrl}
+                onChange={(e) => setPubVideoUrl(e.target.value)}
+                placeholder="https://…"
+                className="mt-1 rounded-xl text-xs"
+              />
+            </div>
+            <div>
               <Label className="text-xs">Publication Status</Label>
               <select
                 value={pubStatus}
                 onChange={(e) =>
-                  setPubStatus(e.target.value as "draft" | "published" | "corrected" | "retracted")
+                  setPubStatus(
+                    e.target.value as
+                      "draft" | "scheduled" | "published" | "corrected" | "retracted",
+                  )
                 }
                 className="mt-1 w-full rounded-xl border border-input bg-background px-3 py-2 text-xs"
               >
                 <option value="draft">Draft</option>
+                <option value="scheduled">Schedule Publication</option>
                 <option value="published">Publish Official Story</option>
                 <option value="corrected">Publish with Correction Notice</option>
                 <option value="retracted">Retract Story</option>
               </select>
             </div>
-            <div>
-              <Label className="text-xs">Correction / Retraction Note (if applicable)</Label>
-              <Input
-                value={pubCorrectionNote}
-                onChange={(e) => setPubCorrectionNote(e.target.value)}
-                className="mt-1 rounded-xl text-xs"
-              />
+            {pubStatus === "scheduled" ? (
+              <div>
+                <Label className="text-xs">Scheduled Publish Time</Label>
+                <Input
+                  type="datetime-local"
+                  value={pubScheduledFor}
+                  onChange={(e) => setPubScheduledFor(e.target.value)}
+                  className="mt-1 rounded-xl text-xs"
+                />
+              </div>
+            ) : (
+              <div>
+                <Label className="text-xs">Correction / Retraction Note (if applicable)</Label>
+                <Input
+                  value={pubCorrectionNote}
+                  onChange={(e) => setPubCorrectionNote(e.target.value)}
+                  className="mt-1 rounded-xl text-xs"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Distribution & Frequency Cap Rules */}
+          <div className="rounded-2xl border border-border/70 bg-secondary/25 p-4 space-y-2.5 text-xs">
+            <p className="font-bold text-foreground">
+              Distribution Rules &amp; Notification Frequency Cap
+            </p>
+            <div className="flex flex-wrap gap-4">
+              <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={distOfficial}
+                  onChange={(e) => setDistOfficial(e.target.checked)}
+                />
+                Official @ping Channel
+              </label>
+              <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={distHome}
+                  onChange={(e) => setDistHome(e.target.checked)}
+                />
+                Home Feed Placement
+              </label>
+              <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={distExplore}
+                  onChange={(e) => setDistExplore(e.target.checked)}
+                />
+                Explore Discovery
+              </label>
+              <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={distNotify}
+                  onChange={(e) => setDistNotify(e.target.checked)}
+                />
+                Notify Opted-In Users (capped)
+              </label>
+              <label className="inline-flex items-center gap-1.5">
+                Cap (days):
+                <Input
+                  type="number"
+                  min={1}
+                  max={30}
+                  value={distCapDays}
+                  onChange={(e) =>
+                    setDistCapDays(Math.max(1, Math.min(30, Number(e.target.value) || 7)))
+                  }
+                  className="h-7 w-16 text-xs"
+                />
+              </label>
             </div>
           </div>
+
           <div className="flex justify-end">
             <Button
               type="submit"
@@ -592,7 +883,7 @@ function SpotlightEditorialDashboard() {
         </form>
       )}
 
-      {/* TAB 3: PUBLICATIONS LIST */}
+      {/* TAB 3: PUBLICATIONS LIST & OBSERVED DISTRIBUTION ANALYTICS */}
       {tab === "publications" && (
         <div className="surface-card rounded-3xl p-6 border border-border/70 divide-y divide-border/60">
           {publications.length === 0 ? (
@@ -600,38 +891,51 @@ function SpotlightEditorialDashboard() {
               No Spotlight publications recorded yet.
             </p>
           ) : (
-            publications.map((p) => (
-              <div key={p.id} className="py-4 flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <Link
-                    to="/spotlight/$slug"
-                    params={{ slug: p.slug }}
-                    className="font-display font-bold text-sm hover:underline"
+            publications.map((p) => {
+              const dist = p.distribution ?? [];
+              const totalImp = dist.reduce((s, d) => s + (d.impressions_count ?? 0), 0);
+              const totalViews = dist.reduce((s, d) => s + (d.views_count ?? 0), 0);
+              const totalClicks = dist.reduce((s, d) => s + (d.clicks_count ?? 0), 0);
+              const totalShares = dist.reduce((s, d) => s + (d.shares_count ?? 0), 0);
+              return (
+                <div key={p.id} className="py-4 flex flex-wrap items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <Link
+                      to="/spotlight/$slug"
+                      params={{ slug: p.slug }}
+                      className="font-display font-bold text-sm hover:underline"
+                    >
+                      {p.title}
+                    </Link>
+                    <p className="text-[11px] text-muted-foreground font-mono">
+                      /spotlight/{p.slug} · {p.template_layout} · Status: {p.status}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground inline-flex items-center gap-1.5 tabular-nums">
+                      <Eye className="size-3 text-primary" /> Observed: {totalImp} imp ·{" "}
+                      {totalViews} views · {totalClicks} clicks · {totalShares} shares
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setPubSlug(p.slug);
+                      setPubFounderId(p.founder_id);
+                      setPubBusinessId(p.business_id ?? "");
+                      setPubTitle(p.title);
+                      setPubLayout(p.template_layout ?? "editorial_feature");
+                      setPubStatus(p.status === "retracted" ? "retracted" : "corrected");
+                      setPubCorrectionNote(p.correction_note);
+                      setTab("publish");
+                    }}
+                    className="rounded-full text-xs"
                   >
-                    {p.title}
-                  </Link>
-                  <p className="text-[11px] text-muted-foreground font-mono">
-                    /spotlight/{p.slug} · Status: {p.status}
-                  </p>
+                    Correct / Retract
+                  </Button>
                 </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setPubSlug(p.slug);
-                    setPubFounderId(p.founder_id);
-                    setPubTitle(p.title);
-                    setPubStatus(p.status === "retracted" ? "retracted" : "corrected");
-                    setPubCorrectionNote(p.correction_note);
-                    setTab("publish");
-                  }}
-                  className="rounded-full text-xs"
-                >
-                  Correct / Retract
-                </Button>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       )}

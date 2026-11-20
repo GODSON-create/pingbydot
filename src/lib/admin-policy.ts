@@ -107,15 +107,47 @@ export const spotlightPublishSchema = z.object({
   problemSolved: z.string().trim().max(2000).default(""),
   productSolution: z.string().trim().max(2000).default(""),
   evidenceAchievements: z.array(z.string().trim().max(240)).max(12).default([]),
+  mediaUrls: z.array(z.string().trim().url()).max(8).default([]),
   featuredPingIds: z.array(z.string().uuid()).max(8).default([]),
   featuredClipIds: z.array(z.string().uuid()).max(8).default([]),
+  featuredMomentIds: z.array(z.string().uuid()).max(8).default([]),
   dotTags: z.array(z.string().trim().max(32)).max(8).default([]),
+  templateLayout: z
+    .enum(["editorial_feature", "video_interview", "builder_case_study"])
+    .default("editorial_feature"),
+  distributionConfig: z
+    .object({
+      home_feed: z.boolean().default(true),
+      explore: z.boolean().default(true),
+      official_account: z.boolean().default(true),
+      notify_eligible: z.boolean().default(false),
+      frequency_cap_days: z.number().int().min(1).max(30).default(7),
+    })
+    .optional(),
+  scheduledFor: z.string().datetime().nullable().optional(),
   videoInterviewUrl: z.string().trim().url().nullable().optional(),
   founderPortraitUrl: z.string().trim().url().nullable().optional(),
   status: z
     .enum(["draft", "scheduled", "published", "corrected", "retracted"])
     .default("published"),
   correctionNote: z.string().trim().max(800).default(""),
+});
+
+export const spotlightQueueDiscoverySchema = z.object({
+  founderId: z.string().uuid(),
+  sourceType: z.enum([
+    "ping",
+    "moment",
+    "clip",
+    "profile",
+    "business",
+    "hub",
+    "editorial_discovery",
+  ]),
+  sourceRefId: z.string().uuid().nullable().optional(),
+  headline: z.string().trim().min(3).max(160),
+  storyPitch: z.string().trim().min(10).max(4000),
+  businessId: z.string().uuid().nullable().optional(),
 });
 
 export const economicReadinessSchema = z.object({

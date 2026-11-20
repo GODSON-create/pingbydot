@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { FounderAvatar } from "@/components/ping/Avatar";
 import { PingCard, PingCardSkeleton } from "@/components/ping/PingCard";
 import { MomentsTray } from "@/components/moments/MomentsTray";
+import { SpotlightFeedStrip } from "@/components/spotlight/SpotlightFeedStrip";
 import { AriseCallout } from "@/components/AriseCallout";
 import { PingMark } from "@/components/BrandLogo";
 import { useAuth } from "@/lib/auth";
@@ -822,7 +823,8 @@ function HomeFeedContent() {
           </section>
 
           {/* 3B. PING SPOTLIGHT, CLIPS & LEARN ECOSYSTEM DISCOVERY */}
-          <section aria-labelledby="ecosystem-discovery-heading">
+          <section aria-labelledby="ecosystem-discovery-heading" className="space-y-3">
+            <SpotlightFeedStrip channel="home_feed" maxItems={2} />
             <div className="flex items-center justify-between mb-3">
               <h2
                 id="ecosystem-discovery-heading"

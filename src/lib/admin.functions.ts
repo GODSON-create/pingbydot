@@ -15,6 +15,7 @@ import {
   setUserPermissionSchema,
   spotlightDecisionSchema,
   spotlightPublishSchema,
+  spotlightQueueDiscoverySchema,
   updateCourseScheduleSchema,
   upsertMembershipPlanSchema,
   verifySignalSchema,
@@ -1088,7 +1089,7 @@ export const getSpotlightEditorialWorkspace = createServerFn({ method: "POST" })
       (supabaseAdmin as any)
         .from("spotlight_publications")
         .select(
-          "id,slug,founder_id,business_id,title,status,published_at,correction_note,updated_at",
+          "id,slug,founder_id,business_id,title,template_layout,status,scheduled_for,published_at,correction_note,distribution_config,updated_at,distribution:spotlight_distribution_records(channel,impressions_count,views_count,clicks_count,shares_count,notifications_sent)",
         )
         .order("updated_at", { ascending: false })
         .limit(30),
@@ -1134,10 +1135,27 @@ export const getSpotlightEditorialWorkspace = createServerFn({ method: "POST" })
         founder_id: string;
         business_id: string | null;
         title: string;
+        template_layout: "editorial_feature" | "video_interview" | "builder_case_study";
         status: string;
+        scheduled_for: string | null;
         published_at: string | null;
         correction_note: string;
+        distribution_config: {
+          home_feed?: boolean;
+          explore?: boolean;
+          official_account?: boolean;
+          notify_eligible?: boolean;
+          frequency_cap_days?: number;
+        } | null;
         updated_at: string;
+        distribution: Array<{
+          channel: string;
+          impressions_count: number;
+          views_count: number;
+          clicks_count: number;
+          shares_count: number;
+          notifications_sent: number;
+        }>;
       }>,
       auditLogs: (auditRes.data ?? []) as Array<{
         id: string;
@@ -1183,26 +1201,240 @@ export const publishSpotlightFeature = createServerFn({ method: "POST" })
       : (await context.supabase.rpc("is_ping_admin")).data === true;
     assertEditorialRole(isEditor);
 
-    const { error } = await (context.supabase as any).rpc("editor_publish_spotlight", {
-      p_slug: data.slug,
-      p_candidate_id: data.candidateId ?? null,
-      p_founder_id: data.founderId,
-      p_business_id: data.businessId ?? null,
-      p_title: data.title,
-      p_editorial_intro: data.editorialIntro,
-      p_founder_story: data.founderStory,
-      p_business_description: data.businessDescription,
-      p_problem_solved: data.problemSolved,
-      p_product_solution: data.productSolution,
-      p_evidence_achievements: data.evidenceAchievements,
-      p_featured_ping_ids: data.featuredPingIds,
-      p_featured_clip_ids: data.featuredClipIds,
-      p_dot_tags: data.dotTags,
-      p_video_interview_url: data.videoInterviewUrl ?? null,
-      p_founder_portrait_url: data.founderPortraitUrl ?? null,
-      p_status: data.status,
-      p_correction_note: data.correctionNote,
-    });
+    const { data: pubRow, error } = await (context.supabase as any).rpc(
+      "editor_publish_spotlight",
+      {
+        p_slug: data.slug,
+        p_candidate_id: data.candidateId ?? null,
+        p_founder_id: data.founderId,
+        p_business_id: data.businessId ?? null,
+        p_title: data.title,
+        p_editorial_intro: data.editorialIntro,
+        p_founder_story: data.founderStory,
+        p_business_description: data.businessDescription,
+        p_problem_solved: data.problemSolved,
+        p_product_solution: data.productSolution,
+        p_evidence_achievements: data.evidenceAchievements,
+        p_featured_ping_ids: data.featuredPingIds,
+        p_featured_clip_ids: data.featuredClipIds,
+        p_dot_tags: data.dotTags,
+        p_video_interview_url: data.videoInterviewUrl ?? null,
+        p_founder_portrait_url: data.founderPortraitUrl ?? null,
+        p_status: data.status,
+        p_correction_note: data.correctionNote,
+      },
+    );
     if (error) throw new Error(error.message || "Couldn't publish Spotlight feature.");
+
+    // Persist layout template, distribution configuration, schedule, and additional media links
+    if (pubRow?.id) {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      await (supabaseAdmin as any)
+        .from("spotlight_publications")
+        .update({
+          template_layout: data.templateLayout,
+          ...(data.distributionConfig ? { distribution_config: data.distributionConfig } : {}),
+          scheduled_for: data.scheduledFor ?? null,
+          media_urls: data.mediaUrls,
+          featured_moment_ids: data.featuredMomentIds,
+        })
+        .eq("id", pubRow.id);
+    }
     return { ok: true };
+  });
+
+/**
+ * Editorial Discovery Scanner (Addendum Section 9 & 13):
+ * Surfaces authentic recent public Pings, Clips, Business Storefronts, and Hubs
+ * along with real Builder Pro eligibility flags so Spotlight editors discover
+ * founders organically rather than relying solely on forms.
+ */
+export const discoverSpotlightCandidates = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const check = await (context.supabase as any).rpc("is_spotlight_editor");
+    const isEditor = !check.error
+      ? check.data === true
+      : (await context.supabase.rpc("is_ping_admin")).data === true;
+    assertEditorialRole(isEditor);
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const [pingsRes, clipsRes, bizRes, hubsRes, proEntRes, proSubRes] = await Promise.all([
+      supabaseAdmin
+        .from("pings")
+        .select(
+          "id,user_id,content,category,created_at,author:profiles!pings_user_id_fkey(username,display_name)",
+        )
+        .is("hidden_at", null)
+        .order("created_at", { ascending: false })
+        .limit(15),
+      (supabaseAdmin as any)
+        .from("ping_clips")
+        .select(
+          "id,creator_id,caption,views_count,created_at,creator:profiles!ping_clips_creator_id_fkey(username,display_name)",
+        )
+        .is("hidden_at", null)
+        .order("created_at", { ascending: false })
+        .limit(12),
+      (supabaseAdmin as any)
+        .from("business_profiles")
+        .select("id,owner_id,name,slug,category,verification_status,created_at")
+        .order("created_at", { ascending: false })
+        .limit(12),
+      (supabaseAdmin as any)
+        .from("hubs")
+        .select("id,creator_id,name,slug,category,member_count,is_private,created_at")
+        .eq("is_private", false)
+        .order("created_at", { ascending: false })
+        .limit(10),
+      (supabaseAdmin as any)
+        .from("subscription_entitlements")
+        .select("user_id")
+        .eq("plan_slug", "pro")
+        .in("status", ["active", "cancelled"]),
+      (supabaseAdmin as any)
+        .from("account_subscriptions")
+        .select("user_id")
+        .eq("tier", "pro")
+        .in("status", ["active", "cancelled"]),
+    ]);
+
+    const proUserIds = new Set<string>();
+    for (const row of (proEntRes.data ?? []) as Array<{ user_id: string }>) {
+      if (row.user_id) proUserIds.add(row.user_id);
+    }
+    for (const row of (proSubRes.data ?? []) as Array<{ user_id: string }>) {
+      if (row.user_id) proUserIds.add(row.user_id);
+    }
+
+    type DiscoveredItem = {
+      sourceType: "ping" | "clip" | "business" | "hub";
+      sourceRefId: string;
+      founderId: string;
+      founderLabel: string;
+      businessId: string | null;
+      title: string;
+      excerpt: string;
+      hasActivePro: boolean;
+      createdAt: string;
+    };
+
+    const items: DiscoveredItem[] = [];
+
+    for (const p of (pingsRes.data ?? []) as Array<any>) {
+      items.push({
+        sourceType: "ping",
+        sourceRefId: String(p.id),
+        founderId: String(p.user_id),
+        founderLabel: p.author?.display_name || `@${p.author?.username || "founder"}`,
+        businessId: null,
+        title: String(p.content ?? "").slice(0, 90) || "Public Ping",
+        excerpt: String(p.content ?? "").slice(0, 240),
+        hasActivePro: proUserIds.has(String(p.user_id)),
+        createdAt: String(p.created_at),
+      });
+    }
+
+    if (!clipsRes.error) {
+      for (const c of (clipsRes.data ?? []) as Array<any>) {
+        items.push({
+          sourceType: "clip",
+          sourceRefId: String(c.id),
+          founderId: String(c.creator_id),
+          founderLabel: c.creator?.display_name || `@${c.creator?.username || "creator"}`,
+          businessId: null,
+          title: String(c.caption ?? "").slice(0, 90) || "Published Ping Clip",
+          excerpt: `${String(c.caption ?? "Short-form video Clip").slice(0, 200)} · ${Number(c.views_count ?? 0)} views`,
+          hasActivePro: proUserIds.has(String(c.creator_id)),
+          createdAt: String(c.created_at),
+        });
+      }
+    }
+
+    if (!bizRes.error) {
+      for (const b of (bizRes.data ?? []) as Array<any>) {
+        items.push({
+          sourceType: "business",
+          sourceRefId: String(b.id),
+          founderId: String(b.owner_id),
+          founderLabel: String(b.name),
+          businessId: String(b.id),
+          title: `Business: ${String(b.name)}`,
+          excerpt: `${String(b.category ?? "Venture")} · /b/${String(b.slug)} · Verification: ${String(b.verification_status ?? "unverified")}`,
+          hasActivePro: proUserIds.has(String(b.owner_id)),
+          createdAt: String(b.created_at),
+        });
+      }
+    }
+
+    if (!hubsRes.error) {
+      for (const h of (hubsRes.data ?? []) as Array<any>) {
+        if (!h.creator_id) continue;
+        items.push({
+          sourceType: "hub",
+          sourceRefId: String(h.id),
+          founderId: String(h.creator_id),
+          founderLabel: `Hub Creator (${String(h.name)})`,
+          businessId: null,
+          title: `Hub: ${String(h.name)}`,
+          excerpt: `${String(h.category ?? "Community")} · ${Number(h.member_count ?? 0)} members`,
+          hasActivePro: proUserIds.has(String(h.creator_id)),
+          createdAt: String(h.created_at),
+        });
+      }
+    }
+
+    return { items };
+  });
+
+export const queueDiscoveredSpotlightCandidate = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator(spotlightQueueDiscoverySchema)
+  .handler(async ({ data, context }) => {
+    const check = await (context.supabase as any).rpc("is_spotlight_editor");
+    const isEditor = !check.error
+      ? check.data === true
+      : (await context.supabase.rpc("is_ping_admin")).data === true;
+    assertEditorialRole(isEditor);
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const proCheck = await (supabaseAdmin as any).rpc("has_active_pro_membership", {
+      _user_id: data.founderId,
+    });
+    if (proCheck.error) {
+      throw new Error("Could not verify Builder Pro membership (migration 0034 required).");
+    }
+    if (proCheck.data !== true) {
+      throw new Error(
+        "Only founders with an active Builder Pro membership can enter the Spotlight consideration queue.",
+      );
+    }
+
+    const { data: created, error } = await (supabaseAdmin as any)
+      .from("spotlight_candidates")
+      .insert({
+        founder_id: data.founderId,
+        business_id: data.businessId ?? null,
+        source_type: data.sourceType,
+        source_ref_id: data.sourceRefId ?? null,
+        headline: data.headline,
+        story_pitch: data.storyPitch,
+        is_private_submission: false,
+        status: "discovered",
+        pro_verified_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+
+    if (error) throw new Error(error.message || "Couldn't queue discovered candidate.");
+
+    await (supabaseAdmin as any).from("spotlight_editorial_audit_logs").insert({
+      actor_id: context.userId,
+      action: "editorial_discovery_queued",
+      target_type: "candidate",
+      target_id: created.id,
+      reason: `Discovered via ${data.sourceType}: ${data.headline}`,
+    });
+
+    return { ok: true, candidateId: String(created.id) };
   });

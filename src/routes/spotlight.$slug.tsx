@@ -5,19 +5,24 @@ import { format } from "date-fns";
 import {
   AlertTriangle,
   ArrowLeft,
+  BarChart3,
   Building2,
   CheckCircle2,
   Clapperboard,
   Eye,
   Flame,
+  MessageSquare,
   Share2,
+  Sparkles,
   User,
+  Users,
 } from "lucide-react";
 import { pageHead } from "@/lib/site";
 import {
   PING_OFFICIAL_ACCOUNT,
   recordObservedSpotlightEvent,
   spotlightBySlugQuery,
+  spotlightLinkedResourcesQuery,
 } from "@/lib/spotlight";
 import { FounderAvatar } from "@/components/ping/Avatar";
 import { AccountStatusBadges } from "@/components/badges/AccountStatusBadges";
@@ -38,6 +43,7 @@ export const Route = createFileRoute("/spotlight/$slug")({
 function SpotlightStoryPage() {
   const { slug } = Route.useParams();
   const { data: pub, isLoading } = useQuery(spotlightBySlugQuery(slug));
+  const { data: linked } = useQuery(spotlightLinkedResourcesQuery(pub));
   const [shareOpen, setShareOpen] = useState(false);
 
   useEffect(() => {
@@ -76,6 +82,20 @@ function SpotlightStoryPage() {
   const founderName = pub.founder?.display_name || pub.founder?.username || "Featured Founder";
   const observedViews = (pub.distribution ?? []).reduce((s, d) => s + (d.views_count ?? 0), 0);
   const observedShares = (pub.distribution ?? []).reduce((s, d) => s + (d.shares_count ?? 0), 0);
+  const observedImpressions = (pub.distribution ?? []).reduce(
+    (s, d) => s + (d.impressions_count ?? 0),
+    0,
+  );
+  const layoutBadge =
+    pub.template_layout === "video_interview"
+      ? "Video Interview Feature"
+      : pub.template_layout === "builder_case_study"
+        ? "Builder Case Study"
+        : "Editorial Feature";
+
+  const linkedPings = linked?.pings ?? [];
+  const linkedClips = linked?.clips ?? [];
+  const linkedHubs = linked?.hubs ?? [];
 
   return (
     <article className="mx-auto max-w-4xl px-4 sm:px-6 py-8 pb-24 space-y-6">
@@ -112,10 +132,15 @@ function SpotlightStoryPage() {
       {/* Editorial Feature Header */}
       <header className="surface-card rounded-3xl p-6 sm:p-9 border border-border/70 space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-          <span className="inline-flex items-center gap-1.5 font-semibold text-amber-600 dark:text-amber-300">
-            <Flame className="size-3.5" /> Published by {PING_OFFICIAL_ACCOUNT.displayName} (@
-            {PING_OFFICIAL_ACCOUNT.handle})
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 font-semibold text-amber-600 dark:text-amber-300">
+              <Flame className="size-3.5" /> Published by {PING_OFFICIAL_ACCOUNT.displayName} (@
+              {PING_OFFICIAL_ACCOUNT.handle})
+            </span>
+            <span className="rounded-full border border-border bg-secondary/60 px-2.5 py-0.5 text-[10px] font-semibold">
+              {layoutBadge}
+            </span>
+          </div>
           <span className="tabular-nums">
             {pub.published_at ? format(new Date(pub.published_at), "MMMM d, yyyy") : "Draft"} ·{" "}
             <Eye className="inline size-3.5 mb-0.5" /> {observedViews} observed views ·{" "}
@@ -185,9 +210,12 @@ function SpotlightStoryPage() {
         </div>
       </header>
 
-      {/* Video Interview (if attached) */}
+      {/* Video Interview (prominent hero in video_interview layout or attached media) */}
       {pub.video_interview_url && (
-        <section className="surface-card rounded-3xl overflow-hidden border border-border/70">
+        <section
+          aria-label="Spotlight Video Interview"
+          className="surface-card rounded-3xl overflow-hidden border border-border/70"
+        >
           <video
             src={pub.video_interview_url}
             controls
@@ -198,7 +226,21 @@ function SpotlightStoryPage() {
         </section>
       )}
 
-      {/* Structured Story Body */}
+      {/* Supporting Editorial Photography */}
+      {pub.media_urls && pub.media_urls.length > 0 && (
+        <section aria-label="Spotlight Gallery" className="grid gap-3 sm:grid-cols-2">
+          {pub.media_urls.map((imgUrl, idx) => (
+            <img
+              key={`${imgUrl}-${idx}`}
+              src={imgUrl}
+              alt={`${pub.title} visual ${idx + 1}`}
+              className="w-full h-56 object-cover rounded-2xl border border-border/70"
+            />
+          ))}
+        </section>
+      )}
+
+      {/* Structured Story Body (Case-Study prioritizes Problem/Solution & Evidence upfront) */}
       <div className="grid gap-5 md:grid-cols-2">
         {pub.problem_solved && (
           <section className="surface-card rounded-3xl p-6 border border-border/70 space-y-2">
@@ -223,7 +265,9 @@ function SpotlightStoryPage() {
       </div>
 
       <section className="surface-card rounded-3xl p-6 sm:p-8 border border-border/70 space-y-4">
-        <h2 className="font-display text-xl font-extrabold">Founder Story</h2>
+        <h2 className="font-display text-xl font-extrabold">
+          {pub.template_layout === "builder_case_study" ? "Execution Case Study" : "Founder Story"}
+        </h2>
         <p className="text-sm sm:text-base leading-relaxed text-foreground/95 whitespace-pre-line">
           {pub.founder_story}
         </p>
@@ -254,30 +298,174 @@ function SpotlightStoryPage() {
         )}
       </section>
 
-      {/* Linked Clips & DOT Tags */}
-      {(pub.featured_clip_ids.length > 0 || pub.dot_tags.length > 0) && (
-        <section className="surface-card rounded-3xl p-6 border border-border/70 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-2">
-            {pub.dot_tags.map((slugTag) => (
+      {/* Featured Clips with Preserved Original Creator Attribution (Section 17) */}
+      {(linkedClips.length > 0 || pub.featured_clip_ids.length > 0) && (
+        <section
+          aria-labelledby="spotlight-clips-heading"
+          className="surface-card rounded-3xl p-6 border border-border/70 space-y-4"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2
+              id="spotlight-clips-heading"
+              className="font-display text-lg font-extrabold flex items-center gap-2"
+            >
+              <Clapperboard className="size-5 text-primary" /> Featured Founder Clips
+            </h2>
+            <Button asChild variant="outline" size="sm" className="rounded-full text-xs">
+              <Link to="/clips">Explore All Ping Clips</Link>
+            </Button>
+          </div>
+
+          {linkedClips.length > 0 ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {linkedClips.map((clip) => (
+                <div
+                  key={clip.id}
+                  data-testid={`spotlight-featured-clip-${clip.id}`}
+                  className="rounded-2xl overflow-hidden border border-border/70 bg-secondary/20 flex flex-col"
+                >
+                  <video
+                    src={clip.video_url}
+                    poster={clip.poster_url ?? undefined}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    className="w-full aspect-[9/16] max-h-72 bg-black object-cover"
+                  />
+                  <div className="p-3.5 space-y-1.5 text-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold text-foreground">
+                        {clip.creator?.display_name || `@${clip.creator?.username || "creator"}`}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground tabular-nums">
+                        {clip.views_count} views
+                      </span>
+                    </div>
+                    {clip.source_moment_id && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary">
+                        <Sparkles className="size-3" /> Originally shared as a Moment
+                      </span>
+                    )}
+                    {clip.caption && (
+                      <p className="text-muted-foreground line-clamp-2">{clip.caption}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              {pub.featured_clip_ids.length} linked Clip
+              {pub.featured_clip_ids.length === 1 ? "" : "s"} attached —{" "}
+              <Link to="/clips" className="text-primary underline">
+                open Ping Clips feed
+              </Link>
+              .
+            </p>
+          )}
+        </section>
+      )}
+
+      {/* Featured Original Pings (Section 11 & 17) */}
+      {linkedPings.length > 0 && (
+        <section
+          aria-labelledby="spotlight-pings-heading"
+          className="surface-card rounded-3xl p-6 border border-border/70 space-y-3"
+        >
+          <h2
+            id="spotlight-pings-heading"
+            className="font-display text-lg font-extrabold flex items-center gap-2"
+          >
+            <MessageSquare className="size-5 text-primary" /> Original Published Pings
+          </h2>
+          <div className="space-y-2.5">
+            {linkedPings.map((ping) => (
               <Link
-                key={slugTag}
-                to="/tag/$slug"
-                params={{ slug: slugTag }}
-                className="rounded-full border border-border bg-secondary/50 px-3 py-1 text-xs font-semibold text-primary hover:bg-secondary"
+                key={ping.id}
+                to="/p/$id"
+                params={{ id: ping.id }}
+                className="block rounded-2xl border border-border/60 bg-secondary/25 p-4 hover:bg-secondary/45 transition-colors space-y-1.5"
               >
-                .{slugTag}
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                  <span className="font-semibold text-foreground">
+                    {ping.author?.display_name || `@${ping.author?.username || "founder"}`}
+                  </span>
+                  <span>{format(new Date(ping.created_at), "MMM d, yyyy")}</span>
+                </div>
+                <p className="text-xs text-foreground/90 leading-relaxed line-clamp-3">
+                  {ping.content}
+                </p>
               </Link>
             ))}
           </div>
-          {pub.featured_clip_ids.length > 0 && (
-            <Button asChild variant="outline" size="sm" className="rounded-full gap-1.5">
-              <Link to="/clips">
-                <Clapperboard className="size-3.5 text-primary" /> Watch{" "}
-                {pub.featured_clip_ids.length} Featured Clip
-                {pub.featured_clip_ids.length === 1 ? "" : "s"}
-              </Link>
-            </Button>
+        </section>
+      )}
+
+      {/* Related Hubs & DOT Tags (Section 17) */}
+      {(linkedHubs.length > 0 || pub.dot_tags.length > 0) && (
+        <section className="surface-card rounded-3xl p-6 border border-border/70 space-y-4">
+          {linkedHubs.length > 0 && (
+            <div className="space-y-2">
+              <h2 className="font-display text-sm font-bold flex items-center gap-1.5">
+                <Users className="size-4 text-primary" /> Related Community Hubs
+              </h2>
+              <div className="flex flex-wrap gap-2">
+                {linkedHubs.map((hub) => (
+                  <Link
+                    key={hub.id}
+                    to="/hubs/$slug"
+                    params={{ slug: hub.slug }}
+                    className="rounded-full border border-border bg-secondary/40 px-3 py-1 text-xs font-semibold hover:bg-secondary"
+                  >
+                    {hub.name}
+                  </Link>
+                ))}
+              </div>
+            </div>
           )}
+
+          {pub.dot_tags.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              {pub.dot_tags.map((slugTag) => (
+                <Link
+                  key={slugTag}
+                  to="/tag/$slug"
+                  params={{ slug: slugTag }}
+                  className="rounded-full border border-border bg-secondary/50 px-3 py-1 text-xs font-semibold text-primary hover:bg-secondary"
+                >
+                  .{slugTag}
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Observed Distribution Analytics (Actual Events Only — Never Fabricated) */}
+      {pub.distribution && pub.distribution.length > 0 && (
+        <section
+          aria-label="Observed Spotlight distribution metrics"
+          className="rounded-2xl border border-border/60 bg-card/60 p-4 text-xs space-y-2"
+        >
+          <div className="flex items-center justify-between">
+            <span className="font-semibold flex items-center gap-1.5 text-foreground">
+              <BarChart3 className="size-3.5 text-primary" /> Observed Distribution Telemetry
+            </span>
+            <span className="text-[11px] text-muted-foreground tabular-nums">
+              {observedImpressions} impressions · {observedViews} views · {observedShares} shares
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {pub.distribution.map((row) => (
+              <span
+                key={row.channel}
+                className="rounded-lg border border-border/60 bg-secondary/40 px-2.5 py-1 text-[11px] tabular-nums"
+              >
+                <strong>{row.channel.replace("_", " ")}</strong>: {row.impressions_count} imp ·{" "}
+                {row.views_count} views · {row.clicks_count} clicks · {row.shares_count} shares
+              </span>
+            ))}
+          </div>
         </section>
       )}
 

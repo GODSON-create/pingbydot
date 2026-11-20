@@ -29,6 +29,7 @@ import {
   PING_LEARN_COURSES,
   courseReleaseScheduleQuery,
   gradeCourseAssessment,
+  myCourseEntitlementsQuery,
   myLearnProgressQuery,
   resolveLearnEntitlements,
   useRecordLessonProgress,
@@ -75,6 +76,7 @@ function PingLearnPage() {
   const { data: subEnt } = useQuery(mySubscriptionEntitlementQuery(user?.id));
   const { data: scheduleState } = useQuery(courseReleaseScheduleQuery());
   const { data: progressState } = useQuery(myLearnProgressQuery(user?.id));
+  const { data: persistedEntState } = useQuery(myCourseEntitlementsQuery(user?.id));
 
   const recordLesson = useRecordLessonProgress(user?.id);
   const submitAssessment = useSubmitCourseAssessment(user?.id);
@@ -107,6 +109,7 @@ function PingLearnPage() {
         subscriptionExpired,
         subscriptionExpiresAt: subEnt?.expires_at ?? dotSummary?.subscription.expires_at ?? null,
         progressBySlug,
+        previousEntitlements: persistedEntState?.entitlementsBySlug,
         schedule,
       }),
     [
@@ -115,6 +118,7 @@ function PingLearnPage() {
       subEnt?.expires_at,
       dotSummary?.subscription.expires_at,
       progressBySlug,
+      persistedEntState?.entitlementsBySlug,
       schedule,
     ],
   );

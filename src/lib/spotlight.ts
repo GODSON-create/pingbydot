@@ -431,3 +431,95 @@ export async function recordObservedSpotlightEvent(
       () => {},
     );
 }
+
+export interface SpotlightLinkedPing {
+  id: string;
+  content: string;
+  created_at: string;
+  author?: { username: string; display_name: string } | null;
+}
+
+export interface SpotlightLinkedClip {
+  id: string;
+  video_url: string;
+  poster_url: string | null;
+  caption: string;
+  views_count: number;
+  source_moment_id: string | null;
+  creator?: { username: string; display_name: string } | null;
+}
+
+export interface SpotlightLinkedHub {
+  id: string;
+  name: string;
+  slug: string;
+  category: string | null;
+}
+
+/**
+ * Resolves linked original Pings, featured Clips, and founder-associated Hubs
+ * for a Spotlight publication while preserving original creator attribution.
+ */
+export function spotlightLinkedResourcesQuery(pub: SpotlightPublication | null | undefined) {
+  const pingIds = pub?.featured_ping_ids ?? [];
+  const clipIds = pub?.featured_clip_ids ?? [];
+  const founderId = pub?.founder_id;
+  return queryOptions({
+    queryKey: ["spotlight-linked-resources", pub?.id, pingIds.join(","), clipIds.join(",")],
+    enabled: Boolean(pub?.id),
+    staleTime: 30_000,
+    queryFn: async (): Promise<{
+      pings: SpotlightLinkedPing[];
+      clips: SpotlightLinkedClip[];
+      hubs: SpotlightLinkedHub[];
+    }> => {
+      const [pingsRes, clipsRes, hubsRes] = await Promise.all([
+        pingIds.length > 0
+          ? supabase
+              .from("pings")
+              .select(
+                "id,content,created_at,author:profiles!pings_user_id_fkey(username,display_name)",
+              )
+              .in("id", pingIds)
+              .is("hidden_at", null)
+          : Promise.resolve({ data: [], error: null }),
+        clipIds.length > 0
+          ? (supabase as any)
+              .from("ping_clips")
+              .select(
+                "id,video_url,poster_url,caption,views_count,source_moment_id,creator:profiles!ping_clips_creator_id_fkey(username,display_name)",
+              )
+              .in("id", clipIds)
+              .is("hidden_at", null)
+          : Promise.resolve({ data: [], error: null }),
+        founderId
+          ? (supabase as any)
+              .from("hub_members")
+              .select("hub:hubs!hub_members_hub_id_fkey(id,name,slug,category,is_private)")
+              .eq("user_id", founderId)
+              .eq("status", "active")
+              .limit(6)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+
+      const pings = (!pingsRes.error
+        ? (pingsRes.data ?? [])
+        : []) as unknown as SpotlightLinkedPing[];
+      const clips = (!clipsRes.error ? (clipsRes.data ?? []) : []) as SpotlightLinkedClip[];
+      const hubs: SpotlightLinkedHub[] = [];
+      if (!hubsRes.error && Array.isArray(hubsRes.data)) {
+        for (const row of hubsRes.data as Array<{ hub?: any }>) {
+          if (row.hub && !row.hub.is_private) {
+            hubs.push({
+              id: String(row.hub.id),
+              name: String(row.hub.name),
+              slug: String(row.hub.slug),
+              category: row.hub.category ? String(row.hub.category) : null,
+            });
+          }
+        }
+      }
+      return { pings, clips, hubs };
+    },
+  });
+}

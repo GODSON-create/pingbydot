@@ -828,6 +828,45 @@ export function myLearnProgressQuery(userId?: string) {
   });
 }
 
+export function myCourseEntitlementsQuery(userId?: string) {
+  return queryOptions({
+    queryKey: ["my-course-entitlements", userId],
+    enabled: Boolean(userId),
+    staleTime: 20_000,
+    queryFn: async (): Promise<{
+      migrated: boolean;
+      entitlementsBySlug: Record<
+        string,
+        { grantSource: LearnGrantSource; releasedGrantDot?: number; redeemedGrantDot?: number }
+      >;
+    }> => {
+      if (!userId) return { migrated: true, entitlementsBySlug: {} };
+      const { data, error } = await (supabase as any)
+        .from("course_entitlements")
+        .select("course_slug,grant_source,released_grant_dot,redeemed_grant_dot")
+        .eq("user_id", userId);
+
+      if (error) {
+        if (!isMissingLearnSchema(error)) throw error;
+        return { migrated: false, entitlementsBySlug: {} };
+      }
+
+      const map: Record<
+        string,
+        { grantSource: LearnGrantSource; releasedGrantDot?: number; redeemedGrantDot?: number }
+      > = {};
+      for (const row of (data ?? []) as any[]) {
+        map[row.course_slug] = {
+          grantSource: row.grant_source as LearnGrantSource,
+          releasedGrantDot: Number(row.released_grant_dot ?? 0),
+          redeemedGrantDot: Number(row.redeemed_grant_dot ?? 0),
+        };
+      }
+      return { migrated: true, entitlementsBySlug: map };
+    },
+  });
+}
+
 export function useRecordLessonProgress(userId?: string) {
   const qc = useQueryClient();
   return useMutation({

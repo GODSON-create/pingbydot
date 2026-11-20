@@ -17,10 +17,13 @@ import {
   Share2,
   Sparkles,
   Upload,
+  UserCheck,
+  UserPlus,
   Volume2,
   VolumeX,
 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import { pageHead } from "@/lib/site";
 import { useAuth } from "@/lib/auth";
 import { CURATED_DOT_TAGS } from "@/lib/dot-tags";
@@ -81,6 +84,8 @@ function VerticalClipCard({ clip }: { clip: PingClip }) {
   const [showCaptions, setShowCaptions] = useState(true);
   const [liked, setLiked] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [followingCreator, setFollowingCreator] = useState(false);
+  const [followPending, setFollowPending] = useState(false);
   const [views, setViews] = useState(clip.views_count);
   const [repliesOpen, setRepliesOpen] = useState(false);
   const [replyDraft, setReplyDraft] = useState("");
@@ -229,22 +234,67 @@ function VerticalClipCard({ clip }: { clip: PingClip }) {
             )}
 
             {!isOwner && user && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-7 rounded-full text-[11px] gap-1 px-2.5"
-                onClick={async () => {
-                  try {
-                    const convId = await startChat.mutateAsync(clip.creator_id);
-                    navigate({ to: "/messages", search: { conversationId: convId } });
-                  } catch {
-                    toast.error("Couldn't open chat with creator.");
-                  }
-                }}
-              >
-                <MessageSquare className="size-3" /> Connect
-              </Button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={followingCreator ? "secondary" : "default"}
+                  disabled={followPending}
+                  className="h-7 rounded-full text-[11px] gap-1 px-2.5"
+                  onClick={async () => {
+                    try {
+                      setFollowPending(true);
+                      if (followingCreator) {
+                        const { error } = await supabase
+                          .from("follows")
+                          .delete()
+                          .eq("follower_id", user.id)
+                          .eq("following_id", clip.creator_id);
+                        if (error) throw error;
+                        setFollowingCreator(false);
+                        toast.success(`Unfollowed ${creatorName}`);
+                      } else {
+                        const { error } = await supabase
+                          .from("follows")
+                          .insert({ follower_id: user.id, following_id: clip.creator_id });
+                        if (error && error.code !== "23505") throw error;
+                        setFollowingCreator(true);
+                        toast.success(`Following ${creatorName}`);
+                      }
+                    } catch {
+                      toast.error("Couldn't update follow status.");
+                    } finally {
+                      setFollowPending(false);
+                    }
+                  }}
+                >
+                  {followingCreator ? (
+                    <>
+                      <UserCheck className="size-3" /> Following
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="size-3" /> Follow
+                    </>
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 rounded-full text-[11px] gap-1 px-2.5"
+                  onClick={async () => {
+                    try {
+                      const convId = await startChat.mutateAsync(clip.creator_id);
+                      navigate({ to: "/messages", search: { conversationId: convId } });
+                    } catch {
+                      toast.error("Couldn't open chat with creator.");
+                    }
+                  }}
+                >
+                  <MessageSquare className="size-3" /> Connect
+                </Button>
+              </div>
             )}
           </div>
 

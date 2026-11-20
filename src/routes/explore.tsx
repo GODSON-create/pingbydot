@@ -26,6 +26,7 @@ import { VerificationBadge } from "@/components/verification/VerificationBadge";
 import { CascadingProfilePanel } from "@/components/profile/CascadingProfilePanel";
 import { MomentsTray } from "@/components/moments/MomentsTray";
 import { DiscoverableMomentsFeed } from "@/components/moments/DiscoverableMomentsFeed";
+import { SpotlightFeedStrip } from "@/components/spotlight/SpotlightFeedStrip";
 import { AriseCallout } from "@/components/AriseCallout";
 import { feedQuery, likeCount, replyCount, type Ping, type Profile } from "@/lib/pings";
 import { hubsQuery } from "@/lib/hub-queries";
@@ -488,6 +489,9 @@ function Explore() {
           </Button>
         </div>
       </div>
+
+      {/* Live Ping Spotlight Explore Distribution Strip (renders only when published stories exist) */}
+      <SpotlightFeedStrip channel="explore" maxItems={2} />
 
       {/* Trending DOT Tags & Legacy Hashtag-Compatible Discovery Chips */}
       {(() => {
