@@ -405,6 +405,31 @@ async function runSchemaVerification(sql, releaseEntries) {
     );
   }
 
+  const [{ p5_rls_count, auth_verify_key_exec, anon_rl_exec, locale_col_present }] = await sql`
+    SELECT
+      (
+        SELECT count(*)::int FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relrowsecurity = true
+          AND c.relname = ANY(ARRAY[
+            'griot_ai_preferences', 'griot_audit_logs', 'developer_apps',
+            'oauth_authorization_codes', 'oauth_access_tokens', 'developer_api_keys',
+            'developer_webhooks', 'developer_webhook_deliveries', 'api_rate_limits'
+          ])
+      ) AS p5_rls_count,
+      has_function_privilege('authenticated', 'public.verify_api_key_hash(text)', 'EXECUTE') AS auth_verify_key_exec,
+      has_function_privilege('anon', 'public.check_server_rate_limit(text, integer, integer)', 'EXECUTE') AS anon_rl_exec,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'preferred_locale'
+      ) AS locale_col_present
+  `;
+  if (p5_rls_count < 9 || auth_verify_key_exec || anon_rl_exec || !locale_col_present) {
+    throw new Error(
+      `Schema Verification FAILED — Phase 5 GRIOT/developer/scale security mismatch (rls_count=${p5_rls_count}/9, auth_verify_key=${auth_verify_key_exec}, anon_rl=${anon_rl_exec}, preferred_locale=${locale_col_present})`,
+    );
+  }
+
   console.log(
     `[SCHEMA VERIFIED] Ledger ${minTag}–${maxTag}: ${releaseEntries.length}/${releaseEntries.length} recorded (total rows=${ledgerRows.length}); ${REQUIRED_TABLES_0011_0020.length}/${REQUIRED_TABLES_0011_0020.length} tables with RLS; storage 'media' bucket, hardened indexes & privileges intact.`,
   );

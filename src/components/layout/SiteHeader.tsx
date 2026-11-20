@@ -18,6 +18,8 @@ import {
   Heart,
   MessageCircle,
   UserPlus,
+  Sparkles,
+  Code2,
 } from "lucide-react";
 import { formatDistanceToNowStrict } from "date-fns";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -405,6 +407,16 @@ export function SiteHeader() {
                       <DropdownMenuItem asChild className="rounded-xl">
                         <Link to="/business" onClick={closeOverlays}>
                           <Building2 /> Business Suite
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild className="rounded-xl">
+                        <Link to="/griot" onClick={closeOverlays}>
+                          <Sparkles className="text-primary" /> GRIOT AI
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild className="rounded-xl">
+                        <Link to="/developers" onClick={closeOverlays}>
+                          <Code2 /> Developer Platform
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild className="rounded-xl">

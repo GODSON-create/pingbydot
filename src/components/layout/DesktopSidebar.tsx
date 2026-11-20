@@ -20,6 +20,7 @@ import {
   Coins,
   Crown,
   Sparkles,
+  Code2,
   ArrowLeft,
   PanelLeftClose,
   PanelLeftOpen,
@@ -468,6 +469,25 @@ export function DesktopSidebar() {
                 <DropdownMenuItem asChild className="rounded-xl">
                   <Link to="/upgrades" onClick={closeOverlays} className="flex items-center gap-2">
                     <Crown className="size-4 text-gold" /> Account Upgrades
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="rounded-xl">
+                  <Link to="/business" onClick={closeOverlays} className="flex items-center gap-2">
+                    <Building2 className="size-4" /> Business Suite
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="rounded-xl">
+                  <Link to="/griot" onClick={closeOverlays} className="flex items-center gap-2">
+                    <Sparkles className="size-4 text-primary" /> GRIOT AI
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="rounded-xl">
+                  <Link
+                    to="/developers"
+                    onClick={closeOverlays}
+                    className="flex items-center gap-2"
+                  >
+                    <Code2 className="size-4" /> Developer Platform
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild className="rounded-xl">

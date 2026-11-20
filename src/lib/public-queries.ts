@@ -25,6 +25,11 @@ export async function fetchPublicPings(
       .maybeSingle();
     if (error) throw new Error("Couldn't load this profile. Please try again.");
     if (!profile) return { profile: null, pings: [] };
+    const profileVisibility = (profile as { profile_visibility?: string | null })
+      .profile_visibility;
+    if (profileVisibility === "private" || profileVisibility === "followers") {
+      return { profile, pings: [], connections: [], visibilityRestricted: true };
+    }
     const { data: pings, error: pingError } = await client
       .from("pings")
       .select(PUBLIC_PING_SELECT)

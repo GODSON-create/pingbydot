@@ -761,6 +761,14 @@ function BusinessWorkspacePage() {
                 </p>
               </div>
             </div>
+            <div className="pt-2 flex flex-wrap items-center gap-2">
+              <Button asChild variant="outline" size="sm" className="rounded-full text-xs">
+                <Link to="/developers">Open Business Messaging API &amp; Webhooks →</Link>
+              </Button>
+              <Button asChild variant="outline" size="sm" className="rounded-full text-xs">
+                <Link to="/griot">Opt-in GRIOT Reply Drafting →</Link>
+              </Button>
+            </div>
           </div>
 
           <div className="surface-card rounded-3xl p-6 border border-border/70 space-y-3">

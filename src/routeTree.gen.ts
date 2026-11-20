@@ -14,6 +14,7 @@ import { Route as AtChar123usernameChar125RouteImport } from './routes/@{$userna
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as BusinessesRouteImport } from './routes/businesses'
+import { Route as DevelopersRouteImport } from './routes/developers'
 import { Route as ExploreRouteImport } from './routes/explore'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as HubsRouteImport } from './routes/hubs'
@@ -32,20 +33,27 @@ import { Route as AuthenticatedAnalyticsRouteImport } from './routes/_authentica
 import { Route as AuthenticatedBalanceRouteImport } from './routes/_authenticated/balance'
 import { Route as AuthenticatedBusinessRouteImport } from './routes/_authenticated/business'
 import { Route as AuthenticatedCreateRouteImport } from './routes/_authenticated/create'
+import { Route as AuthenticatedGriotRouteImport } from './routes/_authenticated/griot'
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedUpgradesRouteImport } from './routes/_authenticated/upgrades'
 import { Route as BSlugRouteImport } from './routes/b.$slug'
 import { Route as HubsSlugRouteImport } from './routes/hubs.$slug'
 import { Route as HubsCreateRouteImport } from './routes/hubs.create'
+import { Route as OauthAuthorizeRouteImport } from './routes/oauth.authorize'
 import { Route as PIdRouteImport } from './routes/p.$id'
 import { Route as SignalsSlugRouteImport } from './routes/signals.$slug'
 import { Route as SignalsChannelsRouteImport } from './routes/signals.channels'
 import { Route as SignalsCreateRouteImport } from './routes/signals.create'
 import { Route as SignalsOpportunitiesRouteImport } from './routes/signals.opportunities'
 import { Route as AuthenticatedEditIdRouteImport } from './routes/_authenticated/edit.$id'
+import { Route as ApiGriotAssistRouteImport } from './routes/api/griot/assist'
+import { Route as ApiV1HealthRouteImport } from './routes/api/v1/health'
+import { Route as ApiV1OpenapiDotjsonRouteImport } from './routes/api/v1/openapi[.]json'
+import { Route as ApiV1PingsRouteImport } from './routes/api/v1/pings'
 import { Route as ApiWebhooksPaystackRouteImport } from './routes/api/webhooks/paystack'
 import { Route as ApiPublicPingCardIdRouteImport } from './routes/api/public/ping-card/$id'
+import { Route as ApiV1BusinessMessagesRouteImport } from './routes/api/v1/business/messages'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -70,6 +78,11 @@ const AdminRoute = AdminRouteImport.update({
 const BusinessesRoute = BusinessesRouteImport.update({
   id: '/businesses',
   path: '/businesses',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevelopersRoute = DevelopersRouteImport.update({
+  id: '/developers',
+  path: '/developers',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ExploreRoute = ExploreRouteImport.update({
@@ -162,6 +175,11 @@ const AuthenticatedCreateRoute = AuthenticatedCreateRouteImport.update({
   path: '/create',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedGriotRoute = AuthenticatedGriotRouteImport.update({
+  id: '/griot',
+  path: '/griot',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedOnboardingRoute = AuthenticatedOnboardingRouteImport.update({
   id: '/onboarding',
   path: '/onboarding',
@@ -191,6 +209,11 @@ const HubsCreateRoute = HubsCreateRouteImport.update({
   id: '/create',
   path: '/create',
   getParentRoute: () => HubsRoute,
+} as any)
+const OauthAuthorizeRoute = OauthAuthorizeRouteImport.update({
+  id: '/oauth/authorize',
+  path: '/oauth/authorize',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const PIdRoute = PIdRouteImport.update({
   id: '/p/$id',
@@ -222,6 +245,26 @@ const AuthenticatedEditIdRoute = AuthenticatedEditIdRouteImport.update({
   path: '/edit/$id',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiGriotAssistRoute = ApiGriotAssistRouteImport.update({
+  id: '/api/griot/assist',
+  path: '/api/griot/assist',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiV1HealthRoute = ApiV1HealthRouteImport.update({
+  id: '/api/v1/health',
+  path: '/api/v1/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiV1OpenapiDotjsonRoute = ApiV1OpenapiDotjsonRouteImport.update({
+  id: '/api/v1/openapi.json',
+  path: '/api/v1/openapi.json',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiV1PingsRoute = ApiV1PingsRouteImport.update({
+  id: '/api/v1/pings',
+  path: '/api/v1/pings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiWebhooksPaystackRoute = ApiWebhooksPaystackRouteImport.update({
   id: '/api/webhooks/paystack',
   path: '/api/webhooks/paystack',
@@ -232,12 +275,18 @@ const ApiPublicPingCardIdRoute = ApiPublicPingCardIdRouteImport.update({
   path: '/api/public/ping-card/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiV1BusinessMessagesRoute = ApiV1BusinessMessagesRouteImport.update({
+  id: '/api/v1/business/messages',
+  path: '/api/v1/business/messages',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/@{$username}': typeof AtChar123usernameChar125Route
   '/admin': typeof AdminRoute
   '/businesses': typeof BusinessesRoute
+  '/developers': typeof DevelopersRoute
   '/explore': typeof ExploreRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/hubs': typeof HubsRouteWithChildren
@@ -256,26 +305,34 @@ export interface FileRoutesByFullPath {
   '/balance': typeof AuthenticatedBalanceRoute
   '/business': typeof AuthenticatedBusinessRoute
   '/create': typeof AuthenticatedCreateRoute
+  '/griot': typeof AuthenticatedGriotRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/upgrades': typeof AuthenticatedUpgradesRoute
   '/b/$slug': typeof BSlugRoute
   '/hubs/$slug': typeof HubsSlugRoute
   '/hubs/create': typeof HubsCreateRoute
+  '/oauth/authorize': typeof OauthAuthorizeRoute
   '/p/$id': typeof PIdRoute
   '/signals/$slug': typeof SignalsSlugRoute
   '/signals/channels': typeof SignalsChannelsRoute
   '/signals/create': typeof SignalsCreateRoute
   '/signals/opportunities': typeof SignalsOpportunitiesRoute
   '/edit/$id': typeof AuthenticatedEditIdRoute
+  '/api/griot/assist': typeof ApiGriotAssistRoute
+  '/api/v1/health': typeof ApiV1HealthRoute
+  '/api/v1/openapi.json': typeof ApiV1OpenapiDotjsonRoute
+  '/api/v1/pings': typeof ApiV1PingsRoute
   '/api/webhooks/paystack': typeof ApiWebhooksPaystackRoute
   '/api/public/ping-card/$id': typeof ApiPublicPingCardIdRoute
+  '/api/v1/business/messages': typeof ApiV1BusinessMessagesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/@{$username}': typeof AtChar123usernameChar125Route
   '/admin': typeof AdminRoute
   '/businesses': typeof BusinessesRoute
+  '/developers': typeof DevelopersRoute
   '/explore': typeof ExploreRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/hubs': typeof HubsRouteWithChildren
@@ -294,20 +351,27 @@ export interface FileRoutesByTo {
   '/balance': typeof AuthenticatedBalanceRoute
   '/business': typeof AuthenticatedBusinessRoute
   '/create': typeof AuthenticatedCreateRoute
+  '/griot': typeof AuthenticatedGriotRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/upgrades': typeof AuthenticatedUpgradesRoute
   '/b/$slug': typeof BSlugRoute
   '/hubs/$slug': typeof HubsSlugRoute
   '/hubs/create': typeof HubsCreateRoute
+  '/oauth/authorize': typeof OauthAuthorizeRoute
   '/p/$id': typeof PIdRoute
   '/signals/$slug': typeof SignalsSlugRoute
   '/signals/channels': typeof SignalsChannelsRoute
   '/signals/create': typeof SignalsCreateRoute
   '/signals/opportunities': typeof SignalsOpportunitiesRoute
   '/edit/$id': typeof AuthenticatedEditIdRoute
+  '/api/griot/assist': typeof ApiGriotAssistRoute
+  '/api/v1/health': typeof ApiV1HealthRoute
+  '/api/v1/openapi.json': typeof ApiV1OpenapiDotjsonRoute
+  '/api/v1/pings': typeof ApiV1PingsRoute
   '/api/webhooks/paystack': typeof ApiWebhooksPaystackRoute
   '/api/public/ping-card/$id': typeof ApiPublicPingCardIdRoute
+  '/api/v1/business/messages': typeof ApiV1BusinessMessagesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -316,6 +380,7 @@ export interface FileRoutesById {
   '/@{$username}': typeof AtChar123usernameChar125Route
   '/admin': typeof AdminRoute
   '/businesses': typeof BusinessesRoute
+  '/developers': typeof DevelopersRoute
   '/explore': typeof ExploreRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/hubs': typeof HubsRouteWithChildren
@@ -334,20 +399,27 @@ export interface FileRoutesById {
   '/_authenticated/balance': typeof AuthenticatedBalanceRoute
   '/_authenticated/business': typeof AuthenticatedBusinessRoute
   '/_authenticated/create': typeof AuthenticatedCreateRoute
+  '/_authenticated/griot': typeof AuthenticatedGriotRoute
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/upgrades': typeof AuthenticatedUpgradesRoute
   '/b/$slug': typeof BSlugRoute
   '/hubs/$slug': typeof HubsSlugRoute
   '/hubs/create': typeof HubsCreateRoute
+  '/oauth/authorize': typeof OauthAuthorizeRoute
   '/p/$id': typeof PIdRoute
   '/signals/$slug': typeof SignalsSlugRoute
   '/signals/channels': typeof SignalsChannelsRoute
   '/signals/create': typeof SignalsCreateRoute
   '/signals/opportunities': typeof SignalsOpportunitiesRoute
   '/_authenticated/edit/$id': typeof AuthenticatedEditIdRoute
+  '/api/griot/assist': typeof ApiGriotAssistRoute
+  '/api/v1/health': typeof ApiV1HealthRoute
+  '/api/v1/openapi.json': typeof ApiV1OpenapiDotjsonRoute
+  '/api/v1/pings': typeof ApiV1PingsRoute
   '/api/webhooks/paystack': typeof ApiWebhooksPaystackRoute
   '/api/public/ping-card/$id': typeof ApiPublicPingCardIdRoute
+  '/api/v1/business/messages': typeof ApiV1BusinessMessagesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -356,6 +428,7 @@ export interface FileRouteTypes {
     | '/@{$username}'
     | '/admin'
     | '/businesses'
+    | '/developers'
     | '/explore'
     | '/forgot-password'
     | '/hubs'
@@ -374,26 +447,34 @@ export interface FileRouteTypes {
     | '/balance'
     | '/business'
     | '/create'
+    | '/griot'
     | '/onboarding'
     | '/settings'
     | '/upgrades'
     | '/b/$slug'
     | '/hubs/$slug'
     | '/hubs/create'
+    | '/oauth/authorize'
     | '/p/$id'
     | '/signals/$slug'
     | '/signals/channels'
     | '/signals/create'
     | '/signals/opportunities'
     | '/edit/$id'
+    | '/api/griot/assist'
+    | '/api/v1/health'
+    | '/api/v1/openapi.json'
+    | '/api/v1/pings'
     | '/api/webhooks/paystack'
     | '/api/public/ping-card/$id'
+    | '/api/v1/business/messages'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/@{$username}'
     | '/admin'
     | '/businesses'
+    | '/developers'
     | '/explore'
     | '/forgot-password'
     | '/hubs'
@@ -412,20 +493,27 @@ export interface FileRouteTypes {
     | '/balance'
     | '/business'
     | '/create'
+    | '/griot'
     | '/onboarding'
     | '/settings'
     | '/upgrades'
     | '/b/$slug'
     | '/hubs/$slug'
     | '/hubs/create'
+    | '/oauth/authorize'
     | '/p/$id'
     | '/signals/$slug'
     | '/signals/channels'
     | '/signals/create'
     | '/signals/opportunities'
     | '/edit/$id'
+    | '/api/griot/assist'
+    | '/api/v1/health'
+    | '/api/v1/openapi.json'
+    | '/api/v1/pings'
     | '/api/webhooks/paystack'
     | '/api/public/ping-card/$id'
+    | '/api/v1/business/messages'
   id:
     | '__root__'
     | '/'
@@ -433,6 +521,7 @@ export interface FileRouteTypes {
     | '/@{$username}'
     | '/admin'
     | '/businesses'
+    | '/developers'
     | '/explore'
     | '/forgot-password'
     | '/hubs'
@@ -451,20 +540,27 @@ export interface FileRouteTypes {
     | '/_authenticated/balance'
     | '/_authenticated/business'
     | '/_authenticated/create'
+    | '/_authenticated/griot'
     | '/_authenticated/onboarding'
     | '/_authenticated/settings'
     | '/_authenticated/upgrades'
     | '/b/$slug'
     | '/hubs/$slug'
     | '/hubs/create'
+    | '/oauth/authorize'
     | '/p/$id'
     | '/signals/$slug'
     | '/signals/channels'
     | '/signals/create'
     | '/signals/opportunities'
     | '/_authenticated/edit/$id'
+    | '/api/griot/assist'
+    | '/api/v1/health'
+    | '/api/v1/openapi.json'
+    | '/api/v1/pings'
     | '/api/webhooks/paystack'
     | '/api/public/ping-card/$id'
+    | '/api/v1/business/messages'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -473,6 +569,7 @@ export interface RootRouteChildren {
   AtChar123usernameChar125Route: typeof AtChar123usernameChar125Route
   AdminRoute: typeof AdminRoute
   BusinessesRoute: typeof BusinessesRoute
+  DevelopersRoute: typeof DevelopersRoute
   ExploreRoute: typeof ExploreRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   HubsRoute: typeof HubsRouteWithChildren
@@ -488,9 +585,15 @@ export interface RootRouteChildren {
   TermsRoute: typeof TermsRoute
   WelcomeRoute: typeof WelcomeRoute
   BSlugRoute: typeof BSlugRoute
+  OauthAuthorizeRoute: typeof OauthAuthorizeRoute
   PIdRoute: typeof PIdRoute
+  ApiGriotAssistRoute: typeof ApiGriotAssistRoute
+  ApiV1HealthRoute: typeof ApiV1HealthRoute
+  ApiV1OpenapiDotjsonRoute: typeof ApiV1OpenapiDotjsonRoute
+  ApiV1PingsRoute: typeof ApiV1PingsRoute
   ApiWebhooksPaystackRoute: typeof ApiWebhooksPaystackRoute
   ApiPublicPingCardIdRoute: typeof ApiPublicPingCardIdRoute
+  ApiV1BusinessMessagesRoute: typeof ApiV1BusinessMessagesRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -528,6 +631,13 @@ declare module '@tanstack/react-router' {
       path: '/businesses'
       fullPath: '/businesses'
       preLoaderRoute: typeof BusinessesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/developers': {
+      id: '/developers'
+      path: '/developers'
+      fullPath: '/developers'
+      preLoaderRoute: typeof DevelopersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/explore': {
@@ -656,6 +766,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCreateRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/griot': {
+      id: '/_authenticated/griot'
+      path: '/griot'
+      fullPath: '/griot'
+      preLoaderRoute: typeof AuthenticatedGriotRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/onboarding': {
       id: '/_authenticated/onboarding'
       path: '/onboarding'
@@ -697,6 +814,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/hubs/create'
       preLoaderRoute: typeof HubsCreateRouteImport
       parentRoute: typeof HubsRoute
+    }
+    '/oauth/authorize': {
+      id: '/oauth/authorize'
+      path: '/oauth/authorize'
+      fullPath: '/oauth/authorize'
+      preLoaderRoute: typeof OauthAuthorizeRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/p/$id': {
       id: '/p/$id'
@@ -740,6 +864,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedEditIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/griot/assist': {
+      id: '/api/griot/assist'
+      path: '/api/griot/assist'
+      fullPath: '/api/griot/assist'
+      preLoaderRoute: typeof ApiGriotAssistRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/health': {
+      id: '/api/v1/health'
+      path: '/api/v1/health'
+      fullPath: '/api/v1/health'
+      preLoaderRoute: typeof ApiV1HealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/openapi.json': {
+      id: '/api/v1/openapi.json'
+      path: '/api/v1/openapi.json'
+      fullPath: '/api/v1/openapi.json'
+      preLoaderRoute: typeof ApiV1OpenapiDotjsonRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/pings': {
+      id: '/api/v1/pings'
+      path: '/api/v1/pings'
+      fullPath: '/api/v1/pings'
+      preLoaderRoute: typeof ApiV1PingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/webhooks/paystack': {
       id: '/api/webhooks/paystack'
       path: '/api/webhooks/paystack'
@@ -754,6 +906,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicPingCardIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/v1/business/messages': {
+      id: '/api/v1/business/messages'
+      path: '/api/v1/business/messages'
+      fullPath: '/api/v1/business/messages'
+      preLoaderRoute: typeof ApiV1BusinessMessagesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -762,6 +921,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedBalanceRoute: typeof AuthenticatedBalanceRoute
   AuthenticatedBusinessRoute: typeof AuthenticatedBusinessRoute
   AuthenticatedCreateRoute: typeof AuthenticatedCreateRoute
+  AuthenticatedGriotRoute: typeof AuthenticatedGriotRoute
   AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedUpgradesRoute: typeof AuthenticatedUpgradesRoute
@@ -773,6 +933,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedBalanceRoute: AuthenticatedBalanceRoute,
   AuthenticatedBusinessRoute: AuthenticatedBusinessRoute,
   AuthenticatedCreateRoute: AuthenticatedCreateRoute,
+  AuthenticatedGriotRoute: AuthenticatedGriotRoute,
   AuthenticatedOnboardingRoute: AuthenticatedOnboardingRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedUpgradesRoute: AuthenticatedUpgradesRoute,
@@ -817,6 +978,7 @@ const rootRouteChildren: RootRouteChildren = {
   AtChar123usernameChar125Route: AtChar123usernameChar125Route,
   AdminRoute: AdminRoute,
   BusinessesRoute: BusinessesRoute,
+  DevelopersRoute: DevelopersRoute,
   ExploreRoute: ExploreRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   HubsRoute: HubsRouteWithChildren,
@@ -832,9 +994,15 @@ const rootRouteChildren: RootRouteChildren = {
   TermsRoute: TermsRoute,
   WelcomeRoute: WelcomeRoute,
   BSlugRoute: BSlugRoute,
+  OauthAuthorizeRoute: OauthAuthorizeRoute,
   PIdRoute: PIdRoute,
+  ApiGriotAssistRoute: ApiGriotAssistRoute,
+  ApiV1HealthRoute: ApiV1HealthRoute,
+  ApiV1OpenapiDotjsonRoute: ApiV1OpenapiDotjsonRoute,
+  ApiV1PingsRoute: ApiV1PingsRoute,
   ApiWebhooksPaystackRoute: ApiWebhooksPaystackRoute,
   ApiPublicPingCardIdRoute: ApiPublicPingCardIdRoute,
+  ApiV1BusinessMessagesRoute: ApiV1BusinessMessagesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

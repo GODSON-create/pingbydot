@@ -32,6 +32,12 @@ export function SiteFooter() {
           <Link to="/create" className="text-muted-foreground hover:text-foreground">
             Create a Ping
           </Link>
+          <Link to="/businesses" className="text-muted-foreground hover:text-foreground">
+            Businesses
+          </Link>
+          <Link to="/developers" className="text-muted-foreground hover:text-foreground">
+            Developer Platform
+          </Link>
         </nav>
         <nav className="flex flex-col gap-2 text-sm" aria-label="Account">
           <span className="font-display font-bold">Account & Legal</span>

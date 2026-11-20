@@ -97,29 +97,31 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 vi.mock("@tanstack/react-start", () => {
-  const createChain = (): any => ({
-    inputValidator: (schema?: any) => ({
-      ...createChain(),
-      handler: (fn: (ctx: any) => unknown) => (input?: any) => {
-        const parsed = schema
-          ? schema.parse(input?.data ?? input ?? {})
-          : (input?.data ?? input ?? {});
-        return fn({
-          data: parsed,
-          context: {
-            userId: authState.user?.id ?? "",
-            supabase: {
-              rpc: vi.fn(async (name: string) => {
-                if (name === "is_ping_admin") {
-                  return { data: adminAccessState.isAdmin, error: null };
-                }
-                return { data: null, error: null };
-              }),
-            },
+  const buildValidator = (schema?: any) => ({
+    ...createChain(),
+    handler: (fn: (ctx: any) => unknown) => (input?: any) => {
+      const parsed = schema
+        ? schema.parse(input?.data ?? input ?? {})
+        : (input?.data ?? input ?? {});
+      return fn({
+        data: parsed,
+        context: {
+          userId: authState.user?.id ?? "",
+          supabase: {
+            rpc: vi.fn(async (name: string) => {
+              if (name === "is_ping_admin") {
+                return { data: adminAccessState.isAdmin, error: null };
+              }
+              return { data: null, error: null };
+            }),
           },
-        });
-      },
-    }),
+        },
+      });
+    },
+  });
+  const createChain = (): any => ({
+    inputValidator: buildValidator,
+    validator: buildValidator,
     middleware: () => createChain(),
     handler: (fn: (ctx: any) => unknown) => (input?: any) =>
       fn({

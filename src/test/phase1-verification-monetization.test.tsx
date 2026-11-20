@@ -125,24 +125,26 @@ vi.mock("@tanstack/react-router", async (importOriginal) => {
 });
 
 vi.mock("@tanstack/react-start", () => {
-  const createChain = (): any => ({
-    inputValidator: (schema?: any) => ({
-      ...createChain(),
-      handler: (fn: (ctx: any) => unknown) => (input?: any) => {
-        const parsed = schema
-          ? schema.parse(input?.data ?? input ?? {})
-          : (input?.data ?? input ?? {});
-        return fn({
-          data: parsed,
-          context: {
-            userId: authState.user?.id ?? "",
-            supabase: {
-              rpc: (...args: any[]) => adminContextRpcMock(...args),
-            },
+  const buildValidator = (schema?: any) => ({
+    ...createChain(),
+    handler: (fn: (ctx: any) => unknown) => (input?: any) => {
+      const parsed = schema
+        ? schema.parse(input?.data ?? input ?? {})
+        : (input?.data ?? input ?? {});
+      return fn({
+        data: parsed,
+        context: {
+          userId: authState.user?.id ?? "",
+          supabase: {
+            rpc: (...args: any[]) => adminContextRpcMock(...args),
           },
-        });
-      },
-    }),
+        },
+      });
+    },
+  });
+  const createChain = (): any => ({
+    inputValidator: buildValidator,
+    validator: buildValidator,
     middleware: () => createChain(),
     handler: (fn: (ctx: any) => unknown) => (input?: any) =>
       fn({

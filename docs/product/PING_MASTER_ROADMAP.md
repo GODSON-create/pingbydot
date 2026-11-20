@@ -2,7 +2,7 @@
 
 **Project:** Ping by DOT (`GODSON-create/pingbydot`)  
 **Objective:** Evolve Ping into a unified social, communication, discovery, business, and economic network while keeping Ping, DOT, GRIOT AI, and Avantage cleanly separated.  
-**Last Updated:** 2026-11-19
+**Last Updated:** 2026-11-20
 
 ---
 
@@ -23,7 +23,7 @@
 | **Phase 2** | Social Network, Communication and Community | **Code Complete & Verified Locally** (Remote DB migrations `0022`–`0029` & RTC voice/video provider credentials pending) | Operator approval + `LOVABLE_DB_MIGRATION_URL` for `0022`–`0029`; RTC provider (LiveKit/Daily/Agora) before activating live voice/video calls |
 | **Phase 3** | Multimedia, Music and Universal Distribution | **Code Complete & Verified Locally** (Remote DB migration `0030`, external video transcoding provider credentials, commercial music licensing, and Play/Apple Universal Link signing pending) | Operator approval + `LOVABLE_DB_MIGRATION_URL` (`0022`–`0030`); Cloudflare Stream / Mux credentials; commercial music licensing; Android SHA-256 & Apple Team ID for App/Universal Links |
 | **Phase 4** | Business, Opportunities and Economic Infrastructure | **Code Complete & Verified Locally** (Remote DB migration `0031`, Paystack sandbox/live keys, Meta WhatsApp Business approval, commercial/tax/ad policy sign-off, and crypto rail approval pending) | Operator approval + `LOVABLE_DB_MIGRATION_URL` (`0022`–`0031`); `PAYSTACK_SECRET_KEY` + `VITE_PAYSTACK_PUBLIC_KEY`; commercial, tax & ad policy sign-off; optional Meta WhatsApp Business Platform credentials |
-| **Phase 5** | AI, Developer Ecosystem, Native Applications and Scale | **Planned (Foundations Built)** — Feature flags, 1M readiness indexes (`0022`), staging load-test harness, and Capacitor native shell prepared; GRIOT AI, Developer Portal, OAuth, Webhooks, Business Messaging API, SDKs, offline queues, and continental localisation planned | AI provider credentials, OAuth security review, CDN/search infrastructure, Google Play & App Store signing |
+| **Phase 5** | AI, Developer Ecosystem, Native Applications and Scale | **Code Complete & Verified Locally** (Remote DB migration `0032`, live AI LLM provider keys, external OAuth security review, dedicated Meilisearch/Typesense cluster, and Google Play / Apple App Store signing pending) | Operator approval + `LOVABLE_DB_MIGRATION_URL` (`0022`–`0032`); `GRIOT_AI_API_URL`/`GRIOT_AI_API_KEY`; `SUPABASE_SERVICE_ROLE_KEY`; Android upload keystore + macOS/Xcode App Store signing |
 
 ---
 
@@ -85,11 +85,22 @@
 
 ---
 
+## Detailed Phase 5 Status Checklist
+
+- [x] **5.1 GRIOT AI contextual intelligence layer** — Dedicated `/griot` workspace, `src/lib/griot.ts`, server endpoint `POST /api/griot/assist`, and `griot_ai_preferences` + `griot_audit_logs` (`0032`). Opt-in only (`enabled = false` by default), strictly separated from Ping core/DOT/Avantage, hard-locked `allow_private_messages_access = false` (SQL CHECK + TypeScript), transparent deterministic local assistant active immediately while live external LLM provider awaits server credentials (`GRIOT_AI_API_URL` / `GRIOT_AI_API_KEY`).
+- [x] **5.2 Public Developer Platform, OAuth 2.0 PKCE, API Keys, Signed Webhooks, Business Messaging API & SDKs** — Public `/developers` portal, OAuth 2.0 PKCE (`S256`) consent screen (`/oauth/authorize`), OpenAPI 3.1 spec (`GET /api/v1/openapi.json`), service health (`GET /api/v1/health`), keyset-paginated public feed (`GET /api/v1/pings`), scoped Business Messaging API (`POST /api/v1/business/messages`), SSRF-safe HTTPS webhooks with HMAC-SHA256 `X-Ping-Signature-256` replay-protected verification & interactive simulator, Website Enquiry Embed generator, and zero-dependency TypeScript `PingClient` SDK (`src/lib/sdk/ping-sdk.ts`). Private DM scopes permanently blocked.
+- [x] **5.3 Offline-first action queue & native application polish** — Durable `localStorage`-backed offline action queue (`src/lib/offline-queue.ts`, `OfflineQueueBanner.tsx`) supporting idempotent replay on reconnect for Pings, DMs, business replies, and Hub RSVPs with bounded retries, integrated into `__root.tsx` and `/create`, plus `getNativeRuntimeDiagnostics()` in `src/lib/native.ts`.
+- [x] **5.4 Continental & global localisation + Data Saver** — `src/lib/i18n.ts` and `LanguageSettings.tsx` in `/settings` shipping 6 initial African & global locales (`en`, `fr`, `sw`, `ha`, `yo`, `ar` with automatic RTL document direction), regional currency formatting (`NGN`, `KES`, `GHS`, `ZAR`, `XOF`, `EGP`, `MAD`, `USD`, `EUR`, `GBP`), and low-bandwidth Data Saver mode synced to `profiles.preferred_locale` / `profiles.low_bandwidth_mode` (`0032`).
+- [x] **5.5 1M+ user scale, search & backlog hardening** — Keyset cursor pagination codec (`src/lib/scale.ts`), edge micro-caching (`s-maxage=15`), server-side rate-limiting RPC (`check_server_rate_limit` in `0032`), PostgreSQL GIN full-text search indexes (`pings_fts_gin_idx`, `hubs_fts_gin_idx`, `business_profiles_fts_gin_idx`, `signal_opportunities_fts_gin_idx`) with swappable Meilisearch/Typesense registry, server-side `profile_visibility` enforcement in `fetchPublicPings`, targeted query invalidation on `/create`, and `.inputValidator()` -> `.validator()` migration.
+- [ ] **5.6 External Phase 5 production activations** — *Blocked awaiting remote DB migrations `0022`–`0032`, live LLM provider credentials (`GRIOT_AI_API_URL`/`GRIOT_AI_API_KEY`), `SUPABASE_SERVICE_ROLE_KEY`, external OAuth security review for production apps, optional dedicated Meilisearch/Typesense cluster, and Google Play / Apple App Store signing.*
+
+---
+
 ## Backlog Discovered During Audit (Mandatory Follow-Up Rule)
 
-1. Migrate TanStack Start server functions from deprecated `.inputValidator()` to `.validator()` (maintenance).
+1. ~~Migrate TanStack Start server functions from deprecated `.inputValidator()` to `.validator()` (maintenance).~~ — **Completed in Phase 5** (`admin.functions.ts`, `public-pings.functions.ts`, `public-hubs.functions.ts`, `public-comments.functions.ts`).
 2. ~~Filter muted accounts from Home feed and Explore feed~~ — **Completed in Phase 2** (`src/routes/index.tsx`, `src/routes/explore.tsx`, `src/lib/feed-engine.ts`).
-3. Enforce `profile_visibility` (`followers` / `private`) server-side in `fetchPublicPings` and profile RLS policies after `0028` is live.
-4. Add server-side rate limiting via Supabase RPC / edge layer to complement client-side `PING SHIELD` limits.
+3. ~~Enforce `profile_visibility` (`followers` / `private`) server-side in `fetchPublicPings`~~ — **Completed in Phase 5** (`src/lib/public-queries.ts`); remote DB column `profile_visibility` activates when `0028` is applied.
+4. ~~Add server-side rate limiting via Supabase RPC / edge layer to complement client-side `PING SHIELD` limits.~~ — **Completed in Phase 5** (`check_server_rate_limit` RPC in `0032` + `enforceHybridRateLimit` in `src/lib/scale.ts`).
 5. ~~Build persistent `notifications` table~~ — **Schema & client integration completed in Phase 2 (`0029`)**; push dispatch worker + DB triggers scheduled after `0029` is applied remotely.
 6. Select & configure WebRTC/SFU provider (e.g., LiveKit / Daily / Agora) for real voice/video calls (never ship fake call buttons).

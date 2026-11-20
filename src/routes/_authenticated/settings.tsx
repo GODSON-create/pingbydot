@@ -28,6 +28,7 @@ import { useSignOut } from "@/components/layout/SiteHeader";
 import { ConnectionsEditor } from "@/components/connections/ConnectionsEditor";
 import { PingActivityPrivacy } from "@/components/settings/PingActivityPrivacy";
 import { AppearanceSettings } from "@/components/settings/AppearanceSettings";
+import { LanguageSettings } from "@/components/settings/LanguageSettings";
 import { CloseCircleDialog } from "@/components/moments/CloseCircleDialog";
 import { blockedUsersQuery, useUnblockUser } from "@/lib/messages";
 import { dotSummaryQuery } from "@/lib/economy";
@@ -645,6 +646,27 @@ function Settings() {
       {user && <PingActivityPrivacy userId={user.id} />}
 
       <AppearanceSettings />
+
+      <LanguageSettings />
+
+      {/* Phase 5 Intelligence & Developer Platform Shortcuts */}
+      <section className="surface-card mt-6 rounded-3xl p-6 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="font-display text-sm font-bold">GRIOT AI &amp; Developer Platform</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Manage opt-in GRIOT AI permissions (private DMs permanently excluded) or register OAuth
+            apps, scoped API keys, and webhooks.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline" size="sm" className="rounded-xl text-xs">
+            <Link to="/griot">GRIOT AI Controls</Link>
+          </Button>
+          <Button asChild variant="outline" size="sm" className="rounded-xl text-xs">
+            <Link to="/developers">Developer Portal</Link>
+          </Button>
+        </div>
+      </section>
 
       {/* Blocked Users Manager */}
       <section className="surface-card mt-6 rounded-3xl p-6 space-y-4">

@@ -5,7 +5,7 @@ import { PUBLIC_PING_SELECT, fetchPublicPings } from "@/lib/public-queries";
 export { PUBLIC_PING_SELECT };
 
 export const readPublicPings = createServerFn({ method: "GET" })
-  .inputValidator(
+  .validator(
     z.object({
       kind: z.enum(["feed", "ping", "profile"]),
       value: z.string().nullable(),

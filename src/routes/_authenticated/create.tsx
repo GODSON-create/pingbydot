@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth";
 import { PingComposer, type PingDraft } from "@/components/ping/PingComposer";
 import { clearPingComposerDraft } from "@/lib/draft-store";
 import { attachMusicToContent } from "@/lib/music";
+import { enqueueOfflineAction } from "@/lib/offline-queue";
 import { createPingPoll, extractHashtags, extractMentions } from "@/lib/social";
 import { pingSchema } from "@/lib/validation";
 import { ensureClientProfileRow } from "@/lib/ensure-profile";
@@ -75,6 +76,31 @@ function Create() {
       }
 
       const draft = pingSchema.parse(d);
+
+      // Phase 5.3: Queue text/linked Ping safely when offline instead of losing work
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        enqueueOfflineAction({
+          kind: "ping_draft_publish",
+          userId: authorId,
+          summary: draft.content.slice(0, 80),
+          payload: {
+            category: draft.category,
+            content: draft.content,
+            headline: d.headline?.trim() || null,
+            cta_url: draft.cta_url || null,
+            cta_label: draft.cta_label || null,
+            image_url: d.image_url ?? null,
+            visibility: d.hub_id ? "hub" : "public",
+          },
+        });
+        return {
+          id: null as string | null,
+          hubShareError: null,
+          scheduled: false,
+          queuedOffline: true,
+        };
+      }
+
       const mediaUrls =
         d.media_urls && d.media_urls.length > 0
           ? d.media_urls
@@ -192,17 +218,37 @@ function Create() {
         }
       }
 
-      return { id: data.id, hubShareError, scheduled: Boolean(d.scheduled_for) };
+      return {
+        id: data.id as string | null,
+        hubShareError,
+        scheduled: Boolean(d.scheduled_for),
+        queuedOffline: false,
+      };
     },
-    onSuccess: ({ id, hubShareError, scheduled }) => {
+    onSuccess: ({ id, hubShareError, scheduled, queuedOffline }) => {
       clearPingComposerDraft(initialHubId ? `hub:${initialHubId}` : "new");
-      qc.invalidateQueries();
+      if (queuedOffline) {
+        toast.info(
+          "You are offline — your Ping has been queued and will publish automatically on reconnect.",
+        );
+        navigate({ to: "/" });
+        return;
+      }
+      // Targeted query invalidation (1M readiness §2.7)
+      void qc.invalidateQueries({ queryKey: ["feed"] });
+      void qc.invalidateQueries({ queryKey: ["following-feed"] });
+      void qc.invalidateQueries({ queryKey: ["explore-people"] });
+      void qc.invalidateQueries({ queryKey: ["my-pings"] });
+      void qc.invalidateQueries({ queryKey: ["media-feed"] });
+      void qc.invalidateQueries({ queryKey: ["hub"] });
       if (hubShareError) {
         toast.warning(`Ping published, but sharing to the Hub failed: ${hubShareError}`);
       } else {
         toast.success(scheduled ? "Your Ping has been scheduled" : "Your Ping is live");
       }
-      navigate({ to: "/p/$id", params: { id } });
+      if (id) {
+        navigate({ to: "/p/$id", params: { id } });
+      }
     },
     onError: (err) => toast.error(describePublishError(err)),
   });
@@ -211,12 +257,23 @@ function Create() {
 
   return (
     <div className="mx-auto max-w-2xl px-5 py-10 pb-24">
-      <h1 className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">
-        Create a Ping
-      </h1>
-      <p className="mt-1.5 text-sm text-muted-foreground">
-        Publish text, photo galleries, or video — with optional polls, music, scheduling, and links.
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">
+            Create a Ping
+          </h1>
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            Publish text, photo galleries, or video — with optional polls, music, scheduling, and
+            links.
+          </p>
+        </div>
+        <Link
+          to="/griot"
+          className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/15 transition-colors"
+        >
+          Opt-in GRIOT Assist →
+        </Link>
+      </div>
       <div className="mt-6">
         <PingComposer
           initial={

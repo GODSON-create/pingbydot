@@ -1,7 +1,7 @@
 # PING API, Server Functions & RPC Catalogue
 
 **Project:** Ping by DOT (`GODSON-create/pingbydot`)  
-**Last Updated:** 2026-11-19
+**Last Updated:** 2026-11-20
 
 ---
 
@@ -12,6 +12,11 @@
 | `GET /api/public/ping-card/$id` | `src/routes/api/public/ping-card/$id.ts` | Public (non-hidden Pings only) | Renders Satori + resvg branded PNG share card with content-derived ETag & short caching; zero server-side arbitrary remote fetches |
 | `GET /sitemap.xml` | `src/routes/sitemap[.]xml.ts` | Public | Router-derived XML sitemap + paginated public Ping & profile URLs (excludes private routes) |
 | `POST /api/webhooks/paystack` | `src/routes/api/webhooks/paystack.ts` | Signed Webhook (`x-paystack-signature` HMAC-SHA512) | Verifies Paystack webhook signatures with `PAYSTACK_SECRET_KEY` and executes idempotent `settle_dot_topup_intent` / `reverse_dot_topup_intent` via service role |
+| `POST /api/griot/assist` | `src/routes/api/griot/assist.ts` | Permission-bounded input only | Processes explicitly submitted text via configured LLM provider (`GRIOT_AI_API_URL`/`GRIOT_AI_API_KEY`) or transparent deterministic local fallback; never accesses private messages |
+| `GET /api/v1/health` | `src/routes/api/v1/health.ts` | Public (edge-cached) | Sanitized service health, API version (`1.0.0`), and live dependency readiness flags |
+| `GET /api/v1/openapi.json` | `src/routes/api/v1/openapi[.]json.ts` | Public (edge-cached) | Machine-readable OpenAPI 3.1.0 specification for Ping Public & Business Messaging APIs |
+| `GET /api/v1/pings` | `src/routes/api/v1/pings.ts` | Public (edge-cached `s-maxage=15`) | Keyset cursor-paginated `(created_at, id)` public Ping feed for O(1) 1M+ row scaling |
+| `POST /api/v1/business/messages` | `src/routes/api/v1/business/messages.ts` | Scoped Bearer API Key (`business:inbox:write`) | Verifies SHA-256 key hash via server-only `verify_api_key_hash` and posts authorised Business Inbox replies |
 
 ---
 
@@ -60,6 +65,9 @@
 | `is_business_member(...)` | `0031` | `authenticated` (anti-spoof) | Verifies caller's role in `business_profiles` / `business_team_members` |
 | `create_dot_topup_intent(...)` | `0031` | `authenticated` | Creates pending custom DOT top-up intent (`10–100,000 DOT`) with 24h velocity limit (never issues credits) |
 | `settle_dot_topup_intent(...)` / `reverse_dot_topup_intent(...)` | `0031` | `service_role` ONLY | Server-only idempotent DOT credit issuance & refund reversal after verified webhook |
+| `get_oauth_app_public_info(...)` / `create_oauth_authorization_code(...)` | `0032` | `authenticated` | Safe OAuth app metadata lookup & single-use PKCE (`S256`) authorization code issuance (rejects private-message scopes) |
+| `verify_api_key_hash(...)` | `0032` | `service_role` ONLY | Server-only SHA-256 API key lookup and `last_used_at` update for Business Messaging API |
+| `check_server_rate_limit(...)` | `0032` | `authenticated` | Atomic sliding-window server-side rate limiting complementing client `PING SHIELD` |
 
 ---
 

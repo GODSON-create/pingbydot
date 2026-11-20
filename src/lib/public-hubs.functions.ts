@@ -8,7 +8,7 @@ async function publicClient() {
 }
 
 export const readPublicHubs = createServerFn({ method: "GET" })
-  .inputValidator(
+  .validator(
     z.object({
       q: z.string().max(60).default(""),
       category: z.string().max(20).nullable().default(null),
@@ -19,5 +19,5 @@ export const readPublicHubs = createServerFn({ method: "GET" })
 
 /** Hub details for SSR. Feed is only returned for public hubs; private feeds load per viewer. */
 export const readPublicHub = createServerFn({ method: "GET" })
-  .inputValidator(z.object({ slug: z.string().max(40), intent: z.string().max(20).nullable() }))
+  .validator(z.object({ slug: z.string().max(40), intent: z.string().max(20).nullable() }))
   .handler(async ({ data }) => fetchPublicHub(await publicClient(), data));

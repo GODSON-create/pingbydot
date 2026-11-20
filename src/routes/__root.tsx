@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
   Link,
@@ -14,7 +14,8 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { sanitizeErrorMessage } from "../lib/error-diagnostics";
-import { initializeNativeApp, useNetworkStatus } from "@/lib/native";
+import { applyDocumentLocale, useLocale } from "@/lib/i18n";
+import { initializeNativeApp } from "@/lib/native";
 import { captureInboundReferral, recordShareEvent } from "@/lib/sharing/universal";
 import { useNavigate } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth";
@@ -28,11 +29,12 @@ import { BottomNav, shouldHideBottomNav } from "@/components/layout/BottomNav";
 import { CreateStackModal } from "@/components/layout/CreateStackModal";
 import { BootSplashScreen } from "@/components/layout/BootSplashScreen";
 import { GestureLayer } from "@/components/layout/GestureLayer";
+import { OfflineQueueBanner } from "@/components/layout/OfflineQueueBanner";
 import { PingMark } from "@/components/BrandLogo";
 import { Toaster } from "@/components/ui/sonner";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Keyboard, WifiOff } from "lucide-react";
+import { Keyboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SITE_NAME, siteJsonLd, siteUrl } from "@/lib/site";
 
@@ -170,10 +172,13 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootShellContent() {
   const { pathname, searchStr } = useLocation();
   const navigate = useNavigate();
-  const qc = useQueryClient();
-  const { connected } = useNetworkStatus();
+  const { locale } = useLocale();
   const { helpOpen, setHelpOpen } = useKeyboardShortcuts();
   const { activeOverlay, isOpen, onOpenChangeFor, closeOverlays } = useNavOverlay();
+
+  useEffect(() => {
+    applyDocumentLocale(locale);
+  }, [locale]);
 
   useEffect(() => {
     const refCode = captureInboundReferral(searchStr, pathname);
@@ -232,28 +237,7 @@ function RootShellContent() {
         Skip to content
       </a>
       <SiteHeader />
-      {!connected && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs text-foreground"
-        >
-          <span className="inline-flex items-center gap-2 font-medium">
-            <WifiOff className="size-3.5 text-amber-500 shrink-0" />
-            You appear to be offline. Cached views stay readable and updates resume automatically on
-            reconnect.
-          </span>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => void qc.invalidateQueries()}
-            className="h-7 rounded-full px-3 text-[11px] shrink-0"
-          >
-            Retry
-          </Button>
-        </div>
-      )}
+      <OfflineQueueBanner />
       <div className="mx-auto w-full max-w-7xl flex flex-col lg:flex-row items-start min-h-screen overflow-x-clip">
         <DesktopSidebar />
         <div

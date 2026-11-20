@@ -31,7 +31,7 @@ export const getAdminOverview = createServerFn({ method: "POST" })
 
 export const getAdminList = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(adminListSchema)
+  .validator(adminListSchema)
   .handler(async ({ data, context }) => {
     const { data: allowed, error: roleError } = await context.supabase.rpc("is_ping_admin");
     assertAdminRole(!roleError && allowed === true);
@@ -170,7 +170,7 @@ export const getAdminList = createServerFn({ method: "POST" })
 
 export const moderatePing = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(moderationSchema)
+  .validator(moderationSchema)
   .handler(async ({ data, context }) => {
     const { data: allowed, error: roleError } = await context.supabase.rpc("is_ping_admin");
     assertAdminRole(!roleError && allowed === true);
@@ -188,7 +188,7 @@ export const moderatePing = createServerFn({ method: "POST" })
 
 export const verifySignal = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(verifySignalSchema)
+  .validator(verifySignalSchema)
   .handler(async ({ data, context }) => {
     const { data: allowed, error: roleError } = await context.supabase.rpc("is_ping_admin");
     assertAdminRole(!roleError && allowed === true);
@@ -204,7 +204,7 @@ export const verifySignal = createServerFn({ method: "POST" })
 
 export const reviewVerification = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(reviewVerificationSchema)
+  .validator(reviewVerificationSchema)
   .handler(async ({ data, context }) => {
     const { data: allowed, error: roleError } = await context.supabase.rpc("is_ping_admin");
     assertAdminRole(!roleError && allowed === true);
@@ -222,7 +222,7 @@ export const reviewVerification = createServerFn({ method: "POST" })
 
 export const getAdminEconomicReadiness = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(economicReadinessSchema)
+  .validator(economicReadinessSchema)
   .handler(async ({ data, context }) => {
     const { data: allowed, error: roleError } = await context.supabase.rpc("is_ping_admin");
     assertAdminRole(!roleError && allowed === true);

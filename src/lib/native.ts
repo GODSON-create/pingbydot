@@ -626,3 +626,31 @@ export async function enablePushNotifications(
     return { status: "unavailable", reason: msg };
   }
 }
+
+export interface NativeRuntimeDiagnostics {
+  isNative: boolean;
+  platform: string;
+  bundleId: string;
+  customScheme: string;
+  connected: boolean;
+  connectionType: string;
+  pushTokenStored: boolean;
+  storeReleaseNotes: string;
+}
+
+/**
+ * Returns sanitized native wrapper & connectivity diagnostics for Settings / Developer QA.
+ */
+export function getNativeRuntimeDiagnostics(): NativeRuntimeDiagnostics {
+  return {
+    isNative,
+    platform,
+    bundleId: "app.lovable.pingbydot",
+    customScheme: NATIVE_APP_SCHEME,
+    connected: networkSnapshot.connected,
+    connectionType: networkSnapshot.connectionType,
+    pushTokenStored: Boolean(readStoredPushToken()),
+    storeReleaseNotes:
+      "Capacitor 8 Android & iOS projects configured; Play Store upload requires Android signing keystore + SHA-256 assetlinks, and App Store release requires macOS/Xcode + Apple Team ID.",
+  };
+}
