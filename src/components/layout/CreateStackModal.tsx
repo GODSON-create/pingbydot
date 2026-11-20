@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "@tanstack/react-router";
-import { ArrowUpRight, Briefcase, Building2, Radio } from "lucide-react";
+import { ArrowUpRight, Briefcase, Building2, Clapperboard, Radio } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -107,6 +107,34 @@ export function CreateStackModal({ open, onOpenChange }: CreateStackModalProps) 
                 </div>
                 <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                   Share what's happening around you.
+                </p>
+              </div>
+            </button>
+
+            {/* CARD 2B — PUBLISH A PING CLIP */}
+            <button
+              type="button"
+              role="listitem"
+              onClick={() =>
+                requireAuthOrRun("/clips", () => {
+                  onOpenChange(false);
+                  navigate({ to: "/clips" });
+                })
+              }
+              className="group relative flex w-full items-start gap-4 rounded-3xl border border-border bg-secondary/45 p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/60 hover:bg-secondary/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+                <Clapperboard className="size-6" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-display text-base font-extrabold text-foreground">
+                    Publish a Clip
+                  </span>
+                  <ArrowUpRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-foreground" />
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  Share a persistent vertical short-form video for discovery &amp; Spotlight.
                 </p>
               </div>
             </button>

@@ -174,9 +174,9 @@ describe("Migration 0033 schema, RLS & financial security invariants", () => {
     const journal = JSON.parse(fs.readFileSync(journalPath, "utf8")) as {
       entries: Array<{ idx: number; tag: string }>;
     };
-    const last = journal.entries[journal.entries.length - 1];
-    expect(last?.idx).toBe(33);
-    expect(last?.tag).toBe("0033_premium_ux_dot_economy_and_interactions");
+    const entry33 = journal.entries.find((e) => e.idx === 33);
+    expect(entry33?.idx).toBe(33);
+    expect(entry33?.tag).toBe("0033_premium_ux_dot_economy_and_interactions");
     journal.entries.forEach((entry, index) => {
       expect(entry.idx).toBe(index);
     });

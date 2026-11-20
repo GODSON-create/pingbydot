@@ -19,6 +19,9 @@ import {
   BarChart3,
   Coins,
   Crown,
+  Clapperboard,
+  Flame,
+  GraduationCap,
   Megaphone,
   Sparkles,
   Code2,
@@ -470,6 +473,21 @@ export function DesktopSidebar() {
                 <DropdownMenuItem asChild className="rounded-xl">
                   <Link to="/upgrades" onClick={closeOverlays} className="flex items-center gap-2">
                     <Crown className="size-4 text-gold" /> DOT Memberships
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="rounded-xl">
+                  <Link to="/learn" onClick={closeOverlays} className="flex items-center gap-2">
+                    <GraduationCap className="size-4 text-primary" /> Ping Learn
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="rounded-xl">
+                  <Link to="/spotlight" onClick={closeOverlays} className="flex items-center gap-2">
+                    <Flame className="size-4 text-amber-500" /> Ping Spotlight
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="rounded-xl">
+                  <Link to="/clips" onClick={closeOverlays} className="flex items-center gap-2">
+                    <Clapperboard className="size-4 text-primary" /> Ping Clips
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild className="rounded-xl">

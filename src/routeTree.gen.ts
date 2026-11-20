@@ -14,6 +14,7 @@ import { Route as AtChar123usernameChar125RouteImport } from './routes/@{$userna
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as BusinessesRouteImport } from './routes/businesses'
+import { Route as ClipsRouteImport } from './routes/clips'
 import { Route as DevelopersRouteImport } from './routes/developers'
 import { Route as ExploreRouteImport } from './routes/explore'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
@@ -27,6 +28,7 @@ import { Route as ShareTargetRouteImport } from './routes/share-target'
 import { Route as SignalsRouteImport } from './routes/signals'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as SpotlightRouteImport } from './routes/spotlight'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as WelcomeRouteImport } from './routes/welcome'
 import { Route as AuthenticatedAnalyticsRouteImport } from './routes/_authenticated/analytics'
@@ -35,6 +37,7 @@ import { Route as AuthenticatedBoostsRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedBusinessRouteImport } from './routes/_authenticated/business'
 import { Route as AuthenticatedCreateRouteImport } from './routes/_authenticated/create'
 import { Route as AuthenticatedGriotRouteImport } from './routes/_authenticated/griot'
+import { Route as AuthenticatedLearnRouteImport } from './routes/_authenticated/learn'
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedUpgradesRouteImport } from './routes/_authenticated/upgrades'
@@ -47,8 +50,10 @@ import { Route as SignalsSlugRouteImport } from './routes/signals.$slug'
 import { Route as SignalsChannelsRouteImport } from './routes/signals.channels'
 import { Route as SignalsCreateRouteImport } from './routes/signals.create'
 import { Route as SignalsOpportunitiesRouteImport } from './routes/signals.opportunities'
+import { Route as SpotlightSlugRouteImport } from './routes/spotlight.$slug'
 import { Route as TagSlugRouteImport } from './routes/tag.$slug'
 import { Route as AuthenticatedEditIdRouteImport } from './routes/_authenticated/edit.$id'
+import { Route as AuthenticatedSpotlightEditorialRouteImport } from './routes/_authenticated/spotlight.editorial'
 import { Route as ApiGriotAssistRouteImport } from './routes/api/griot/assist'
 import { Route as ApiV1HealthRouteImport } from './routes/api/v1/health'
 import { Route as ApiV1OpenapiDotjsonRouteImport } from './routes/api/v1/openapi[.]json'
@@ -80,6 +85,11 @@ const AdminRoute = AdminRouteImport.update({
 const BusinessesRoute = BusinessesRouteImport.update({
   id: '/businesses',
   path: '/businesses',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClipsRoute = ClipsRouteImport.update({
+  id: '/clips',
+  path: '/clips',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DevelopersRoute = DevelopersRouteImport.update({
@@ -147,6 +157,11 @@ const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SpotlightRoute = SpotlightRouteImport.update({
+  id: '/spotlight',
+  path: '/spotlight',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TermsRoute = TermsRouteImport.update({
   id: '/terms',
   path: '/terms',
@@ -185,6 +200,11 @@ const AuthenticatedCreateRoute = AuthenticatedCreateRouteImport.update({
 const AuthenticatedGriotRoute = AuthenticatedGriotRouteImport.update({
   id: '/griot',
   path: '/griot',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedLearnRoute = AuthenticatedLearnRouteImport.update({
+  id: '/learn',
+  path: '/learn',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedOnboardingRoute = AuthenticatedOnboardingRouteImport.update({
@@ -247,6 +267,11 @@ const SignalsOpportunitiesRoute = SignalsOpportunitiesRouteImport.update({
   path: '/opportunities',
   getParentRoute: () => SignalsRoute,
 } as any)
+const SpotlightSlugRoute = SpotlightSlugRouteImport.update({
+  id: '/$slug',
+  path: '/$slug',
+  getParentRoute: () => SpotlightRoute,
+} as any)
 const TagSlugRoute = TagSlugRouteImport.update({
   id: '/tag/$slug',
   path: '/tag/$slug',
@@ -257,6 +282,12 @@ const AuthenticatedEditIdRoute = AuthenticatedEditIdRouteImport.update({
   path: '/edit/$id',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedSpotlightEditorialRoute =
+  AuthenticatedSpotlightEditorialRouteImport.update({
+    id: '/spotlight/editorial',
+    path: '/spotlight/editorial',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const ApiGriotAssistRoute = ApiGriotAssistRouteImport.update({
   id: '/api/griot/assist',
   path: '/api/griot/assist',
@@ -298,6 +329,7 @@ export interface FileRoutesByFullPath {
   '/@{$username}': typeof AtChar123usernameChar125Route
   '/admin': typeof AdminRoute
   '/businesses': typeof BusinessesRoute
+  '/clips': typeof ClipsRoute
   '/developers': typeof DevelopersRoute
   '/explore': typeof ExploreRoute
   '/forgot-password': typeof ForgotPasswordRoute
@@ -311,6 +343,7 @@ export interface FileRoutesByFullPath {
   '/signals': typeof SignalsRouteWithChildren
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/spotlight': typeof SpotlightRouteWithChildren
   '/terms': typeof TermsRoute
   '/welcome': typeof WelcomeRoute
   '/analytics': typeof AuthenticatedAnalyticsRoute
@@ -319,6 +352,7 @@ export interface FileRoutesByFullPath {
   '/business': typeof AuthenticatedBusinessRoute
   '/create': typeof AuthenticatedCreateRoute
   '/griot': typeof AuthenticatedGriotRoute
+  '/learn': typeof AuthenticatedLearnRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/upgrades': typeof AuthenticatedUpgradesRoute
@@ -331,8 +365,10 @@ export interface FileRoutesByFullPath {
   '/signals/channels': typeof SignalsChannelsRoute
   '/signals/create': typeof SignalsCreateRoute
   '/signals/opportunities': typeof SignalsOpportunitiesRoute
+  '/spotlight/$slug': typeof SpotlightSlugRoute
   '/tag/$slug': typeof TagSlugRoute
   '/edit/$id': typeof AuthenticatedEditIdRoute
+  '/spotlight/editorial': typeof AuthenticatedSpotlightEditorialRoute
   '/api/griot/assist': typeof ApiGriotAssistRoute
   '/api/v1/health': typeof ApiV1HealthRoute
   '/api/v1/openapi.json': typeof ApiV1OpenapiDotjsonRoute
@@ -346,6 +382,7 @@ export interface FileRoutesByTo {
   '/@{$username}': typeof AtChar123usernameChar125Route
   '/admin': typeof AdminRoute
   '/businesses': typeof BusinessesRoute
+  '/clips': typeof ClipsRoute
   '/developers': typeof DevelopersRoute
   '/explore': typeof ExploreRoute
   '/forgot-password': typeof ForgotPasswordRoute
@@ -359,6 +396,7 @@ export interface FileRoutesByTo {
   '/signals': typeof SignalsRouteWithChildren
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/spotlight': typeof SpotlightRouteWithChildren
   '/terms': typeof TermsRoute
   '/welcome': typeof WelcomeRoute
   '/analytics': typeof AuthenticatedAnalyticsRoute
@@ -367,6 +405,7 @@ export interface FileRoutesByTo {
   '/business': typeof AuthenticatedBusinessRoute
   '/create': typeof AuthenticatedCreateRoute
   '/griot': typeof AuthenticatedGriotRoute
+  '/learn': typeof AuthenticatedLearnRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/upgrades': typeof AuthenticatedUpgradesRoute
@@ -379,8 +418,10 @@ export interface FileRoutesByTo {
   '/signals/channels': typeof SignalsChannelsRoute
   '/signals/create': typeof SignalsCreateRoute
   '/signals/opportunities': typeof SignalsOpportunitiesRoute
+  '/spotlight/$slug': typeof SpotlightSlugRoute
   '/tag/$slug': typeof TagSlugRoute
   '/edit/$id': typeof AuthenticatedEditIdRoute
+  '/spotlight/editorial': typeof AuthenticatedSpotlightEditorialRoute
   '/api/griot/assist': typeof ApiGriotAssistRoute
   '/api/v1/health': typeof ApiV1HealthRoute
   '/api/v1/openapi.json': typeof ApiV1OpenapiDotjsonRoute
@@ -396,6 +437,7 @@ export interface FileRoutesById {
   '/@{$username}': typeof AtChar123usernameChar125Route
   '/admin': typeof AdminRoute
   '/businesses': typeof BusinessesRoute
+  '/clips': typeof ClipsRoute
   '/developers': typeof DevelopersRoute
   '/explore': typeof ExploreRoute
   '/forgot-password': typeof ForgotPasswordRoute
@@ -409,6 +451,7 @@ export interface FileRoutesById {
   '/signals': typeof SignalsRouteWithChildren
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/spotlight': typeof SpotlightRouteWithChildren
   '/terms': typeof TermsRoute
   '/welcome': typeof WelcomeRoute
   '/_authenticated/analytics': typeof AuthenticatedAnalyticsRoute
@@ -417,6 +460,7 @@ export interface FileRoutesById {
   '/_authenticated/business': typeof AuthenticatedBusinessRoute
   '/_authenticated/create': typeof AuthenticatedCreateRoute
   '/_authenticated/griot': typeof AuthenticatedGriotRoute
+  '/_authenticated/learn': typeof AuthenticatedLearnRoute
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/upgrades': typeof AuthenticatedUpgradesRoute
@@ -429,8 +473,10 @@ export interface FileRoutesById {
   '/signals/channels': typeof SignalsChannelsRoute
   '/signals/create': typeof SignalsCreateRoute
   '/signals/opportunities': typeof SignalsOpportunitiesRoute
+  '/spotlight/$slug': typeof SpotlightSlugRoute
   '/tag/$slug': typeof TagSlugRoute
   '/_authenticated/edit/$id': typeof AuthenticatedEditIdRoute
+  '/_authenticated/spotlight/editorial': typeof AuthenticatedSpotlightEditorialRoute
   '/api/griot/assist': typeof ApiGriotAssistRoute
   '/api/v1/health': typeof ApiV1HealthRoute
   '/api/v1/openapi.json': typeof ApiV1OpenapiDotjsonRoute
@@ -446,6 +492,7 @@ export interface FileRouteTypes {
     | '/@{$username}'
     | '/admin'
     | '/businesses'
+    | '/clips'
     | '/developers'
     | '/explore'
     | '/forgot-password'
@@ -459,6 +506,7 @@ export interface FileRouteTypes {
     | '/signals'
     | '/signup'
     | '/sitemap.xml'
+    | '/spotlight'
     | '/terms'
     | '/welcome'
     | '/analytics'
@@ -467,6 +515,7 @@ export interface FileRouteTypes {
     | '/business'
     | '/create'
     | '/griot'
+    | '/learn'
     | '/onboarding'
     | '/settings'
     | '/upgrades'
@@ -479,8 +528,10 @@ export interface FileRouteTypes {
     | '/signals/channels'
     | '/signals/create'
     | '/signals/opportunities'
+    | '/spotlight/$slug'
     | '/tag/$slug'
     | '/edit/$id'
+    | '/spotlight/editorial'
     | '/api/griot/assist'
     | '/api/v1/health'
     | '/api/v1/openapi.json'
@@ -494,6 +545,7 @@ export interface FileRouteTypes {
     | '/@{$username}'
     | '/admin'
     | '/businesses'
+    | '/clips'
     | '/developers'
     | '/explore'
     | '/forgot-password'
@@ -507,6 +559,7 @@ export interface FileRouteTypes {
     | '/signals'
     | '/signup'
     | '/sitemap.xml'
+    | '/spotlight'
     | '/terms'
     | '/welcome'
     | '/analytics'
@@ -515,6 +568,7 @@ export interface FileRouteTypes {
     | '/business'
     | '/create'
     | '/griot'
+    | '/learn'
     | '/onboarding'
     | '/settings'
     | '/upgrades'
@@ -527,8 +581,10 @@ export interface FileRouteTypes {
     | '/signals/channels'
     | '/signals/create'
     | '/signals/opportunities'
+    | '/spotlight/$slug'
     | '/tag/$slug'
     | '/edit/$id'
+    | '/spotlight/editorial'
     | '/api/griot/assist'
     | '/api/v1/health'
     | '/api/v1/openapi.json'
@@ -543,6 +599,7 @@ export interface FileRouteTypes {
     | '/@{$username}'
     | '/admin'
     | '/businesses'
+    | '/clips'
     | '/developers'
     | '/explore'
     | '/forgot-password'
@@ -556,6 +613,7 @@ export interface FileRouteTypes {
     | '/signals'
     | '/signup'
     | '/sitemap.xml'
+    | '/spotlight'
     | '/terms'
     | '/welcome'
     | '/_authenticated/analytics'
@@ -564,6 +622,7 @@ export interface FileRouteTypes {
     | '/_authenticated/business'
     | '/_authenticated/create'
     | '/_authenticated/griot'
+    | '/_authenticated/learn'
     | '/_authenticated/onboarding'
     | '/_authenticated/settings'
     | '/_authenticated/upgrades'
@@ -576,8 +635,10 @@ export interface FileRouteTypes {
     | '/signals/channels'
     | '/signals/create'
     | '/signals/opportunities'
+    | '/spotlight/$slug'
     | '/tag/$slug'
     | '/_authenticated/edit/$id'
+    | '/_authenticated/spotlight/editorial'
     | '/api/griot/assist'
     | '/api/v1/health'
     | '/api/v1/openapi.json'
@@ -593,6 +654,7 @@ export interface RootRouteChildren {
   AtChar123usernameChar125Route: typeof AtChar123usernameChar125Route
   AdminRoute: typeof AdminRoute
   BusinessesRoute: typeof BusinessesRoute
+  ClipsRoute: typeof ClipsRoute
   DevelopersRoute: typeof DevelopersRoute
   ExploreRoute: typeof ExploreRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
@@ -606,6 +668,7 @@ export interface RootRouteChildren {
   SignalsRoute: typeof SignalsRouteWithChildren
   SignupRoute: typeof SignupRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  SpotlightRoute: typeof SpotlightRouteWithChildren
   TermsRoute: typeof TermsRoute
   WelcomeRoute: typeof WelcomeRoute
   BSlugRoute: typeof BSlugRoute
@@ -656,6 +719,13 @@ declare module '@tanstack/react-router' {
       path: '/businesses'
       fullPath: '/businesses'
       preLoaderRoute: typeof BusinessesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/clips': {
+      id: '/clips'
+      path: '/clips'
+      fullPath: '/clips'
+      preLoaderRoute: typeof ClipsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/developers': {
@@ -749,6 +819,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/spotlight': {
+      id: '/spotlight'
+      path: '/spotlight'
+      fullPath: '/spotlight'
+      preLoaderRoute: typeof SpotlightRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/terms': {
       id: '/terms'
       path: '/terms'
@@ -803,6 +880,13 @@ declare module '@tanstack/react-router' {
       path: '/griot'
       fullPath: '/griot'
       preLoaderRoute: typeof AuthenticatedGriotRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/learn': {
+      id: '/_authenticated/learn'
+      path: '/learn'
+      fullPath: '/learn'
+      preLoaderRoute: typeof AuthenticatedLearnRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/onboarding': {
@@ -889,6 +973,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SignalsOpportunitiesRouteImport
       parentRoute: typeof SignalsRoute
     }
+    '/spotlight/$slug': {
+      id: '/spotlight/$slug'
+      path: '/$slug'
+      fullPath: '/spotlight/$slug'
+      preLoaderRoute: typeof SpotlightSlugRouteImport
+      parentRoute: typeof SpotlightRoute
+    }
     '/tag/$slug': {
       id: '/tag/$slug'
       path: '/tag/$slug'
@@ -901,6 +992,13 @@ declare module '@tanstack/react-router' {
       path: '/edit/$id'
       fullPath: '/edit/$id'
       preLoaderRoute: typeof AuthenticatedEditIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/spotlight/editorial': {
+      id: '/_authenticated/spotlight/editorial'
+      path: '/spotlight/editorial'
+      fullPath: '/spotlight/editorial'
+      preLoaderRoute: typeof AuthenticatedSpotlightEditorialRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/api/griot/assist': {
@@ -962,10 +1060,12 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedBusinessRoute: typeof AuthenticatedBusinessRoute
   AuthenticatedCreateRoute: typeof AuthenticatedCreateRoute
   AuthenticatedGriotRoute: typeof AuthenticatedGriotRoute
+  AuthenticatedLearnRoute: typeof AuthenticatedLearnRoute
   AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedUpgradesRoute: typeof AuthenticatedUpgradesRoute
   AuthenticatedEditIdRoute: typeof AuthenticatedEditIdRoute
+  AuthenticatedSpotlightEditorialRoute: typeof AuthenticatedSpotlightEditorialRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -975,10 +1075,12 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedBusinessRoute: AuthenticatedBusinessRoute,
   AuthenticatedCreateRoute: AuthenticatedCreateRoute,
   AuthenticatedGriotRoute: AuthenticatedGriotRoute,
+  AuthenticatedLearnRoute: AuthenticatedLearnRoute,
   AuthenticatedOnboardingRoute: AuthenticatedOnboardingRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedUpgradesRoute: AuthenticatedUpgradesRoute,
   AuthenticatedEditIdRoute: AuthenticatedEditIdRoute,
+  AuthenticatedSpotlightEditorialRoute: AuthenticatedSpotlightEditorialRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
@@ -1013,12 +1115,25 @@ const SignalsRouteChildren: SignalsRouteChildren = {
 const SignalsRouteWithChildren =
   SignalsRoute._addFileChildren(SignalsRouteChildren)
 
+interface SpotlightRouteChildren {
+  SpotlightSlugRoute: typeof SpotlightSlugRoute
+}
+
+const SpotlightRouteChildren: SpotlightRouteChildren = {
+  SpotlightSlugRoute: SpotlightSlugRoute,
+}
+
+const SpotlightRouteWithChildren = SpotlightRoute._addFileChildren(
+  SpotlightRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AtChar123usernameChar125Route: AtChar123usernameChar125Route,
   AdminRoute: AdminRoute,
   BusinessesRoute: BusinessesRoute,
+  ClipsRoute: ClipsRoute,
   DevelopersRoute: DevelopersRoute,
   ExploreRoute: ExploreRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
@@ -1032,6 +1147,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignalsRoute: SignalsRouteWithChildren,
   SignupRoute: SignupRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  SpotlightRoute: SpotlightRouteWithChildren,
   TermsRoute: TermsRoute,
   WelcomeRoute: WelcomeRoute,
   BSlugRoute: BSlugRoute,

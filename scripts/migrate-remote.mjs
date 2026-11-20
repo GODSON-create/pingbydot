@@ -452,6 +452,40 @@ async function runSchemaVerification(sql, releaseEntries) {
     );
   }
 
+  const [{ p7_rls_count, auth_learn_ent_ins, auth_spot_pub_ins, anon_spot_exec, anon_clip_conv }] =
+    await sql`
+      SELECT
+        (
+          SELECT count(*)::int FROM pg_class c
+          JOIN pg_namespace n ON n.oid = c.relnamespace
+          WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relrowsecurity = true
+            AND c.relname = ANY(ARRAY[
+              'learn_courses', 'course_release_schedules', 'course_entitlements',
+              'learn_course_progress', 'learn_audit_logs',
+              'spotlight_rubric_config', 'spotlight_candidates', 'spotlight_nominations',
+              'spotlight_evaluations', 'spotlight_publications',
+              'spotlight_distribution_records', 'spotlight_editorial_audit_logs',
+              'ping_clips', 'clip_media_relationships', 'clip_likes',
+              'clip_saves', 'clip_replies', 'clip_reports'
+            ])
+        ) AS p7_rls_count,
+        has_table_privilege('authenticated', 'public.course_entitlements', 'INSERT') AS auth_learn_ent_ins,
+        has_table_privilege('authenticated', 'public.spotlight_publications', 'INSERT') AS auth_spot_pub_ins,
+        has_function_privilege('anon', 'public.submit_spotlight_story(text, text, text, text, uuid, text[])', 'EXECUTE') AS anon_spot_exec,
+        has_function_privilege('anon', 'public.publish_moment_as_clip(uuid, text, text, text[])', 'EXECUTE') AS anon_clip_conv
+    `;
+  if (
+    p7_rls_count < 18 ||
+    auth_learn_ent_ins ||
+    auth_spot_pub_ins ||
+    anon_spot_exec ||
+    anon_clip_conv
+  ) {
+    throw new Error(
+      `Schema Verification FAILED — Ping Learn/Spotlight/Clips security mismatch (rls_count=${p7_rls_count}/18, auth_learn_ent_ins=${auth_learn_ent_ins}, auth_spot_pub_ins=${auth_spot_pub_ins}, anon_spot=${anon_spot_exec}, anon_clip=${anon_clip_conv})`,
+    );
+  }
+
   console.log(
     `[SCHEMA VERIFIED] Ledger ${minTag}–${maxTag}: ${releaseEntries.length}/${releaseEntries.length} recorded (total rows=${ledgerRows.length}); ${REQUIRED_TABLES_0011_0020.length}/${REQUIRED_TABLES_0011_0020.length} tables with RLS; storage 'media' bucket, hardened indexes & privileges intact.`,
   );

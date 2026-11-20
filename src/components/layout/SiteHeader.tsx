@@ -15,6 +15,9 @@ import {
   BarChart3,
   Coins,
   Crown,
+  Clapperboard,
+  Flame,
+  GraduationCap,
   Megaphone,
   Heart,
   MessageCircle,
@@ -382,6 +385,21 @@ export function SiteHeader() {
                       <DropdownMenuItem asChild className="rounded-xl">
                         <Link to="/upgrades" onClick={closeOverlays}>
                           <Crown className="text-gold" /> DOT Memberships
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild className="rounded-xl">
+                        <Link to="/learn" onClick={closeOverlays}>
+                          <GraduationCap className="text-primary" /> Ping Learn
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild className="rounded-xl">
+                        <Link to="/spotlight" onClick={closeOverlays}>
+                          <Flame className="text-amber-500" /> Ping Spotlight
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild className="rounded-xl">
+                        <Link to="/clips" onClick={closeOverlays}>
+                          <Clapperboard className="text-primary" /> Ping Clips
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild className="rounded-xl">

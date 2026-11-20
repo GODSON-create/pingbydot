@@ -3,10 +3,14 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
   ADMIN_PAGE_SIZE,
   adminListSchema,
+  assertEditorialRole,
   economicReadinessSchema,
   moderateBoostSchema,
   moderationSchema,
   reviewVerificationSchema,
+  spotlightDecisionSchema,
+  spotlightPublishSchema,
+  updateCourseScheduleSchema,
   upsertMembershipPlanSchema,
   verifySignalSchema,
   assertAdminRole,
@@ -236,6 +240,36 @@ export const getAdminList = createServerFn({ method: "POST" })
         unmigrated: false,
       };
     }
+    if (data.view === "learn") {
+      const result = await (supabaseAdmin as any)
+        .from("course_release_schedules")
+        .select(
+          "id,require_leapfrog_completion,release_interval_days,courses_per_cycle,min_assessment_score,release_order,updated_at",
+          { count: "exact" },
+        )
+        .eq("id", "default");
+      if (result.error) {
+        const code = result.error.code;
+        if (code === "42P01" || code === "PGRST205") {
+          return { view: "learn" as const, rows: [], total: 0, unmigrated: true };
+        }
+        throw new Error("Couldn't load Ping Learn release schedule.");
+      }
+      return {
+        view: "learn" as const,
+        rows: (result.data ?? []) as Array<{
+          id: string;
+          require_leapfrog_completion: boolean;
+          release_interval_days: number;
+          courses_per_cycle: number;
+          min_assessment_score: number;
+          release_order: string[];
+          updated_at: string;
+        }>,
+        total: Number(result.count ?? 0),
+        unmigrated: false,
+      };
+    }
     let q = supabaseAdmin
       .from("moderation_audit")
       .select("id,actor_id,action,target_id,reason,created_at", { count: "exact" });
@@ -361,4 +395,176 @@ export const getAdminEconomicReadiness = createServerFn({ method: "POST" })
     });
     if (error) throw new Error("Couldn't inspect economic measurement readiness.");
     return summary;
+  });
+
+export const updateCourseReleaseSchedule = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator(updateCourseScheduleSchema)
+  .handler(async ({ data, context }) => {
+    const { data: allowed, error: roleError } = await context.supabase.rpc("is_ping_admin");
+    assertAdminRole(!roleError && allowed === true);
+    const { error } = await (context.supabase as any).rpc("admin_update_course_release_schedule", {
+      p_require_leapfrog: data.requireLeapfrogCompletion,
+      p_interval_days: data.releaseIntervalDays,
+      p_courses_per_cycle: data.coursesPerCycle,
+      p_min_score: data.minAssessmentScore,
+      p_release_order: data.releaseOrder,
+    });
+    if (error) throw new Error(error.message || "Couldn't update Ping Learn release schedule.");
+    return { ok: true };
+  });
+
+/**
+ * Separated Spotlight Editorial Permission Check (Addendum Section 13 & 20).
+ * Grants access to users holding `spotlight_editor` or `admin` role without
+ * exposing financial administration tools to editorial staff.
+ */
+export const checkSpotlightEditorAccess = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const v2 = await (context.supabase as any).rpc("is_spotlight_editor");
+    if (!v2.error) return { isEditor: v2.data === true };
+    const { data, error } = await context.supabase.rpc("is_ping_admin");
+    if (error) throw new Error("Couldn't verify editorial permissions.");
+    return { isEditor: data === true };
+  });
+
+export const getSpotlightEditorialWorkspace = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const check = await (context.supabase as any).rpc("is_spotlight_editor");
+    const isEditor = !check.error
+      ? check.data === true
+      : (await context.supabase.rpc("is_ping_admin")).data === true;
+    assertEditorialRole(isEditor);
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const [candRes, pubRes, auditRes] = await Promise.all([
+      (supabaseAdmin as any)
+        .from("spotlight_candidates")
+        .select(
+          "id,founder_id,business_id,source_type,headline,story_pitch,problem_statement,traction_evidence,evidence_urls,status,pro_verified_at,selection_reason,created_at,updated_at,founder:profiles!spotlight_candidates_founder_id_fkey(username,display_name,avatar_url)",
+        )
+        .order("updated_at", { ascending: false })
+        .limit(50),
+      (supabaseAdmin as any)
+        .from("spotlight_publications")
+        .select(
+          "id,slug,founder_id,business_id,title,status,published_at,correction_note,updated_at",
+        )
+        .order("updated_at", { ascending: false })
+        .limit(30),
+      (supabaseAdmin as any)
+        .from("spotlight_editorial_audit_logs")
+        .select("id,actor_id,action,target_type,target_id,reason,created_at")
+        .order("created_at", { ascending: false })
+        .limit(30),
+    ]);
+
+    const missing =
+      candRes.error?.code === "42P01" ||
+      candRes.error?.code === "PGRST205" ||
+      pubRes.error?.code === "42P01" ||
+      pubRes.error?.code === "PGRST205";
+
+    if (missing) {
+      return { unmigrated: true, candidates: [], publications: [], auditLogs: [] };
+    }
+
+    return {
+      unmigrated: false,
+      candidates: (candRes.data ?? []) as Array<{
+        id: string;
+        founder_id: string;
+        business_id: string | null;
+        source_type: string;
+        headline: string;
+        story_pitch: string;
+        problem_statement: string;
+        traction_evidence: string;
+        evidence_urls: string[];
+        status: string;
+        pro_verified_at: string | null;
+        selection_reason: string;
+        created_at: string;
+        updated_at: string;
+        founder: { username: string; display_name: string; avatar_url: string | null } | null;
+      }>,
+      publications: (pubRes.data ?? []) as Array<{
+        id: string;
+        slug: string;
+        founder_id: string;
+        business_id: string | null;
+        title: string;
+        status: string;
+        published_at: string | null;
+        correction_note: string;
+        updated_at: string;
+      }>,
+      auditLogs: (auditRes.data ?? []) as Array<{
+        id: string;
+        actor_id: string;
+        action: string;
+        target_type: string;
+        target_id: string | null;
+        reason: string;
+        created_at: string;
+      }>,
+    };
+  });
+
+export const decideSpotlightCandidate = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator(spotlightDecisionSchema)
+  .handler(async ({ data, context }) => {
+    const check = await (context.supabase as any).rpc("is_spotlight_editor");
+    const isEditor = !check.error
+      ? check.data === true
+      : (await context.supabase.rpc("is_ping_admin")).data === true;
+    assertEditorialRole(isEditor);
+
+    const { error } = await (context.supabase as any).rpc("editor_decide_spotlight_candidate", {
+      p_candidate_id: data.candidateId,
+      p_status: data.status,
+      p_selection_reason: data.selectionReason,
+      p_scores: data.scores ?? null,
+      p_weighted_total: data.weightedTotal ?? null,
+      p_internal_notes: data.internalNotes,
+    });
+    if (error) throw new Error(error.message || "Couldn't record Spotlight editorial decision.");
+    return { ok: true };
+  });
+
+export const publishSpotlightFeature = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator(spotlightPublishSchema)
+  .handler(async ({ data, context }) => {
+    const check = await (context.supabase as any).rpc("is_spotlight_editor");
+    const isEditor = !check.error
+      ? check.data === true
+      : (await context.supabase.rpc("is_ping_admin")).data === true;
+    assertEditorialRole(isEditor);
+
+    const { error } = await (context.supabase as any).rpc("editor_publish_spotlight", {
+      p_slug: data.slug,
+      p_candidate_id: data.candidateId ?? null,
+      p_founder_id: data.founderId,
+      p_business_id: data.businessId ?? null,
+      p_title: data.title,
+      p_editorial_intro: data.editorialIntro,
+      p_founder_story: data.founderStory,
+      p_business_description: data.businessDescription,
+      p_problem_solved: data.problemSolved,
+      p_product_solution: data.productSolution,
+      p_evidence_achievements: data.evidenceAchievements,
+      p_featured_ping_ids: data.featuredPingIds,
+      p_featured_clip_ids: data.featuredClipIds,
+      p_dot_tags: data.dotTags,
+      p_video_interview_url: data.videoInterviewUrl ?? null,
+      p_founder_portrait_url: data.founderPortraitUrl ?? null,
+      p_status: data.status,
+      p_correction_note: data.correctionNote,
+    });
+    if (error) throw new Error(error.message || "Couldn't publish Spotlight feature.");
+    return { ok: true };
   });

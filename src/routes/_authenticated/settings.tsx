@@ -160,6 +160,11 @@ function NotificationPreferencesCard({ userId }: { userId?: string | undefined }
       label: "Opportunities & applications",
       desc: "Updates on Signal opportunities",
     },
+    {
+      key: "spotlight",
+      label: "Ping Spotlight stories",
+      desc: "Editorial founder features (frequency-capped, never mass-blasted)",
+    },
     { key: "email_digest", label: "Email summary digest", desc: "Periodic activity roundup" },
   ];
 

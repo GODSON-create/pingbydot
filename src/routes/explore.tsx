@@ -469,6 +469,15 @@ function Explore() {
             ))}
           </div>
           <Button asChild size="sm" variant="outline" className="rounded-full text-xs h-8">
+            <Link to="/clips">Ping Clips</Link>
+          </Button>
+          <Button asChild size="sm" variant="outline" className="rounded-full text-xs h-8">
+            <Link to="/spotlight">Spotlight</Link>
+          </Button>
+          <Button asChild size="sm" variant="outline" className="rounded-full text-xs h-8">
+            <Link to="/learn">Learn</Link>
+          </Button>
+          <Button asChild size="sm" variant="outline" className="rounded-full text-xs h-8">
             <Link to="/media">Video &amp; Media</Link>
           </Button>
           <Button asChild size="sm" variant="outline" className="rounded-full text-xs h-8">

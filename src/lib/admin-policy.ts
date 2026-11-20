@@ -10,6 +10,7 @@ export const adminListSchema = z.object({
     "verifications",
     "plans",
     "boosts",
+    "learn",
     "audit",
   ]),
   page: z.number().int().min(0).max(100000),
@@ -50,9 +51,53 @@ export const moderateBoostSchema = z.object({
   reason: z.string().trim().min(3).max(500),
   refundAmount: z.number().int().min(0).max(100000).default(0),
 });
+export const updateCourseScheduleSchema = z.object({
+  requireLeapfrogCompletion: z.boolean(),
+  releaseIntervalDays: z.number().int().min(7).max(180),
+  coursesPerCycle: z.number().int().min(1).max(5),
+  minAssessmentScore: z.number().int().min(50).max(100),
+  releaseOrder: z.array(z.string().trim().min(2).max(48)).min(1).max(20),
+});
+export const spotlightDecisionSchema = z.object({
+  candidateId: z.string().uuid(),
+  status: z.enum(["under_review", "shortlisted", "selected", "declined", "retracted"]),
+  selectionReason: z.string().trim().min(8).max(1000),
+  scores: z.record(z.string(), z.number().min(0).max(10)).nullable().optional(),
+  weightedTotal: z.number().min(0).max(100).nullable().optional(),
+  internalNotes: z.string().trim().max(2500).default(""),
+});
+export const spotlightPublishSchema = z.object({
+  slug: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9-]{3,80}$/),
+  candidateId: z.string().uuid().nullable().optional(),
+  founderId: z.string().uuid(),
+  businessId: z.string().uuid().nullable().optional(),
+  title: z.string().trim().min(3).max(160),
+  editorialIntro: z.string().trim().max(1000).default(""),
+  founderStory: z.string().trim().min(20).max(12000),
+  businessDescription: z.string().trim().max(4000).default(""),
+  problemSolved: z.string().trim().max(2000).default(""),
+  productSolution: z.string().trim().max(2000).default(""),
+  evidenceAchievements: z.array(z.string().trim().max(240)).max(12).default([]),
+  featuredPingIds: z.array(z.string().uuid()).max(8).default([]),
+  featuredClipIds: z.array(z.string().uuid()).max(8).default([]),
+  dotTags: z.array(z.string().trim().max(32)).max(8).default([]),
+  videoInterviewUrl: z.string().trim().url().nullable().optional(),
+  founderPortraitUrl: z.string().trim().url().nullable().optional(),
+  status: z
+    .enum(["draft", "scheduled", "published", "corrected", "retracted"])
+    .default("published"),
+  correctionNote: z.string().trim().max(800).default(""),
+});
 export const economicReadinessSchema = z.object({
   days: z.number().int().min(7).max(90).default(30),
 });
 export function assertAdminRole(verified: boolean) {
   if (!verified) throw new Error("Access denied");
+}
+export function assertEditorialRole(verified: boolean) {
+  if (!verified) throw new Error("Spotlight editorial role required");
 }

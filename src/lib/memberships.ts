@@ -25,6 +25,9 @@ export interface MembershipBenefitLimits {
   profile_customisation?: boolean;
   community_tools?: boolean;
   enhanced_business?: boolean;
+  ngn_reference_price?: number;
+  learn_access_policy?: "none" | "leapfrog_entry_then_monthly" | "full_ten_course_library";
+  spotlight_eligible?: boolean;
 }
 
 export interface MembershipPlan {
@@ -97,10 +100,10 @@ export const FALLBACK_MEMBERSHIP_PLANS: readonly MembershipPlan[] = [
   },
   {
     slug: "plus",
-    name: "Plus",
-    badge: "Plus",
+    name: "Builder Plus",
+    badge: "Builder Plus",
     tagline:
-      "Profile customisation, additional links, scheduled publishing, and extended creator analytics.",
+      "₦3,000/mo reference plan · Includes LEAPFROG (90-Day AI Business Course, $2,000 reference value) + periodic course unlocks after completion.",
     dot_price: 150,
     duration_days: 30,
     benefits: {
@@ -111,12 +114,15 @@ export const FALLBACK_MEMBERSHIP_PLANS: readonly MembershipPlan[] = [
       profile_customisation: true,
       community_tools: false,
       enhanced_business: false,
+      ngn_reference_price: 3000,
+      learn_access_policy: "leapfrog_entry_then_monthly",
+      spotlight_eligible: false,
     },
     perks: [
-      "Custom accent themes & enhanced profile customisation",
-      "Up to 8 external profile connections & links",
-      "Ping scheduling & 30-day creator analytics history",
-      "Premium sticker packs & extended Highlight covers",
+      "LEAPFROG — Build a Successful Business in 90 Days Using AI ($2,000 reference value)",
+      "7 strategic plays, practical exercises, completion assessment & permanent certificate",
+      "Unlocks 1 additional Ping Learn course per monthly cycle after Leapfrog completion",
+      "Distinct Builder Plus badge (strictly separate from Identity Verification)",
     ],
     highlighted: false,
     is_active: true,
@@ -124,10 +130,10 @@ export const FALLBACK_MEMBERSHIP_PLANS: readonly MembershipPlan[] = [
   },
   {
     slug: "pro",
-    name: "Pro",
-    badge: "Pro",
+    name: "Builder Pro",
+    badge: "Builder Pro",
     tagline:
-      "Complete creator & community toolkit with 90-day insights, priority workflows, and advanced tools.",
+      "₦30,000/mo reference plan · Complete 10-Course Ping Learn library ($10,000 aggregate reference value) + Ping Spotlight eligibility.",
     dot_price: 350,
     duration_days: 30,
     benefits: {
@@ -138,12 +144,15 @@ export const FALLBACK_MEMBERSHIP_PLANS: readonly MembershipPlan[] = [
       profile_customisation: true,
       community_tools: true,
       enhanced_business: false,
+      ngn_reference_price: 30000,
+      learn_access_policy: "full_ten_course_library",
+      spotlight_eligible: true,
     },
     perks: [
-      "Everything in Plus (strictly separate from identity verification)",
-      "Up to 15 profile links & 90-day economic + engagement analytics",
-      "Advanced creator tools, scheduling & campaign tracking",
-      "Expanded Community Hub governance & event management tools",
+      "Complete 10-Course Ping Learn library ($10,000 reference value; not a cash/DOT award)",
+      "Preserves existing Leapfrog progress & certificates on upgrade (zero duplicate enrolment)",
+      "Eligibility for merit-based Ping Spotlight editorial consideration (selection not guaranteed)",
+      "Distinct Builder Pro badge (never automatically grants Identity Verification)",
     ],
     highlighted: true,
     is_active: true,

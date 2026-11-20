@@ -217,6 +217,12 @@ function UpgradesPage() {
 
         <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
           <Button asChild variant="outline" size="sm" className="rounded-full gap-1.5">
+            <Link to="/learn">
+              <Sparkles className="size-3.5 text-primary" />
+              <span>Ping Learn</span>
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm" className="rounded-full gap-1.5">
             <Link to="/boosts">
               <Megaphone className="size-3.5 text-gold" />
               <span>Boost Campaigns</span>
@@ -448,13 +454,18 @@ function UpgradesPage() {
                     </div>
 
                     <h3 className="mt-4 font-display text-xl font-extrabold">{plan.name}</h3>
-                    <div className="mt-2 flex items-baseline gap-1.5">
+                    <div className="mt-2 flex items-baseline gap-1.5 flex-wrap">
                       <span className="font-display text-3xl font-extrabold tabular-nums">
                         {plan.dot_price === 0 ? "Free" : `${plan.dot_price} DOT`}
                       </span>
                       {plan.duration_days > 0 && (
                         <span className="text-xs text-muted-foreground">
                           / {plan.duration_days}d
+                        </span>
+                      )}
+                      {typeof plan.benefits.ngn_reference_price === "number" && (
+                        <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
+                          Ref ₦{plan.benefits.ngn_reference_price.toLocaleString()}
                         </span>
                       )}
                     </div>

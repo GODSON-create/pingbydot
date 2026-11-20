@@ -46,6 +46,7 @@ export interface NotificationPreferences {
   messages: boolean;
   hubs: boolean;
   opportunities: boolean;
+  spotlight: boolean;
   email_digest: boolean;
   push_enabled: boolean;
 }
@@ -58,6 +59,7 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   messages: true,
   hubs: true,
   opportunities: true,
+  spotlight: true,
   email_digest: false,
   push_enabled: false,
 };

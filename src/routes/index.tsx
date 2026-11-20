@@ -821,6 +821,57 @@ function HomeFeedContent() {
             </div>
           </section>
 
+          {/* 3B. PING SPOTLIGHT, CLIPS & LEARN ECOSYSTEM DISCOVERY */}
+          <section aria-labelledby="ecosystem-discovery-heading">
+            <div className="flex items-center justify-between mb-3">
+              <h2
+                id="ecosystem-discovery-heading"
+                className="font-display text-lg font-bold flex items-center gap-2 text-foreground"
+              >
+                <Sparkles className="size-5 text-primary" />
+                <span>Spotlight, Clips &amp; Learn</span>
+              </h2>
+            </div>
+            <div className="surface-card rounded-2xl p-4 border border-border/60 space-y-2.5 text-xs">
+              <Link
+                to="/spotlight"
+                className="flex items-center justify-between gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 hover:bg-amber-500/15 transition-colors"
+              >
+                <div>
+                  <p className="font-bold text-foreground">Ping Spotlight</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Merit-selected founder stories &amp; official distribution
+                  </p>
+                </div>
+                <ArrowUpRight className="size-4 text-amber-500 shrink-0" />
+              </Link>
+              <Link
+                to="/clips"
+                className="flex items-center justify-between gap-2 rounded-xl border border-border/70 bg-secondary/40 p-3 hover:bg-secondary/70 transition-colors"
+              >
+                <div>
+                  <p className="font-bold text-foreground">Ping Clips</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Short-form vertical videos from builders &amp; creators
+                  </p>
+                </div>
+                <ArrowUpRight className="size-4 text-primary shrink-0" />
+              </Link>
+              <Link
+                to="/learn"
+                className="flex items-center justify-between gap-2 rounded-xl border border-border/70 bg-secondary/40 p-3 hover:bg-secondary/70 transition-colors"
+              >
+                <div>
+                  <p className="font-bold text-foreground">Ping Learn</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    LEAPFROG (Builder Plus) &amp; 10-Course Library (Pro)
+                  </p>
+                </div>
+                <ArrowUpRight className="size-4 text-primary shrink-0" />
+              </Link>
+            </div>
+          </section>
+
           {/* 4. SIGNAL — 1-ON-1 CHATS & CONVERSATIONS */}
           <section aria-labelledby="signals-discovery-heading">
             <div className="flex items-center justify-between mb-3">

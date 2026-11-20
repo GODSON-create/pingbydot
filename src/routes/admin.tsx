@@ -20,6 +20,7 @@ import {
   moderateBoostCampaign,
   moderatePing,
   reviewVerification,
+  updateCourseReleaseSchedule,
   upsertMembershipPlan,
   verifySignal,
 } from "@/lib/admin.functions";
@@ -100,9 +101,25 @@ function AdminDashboard() {
   const reviewVerificationFn = useServerFn(reviewVerification);
   const upsertPlanFn = useServerFn(upsertMembershipPlan);
   const moderateBoostFn = useServerFn(moderateBoostCampaign);
+  const updateLearnScheduleFn = useServerFn(updateCourseReleaseSchedule);
   const [view, setView] = useState<
-    "pings" | "users" | "reports" | "signals" | "verifications" | "plans" | "boosts" | "audit"
+    | "pings"
+    | "users"
+    | "reports"
+    | "signals"
+    | "verifications"
+    | "plans"
+    | "boosts"
+    | "learn"
+    | "audit"
   >("pings");
+  const [learnDraft, setLearnDraft] = useState<{
+    requireLeapfrogCompletion: boolean;
+    releaseIntervalDays: number;
+    coursesPerCycle: number;
+    minAssessmentScore: number;
+    releaseOrder: string[];
+  } | null>(null);
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState("");
   const [draftSearch, setDraftSearch] = useState("");
@@ -206,6 +223,21 @@ function AdminDashboard() {
     },
     onError: (e: any) => toast.error(e?.message || "Couldn't moderate boost campaign."),
   });
+  const updateLearnScheduleMutation = useMutation({
+    mutationFn: (data: {
+      requireLeapfrogCompletion: boolean;
+      releaseIntervalDays: number;
+      coursesPerCycle: number;
+      minAssessmentScore: number;
+      releaseOrder: string[];
+    }) => updateLearnScheduleFn({ data }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["admin-list"] });
+      await qc.invalidateQueries({ queryKey: ["learn-release-schedule"] });
+      toast.success("Ping Learn course release schedule updated.");
+    },
+    onError: (e: any) => toast.error(e?.message || "Couldn't update Ping Learn schedule."),
+  });
   const metric = (key: string) => {
     const data = overview.data;
     return data && typeof data === "object" && !Array.isArray(data) && typeof data[key] === "number"
@@ -232,12 +264,17 @@ function AdminDashboard() {
           </span>
           <h1 className="mt-2 font-display text-4xl font-bold">Administration</h1>
         </div>
-        <Button
-          variant="outline"
-          onClick={() => qc.invalidateQueries({ queryKey: ["admin-overview"] })}
-        >
-          <RefreshCw /> Refresh health
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline">
+            <Link to="/spotlight/editorial">Spotlight Editorial Desk</Link>
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => qc.invalidateQueries({ queryKey: ["admin-overview"] })}
+          >
+            <RefreshCw /> Refresh health
+          </Button>
+        </div>
       </div>
       <section aria-label="Platform totals" className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-6">
         {[
@@ -284,6 +321,7 @@ function AdminDashboard() {
             "verifications",
             "plans",
             "boosts",
+            "learn",
             "audit",
           ] as const
         ).map((v) => (
@@ -311,9 +349,11 @@ function AdminDashboard() {
                       ? "Membership plans"
                       : v === "boosts"
                         ? "Boost campaigns"
-                        : v === "users"
-                          ? "Users"
-                          : "Pings"}
+                        : v === "learn"
+                          ? "Learn schedule"
+                          : v === "users"
+                            ? "Users"
+                            : "Pings"}
           </Button>
         ))}
       </div>
@@ -777,12 +817,114 @@ function AdminDashboard() {
               </article>
             ))
           ))}
+        {list.data?.view === "learn" &&
+          (list.data.unmigrated ? (
+            <p className="py-8 text-sm text-muted-foreground">
+              course_release_schedules table is not yet present on the connected database (migration
+              0034 pending).
+            </p>
+          ) : (
+            list.data.rows.map((sched) => {
+              const cur = learnDraft ?? {
+                requireLeapfrogCompletion: sched.require_leapfrog_completion,
+                releaseIntervalDays: sched.release_interval_days,
+                coursesPerCycle: sched.courses_per_cycle,
+                minAssessmentScore: sched.min_assessment_score,
+                releaseOrder: sched.release_order,
+              };
+              return (
+                <article key={sched.id} className="py-5 space-y-4">
+                  <div>
+                    <h3 className="font-semibold">Builder Plus Periodic Course Release Schedule</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Controls how Builder Plus members unlock additional Ping Learn courses after
+                      completing LEAPFROG.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div className="w-32">
+                      <Label className="text-[11px]">Interval (days)</Label>
+                      <Input
+                        type="number"
+                        min={7}
+                        max={180}
+                        value={cur.releaseIntervalDays}
+                        onChange={(e) =>
+                          setLearnDraft({
+                            ...cur,
+                            releaseIntervalDays: Math.max(7, Number(e.target.value) || 30),
+                          })
+                        }
+                        className="mt-1 h-8 text-xs"
+                      />
+                    </div>
+                    <div className="w-32">
+                      <Label className="text-[11px]">Courses / cycle</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={5}
+                        value={cur.coursesPerCycle}
+                        onChange={(e) =>
+                          setLearnDraft({
+                            ...cur,
+                            coursesPerCycle: Math.max(1, Number(e.target.value) || 1),
+                          })
+                        }
+                        className="mt-1 h-8 text-xs"
+                      />
+                    </div>
+                    <div className="w-32">
+                      <Label className="text-[11px]">Min Pass Score (%)</Label>
+                      <Input
+                        type="number"
+                        min={50}
+                        max={100}
+                        value={cur.minAssessmentScore}
+                        onChange={(e) =>
+                          setLearnDraft({
+                            ...cur,
+                            minAssessmentScore: Math.max(50, Number(e.target.value) || 70),
+                          })
+                        }
+                        className="mt-1 h-8 text-xs"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        setLearnDraft({
+                          ...cur,
+                          requireLeapfrogCompletion: !cur.requireLeapfrogCompletion,
+                        })
+                      }
+                    >
+                      {cur.requireLeapfrogCompletion
+                        ? "Leapfrog Required: ON"
+                        : "Leapfrog Required: OFF"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={updateLearnScheduleMutation.isPending}
+                      onClick={() => updateLearnScheduleMutation.mutate(cur)}
+                    >
+                      Save Schedule
+                    </Button>
+                  </div>
+                </article>
+              );
+            })
+          ))}
         {list.data?.rows.length === 0 &&
           !(
             (list.data.view === "signals" ||
               list.data.view === "verifications" ||
               list.data.view === "plans" ||
-              list.data.view === "boosts") &&
+              list.data.view === "boosts" ||
+              list.data.view === "learn") &&
             list.data.unmigrated
           ) && <p className="py-10 text-muted-foreground">No matching entries.</p>}
       </div>

@@ -22,6 +22,7 @@ import {
   Play,
   ChevronUp,
   ChevronDown,
+  Clapperboard,
   Megaphone,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -38,6 +39,7 @@ import {
 import { FounderAvatar } from "@/components/ping/Avatar";
 import { VerificationBadge } from "@/components/verification/VerificationBadge";
 import { BoostContentDialog, PromotedBadge } from "@/components/boost/BoostContentDialog";
+import { MomentToClipDialog } from "@/components/clips/MomentToClipDialog";
 import { activeBoostsMapQuery } from "@/lib/boosts";
 import {
   useViewMoment,
@@ -89,6 +91,7 @@ export function MomentViewerModal({
   const [highlightDialogOpen, setHighlightDialogOpen] = useState(false);
   const [activityDialogOpen, setActivityDialogOpen] = useState(false);
   const [boostDialogOpen, setBoostDialogOpen] = useState(false);
+  const [clipDialogOpen, setClipDialogOpen] = useState(false);
   const [newHighlightTitle, setNewHighlightTitle] = useState("");
 
   const addHighlightItemMutation = useAddMomentToHighlight();
@@ -140,7 +143,8 @@ export function MomentViewerModal({
       repingModalOpen ||
       highlightDialogOpen ||
       activityDialogOpen ||
-      boostDialogOpen
+      boostDialogOpen ||
+      clipDialogOpen
     ) {
       vid.pause();
     } else {
@@ -152,6 +156,7 @@ export function MomentViewerModal({
     highlightDialogOpen,
     activityDialogOpen,
     boostDialogOpen,
+    clipDialogOpen,
     currentMoment?.id,
   ]);
 
@@ -204,7 +209,8 @@ export function MomentViewerModal({
       repingModalOpen ||
       highlightDialogOpen ||
       activityDialogOpen ||
-      boostDialogOpen
+      boostDialogOpen ||
+      clipDialogOpen
     ) {
       return;
     }
@@ -235,6 +241,7 @@ export function MomentViewerModal({
     highlightDialogOpen,
     activityDialogOpen,
     boostDialogOpen,
+    clipDialogOpen,
     videoDurationSec,
     advanceNext,
   ]);
@@ -508,6 +515,14 @@ export function MomentViewerModal({
                       >
                         <Megaphone className="size-4 mr-2" /> Boost Moment with DOT
                       </DropdownMenuItem>
+                      {currentMoment.media_type === "video" && (
+                        <DropdownMenuItem
+                          onClick={() => setClipDialogOpen(true)}
+                          className="rounded-xl text-[#c7f36b]"
+                        >
+                          <Clapperboard className="size-4 mr-2" /> Republish as Ping Clip
+                        </DropdownMenuItem>
+                      )}
                       {highlightId && (
                         <DropdownMenuItem
                           onClick={handleRemoveFromHighlight}
@@ -984,20 +999,27 @@ export function MomentViewerModal({
 
         {/* Boost Moment Dialog */}
         {isOwner && (
-          <BoostContentDialog
-            open={boostDialogOpen}
-            onOpenChange={setBoostDialogOpen}
-            target={{
-              contentType: "moment",
-              contentId: currentMoment.id,
-              previewText:
-                currentMoment.caption ||
-                currentMoment.overlay_text ||
-                `Moment by @${currentSequence.author.username}`,
-              momentExpiresAt: currentMoment.expires_at,
-              momentAudience: currentMoment.audience,
-            }}
-          />
+          <>
+            <BoostContentDialog
+              open={boostDialogOpen}
+              onOpenChange={setBoostDialogOpen}
+              target={{
+                contentType: "moment",
+                contentId: currentMoment.id,
+                previewText:
+                  currentMoment.caption ||
+                  currentMoment.overlay_text ||
+                  `Moment by @${currentSequence.author.username}`,
+                momentExpiresAt: currentMoment.expires_at,
+                momentAudience: currentMoment.audience,
+              }}
+            />
+            <MomentToClipDialog
+              moment={currentMoment}
+              open={clipDialogOpen}
+              onOpenChange={setClipDialogOpen}
+            />
+          </>
         )}
       </DialogContent>
     </Dialog>
