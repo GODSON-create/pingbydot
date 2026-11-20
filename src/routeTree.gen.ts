@@ -16,6 +16,7 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as BusinessesRouteImport } from './routes/businesses'
 import { Route as ClipsRouteImport } from './routes/clips'
 import { Route as DevelopersRouteImport } from './routes/developers'
+import { Route as DownloadRouteImport } from './routes/download'
 import { Route as ExploreRouteImport } from './routes/explore'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as HubsRouteImport } from './routes/hubs'
@@ -95,6 +96,11 @@ const ClipsRoute = ClipsRouteImport.update({
 const DevelopersRoute = DevelopersRouteImport.update({
   id: '/developers',
   path: '/developers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DownloadRoute = DownloadRouteImport.update({
+  id: '/download',
+  path: '/download',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ExploreRoute = ExploreRouteImport.update({
@@ -331,6 +337,7 @@ export interface FileRoutesByFullPath {
   '/businesses': typeof BusinessesRoute
   '/clips': typeof ClipsRoute
   '/developers': typeof DevelopersRoute
+  '/download': typeof DownloadRoute
   '/explore': typeof ExploreRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/hubs': typeof HubsRouteWithChildren
@@ -384,6 +391,7 @@ export interface FileRoutesByTo {
   '/businesses': typeof BusinessesRoute
   '/clips': typeof ClipsRoute
   '/developers': typeof DevelopersRoute
+  '/download': typeof DownloadRoute
   '/explore': typeof ExploreRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/hubs': typeof HubsRouteWithChildren
@@ -439,6 +447,7 @@ export interface FileRoutesById {
   '/businesses': typeof BusinessesRoute
   '/clips': typeof ClipsRoute
   '/developers': typeof DevelopersRoute
+  '/download': typeof DownloadRoute
   '/explore': typeof ExploreRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/hubs': typeof HubsRouteWithChildren
@@ -494,6 +503,7 @@ export interface FileRouteTypes {
     | '/businesses'
     | '/clips'
     | '/developers'
+    | '/download'
     | '/explore'
     | '/forgot-password'
     | '/hubs'
@@ -547,6 +557,7 @@ export interface FileRouteTypes {
     | '/businesses'
     | '/clips'
     | '/developers'
+    | '/download'
     | '/explore'
     | '/forgot-password'
     | '/hubs'
@@ -601,6 +612,7 @@ export interface FileRouteTypes {
     | '/businesses'
     | '/clips'
     | '/developers'
+    | '/download'
     | '/explore'
     | '/forgot-password'
     | '/hubs'
@@ -656,6 +668,7 @@ export interface RootRouteChildren {
   BusinessesRoute: typeof BusinessesRoute
   ClipsRoute: typeof ClipsRoute
   DevelopersRoute: typeof DevelopersRoute
+  DownloadRoute: typeof DownloadRoute
   ExploreRoute: typeof ExploreRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   HubsRoute: typeof HubsRouteWithChildren
@@ -733,6 +746,13 @@ declare module '@tanstack/react-router' {
       path: '/developers'
       fullPath: '/developers'
       preLoaderRoute: typeof DevelopersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/download': {
+      id: '/download'
+      path: '/download'
+      fullPath: '/download'
+      preLoaderRoute: typeof DownloadRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/explore': {
@@ -1135,6 +1155,7 @@ const rootRouteChildren: RootRouteChildren = {
   BusinessesRoute: BusinessesRoute,
   ClipsRoute: ClipsRoute,
   DevelopersRoute: DevelopersRoute,
+  DownloadRoute: DownloadRoute,
   ExploreRoute: ExploreRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   HubsRoute: HubsRouteWithChildren,

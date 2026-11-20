@@ -1,0 +1,38 @@
+{
+  "version": "1.0.0-ea.1",
+  "releaseChannel": "early-access",
+  "releasedAt": "2026-11-20",
+  "appId": "app.lovable.pingbydot",
+  "android": {
+    "status": "pending_signed_build",
+    "versionName": "1.0.0-ea.1",
+    "versionCode": 1,
+    "minSdk": 24,
+    "downloadUrl": null,
+    "sha256": null,
+    "debugDistributionBlocked": true,
+    "statusMessage": "Signed release APK awaits release keystore & Android SDK build pipeline. Debug APKs are intentionally never distributed publicly. Install the Ping Progressive Web App immediately on Android Chrome below."
+  },
+  "pwa": {
+    "status": "available",
+    "manifestUrl": "/manifest.webmanifest",
+    "supportedBrowsers": ["Android Chrome", "iPhone & iPad Safari", "Desktop Chrome / Edge"],
+    "statusMessage": "Install Ping directly to your home screen with zero app-store wait. Updates automatically and supports offline fallback."
+  },
+  "ios": {
+    "status": "pending_apple_review",
+    "testFlightUrl": null,
+    "bundleId": "app.lovable.pingbydot",
+    "statusMessage": "Native iOS TestFlight archive requires macOS, Xcode, and Apple Developer signing credentials. iPhone and iPad users can install Ping immediately via Safari Add to Home Screen (PWA) and join the TestFlight waitlist below."
+  },
+  "releaseNotes": [
+    "Unified 5-destination navigation across Home, Explore, Create, Hubs, and Inbox.",
+    "Ping Learn entitlements (Builder Plus Leapfrog entry + Builder Pro 10-course library), Ping Spotlight editorial hub, and Ping Clips vertical short-form video.",
+    "Progressive Web App installability with offline fallback, update notifications, and privacy-hardened caching.",
+    "Appointment-based Platform Owner administration and real database-backed analytics."
+  ],
+  "support": {
+    "bugReportPath": "/download#early-access-signup",
+    "helpEmail": "support@pingbydot.com"
+  }
+}

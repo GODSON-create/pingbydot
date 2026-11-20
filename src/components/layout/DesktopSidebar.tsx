@@ -25,6 +25,7 @@ import {
   Megaphone,
   Sparkles,
   Code2,
+  Download,
   ArrowLeft,
   PanelLeftClose,
   PanelLeftOpen,
@@ -512,6 +513,11 @@ export function DesktopSidebar() {
                     className="flex items-center gap-2"
                   >
                     <Code2 className="size-4" /> Developer Platform
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="rounded-xl">
+                  <Link to="/download" onClick={closeOverlays} className="flex items-center gap-2">
+                    <Download className="size-4" /> Download Ping App
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild className="rounded-xl">

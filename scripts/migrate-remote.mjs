@@ -486,6 +486,37 @@ async function runSchemaVerification(sql, releaseEntries) {
     );
   }
 
+  const [
+    { p8_rls_count, auth_role_ins, auth_appt_ins, auth_metrics_exec, anon_appoint_exec },
+  ] = await sql`
+    SELECT
+      (
+        SELECT count(*)::int FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relrowsecurity = true
+          AND c.relname = ANY(ARRAY[
+            'admin_role_permissions', 'admin_user_permissions', 'admin_appointments',
+            'user_presence_heartbeats', 'system_error_logs',
+            'early_access_registrations', 'download_attribution_events'
+          ])
+      ) AS p8_rls_count,
+      has_table_privilege('authenticated', 'public.user_roles', 'INSERT') AS auth_role_ins,
+      has_table_privilege('authenticated', 'public.admin_appointments', 'INSERT') AS auth_appt_ins,
+      has_function_privilege('authenticated', 'public.admin_control_centre_metrics()', 'EXECUTE') AS auth_metrics_exec,
+      has_function_privilege('anon', 'public.owner_appoint_admin(uuid, text, text)', 'EXECUTE') AS anon_appoint_exec
+  `;
+  if (
+    p8_rls_count < 7 ||
+    auth_role_ins ||
+    auth_appt_ins ||
+    auth_metrics_exec ||
+    anon_appoint_exec
+  ) {
+    throw new Error(
+      `Schema Verification FAILED — Admin Control Centre & Early Access security mismatch (rls_count=${p8_rls_count}/7, auth_role_ins=${auth_role_ins}, auth_appt_ins=${auth_appt_ins}, auth_metrics_exec=${auth_metrics_exec}, anon_appoint_exec=${anon_appoint_exec})`,
+    );
+  }
+
   console.log(
     `[SCHEMA VERIFIED] Ledger ${minTag}–${maxTag}: ${releaseEntries.length}/${releaseEntries.length} recorded (total rows=${ledgerRows.length}); ${REQUIRED_TABLES_0011_0020.length}/${REQUIRED_TABLES_0011_0020.length} tables with RLS; storage 'media' bucket, hardened indexes & privileges intact.`,
   );

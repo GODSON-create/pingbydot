@@ -30,6 +30,7 @@ import { CreateStackModal } from "@/components/layout/CreateStackModal";
 import { BootSplashScreen } from "@/components/layout/BootSplashScreen";
 import { GestureLayer } from "@/components/layout/GestureLayer";
 import { OfflineQueueBanner } from "@/components/layout/OfflineQueueBanner";
+import { PwaInstallAndUpdateBanner } from "@/components/pwa/PwaInstallAndUpdateBanner";
 import { PingMark } from "@/components/BrandLogo";
 import { Toaster } from "@/components/ui/sonner";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
@@ -128,6 +129,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:image", content: siteUrl("/brand/ping-logo.svg") },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "theme-color", content: "#173C32" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
+      { name: "apple-mobile-web-app-title", content: "Ping" },
     ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -137,9 +141,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         href: "https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap",
       },
       { rel: "stylesheet", href: appCss },
+      { rel: "manifest", href: "/manifest.webmanifest" },
+      { rel: "icon", href: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
       { rel: "icon", href: "/brand/ping-mark-lime.png", type: "image/png" },
       { rel: "icon", href: "/brand/ping-icon.svg", type: "image/svg+xml" },
-      { rel: "apple-touch-icon", href: "/brand/ping-mark-lime.png" },
+      { rel: "apple-touch-icon", href: "/icons/apple-touch-icon-180.png", sizes: "180x180" },
     ],
     scripts: [{ type: "application/ld+json", children: JSON.stringify(siteJsonLd()) }],
   }),
@@ -237,6 +243,7 @@ function RootShellContent() {
         Skip to content
       </a>
       <SiteHeader />
+      <PwaInstallAndUpdateBanner />
       <OfflineQueueBanner />
       <div className="mx-auto w-full max-w-7xl flex flex-col lg:flex-row items-start min-h-screen overflow-x-clip">
         <DesktopSidebar />

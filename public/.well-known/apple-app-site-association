@@ -10,6 +10,10 @@
           { "/": "/hubs/*" },
           { "/": "/signals/*" },
           { "/": "/media*" },
+          { "/": "/clips*" },
+          { "/": "/spotlight/*" },
+          { "/": "/learn*" },
+          { "/": "/download*" },
           { "/": "/share-target*" }
         ]
       }

@@ -38,6 +38,9 @@ export function SiteFooter() {
           <Link to="/developers" className="text-muted-foreground hover:text-foreground">
             Developer Platform
           </Link>
+          <Link to="/download" className="text-muted-foreground hover:text-foreground">
+            Download Ping App
+          </Link>
         </nav>
         <nav className="flex flex-col gap-2 text-sm" aria-label="Account">
           <span className="font-display font-bold">Account & Legal</span>

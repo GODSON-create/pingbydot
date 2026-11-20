@@ -8,6 +8,7 @@ import { needsOnboarding } from "@/lib/pathways";
 import { ensureClientProfileRow } from "@/lib/ensure-profile";
 import { captureLandingAttribution, recordFirstMeaningfulSessionOnce } from "@/lib/economic-events";
 import { clearSessionRestoredFlag, trackSessionRestoredOnce } from "@/lib/telemetry";
+import { clearPwaCachesOnLogout, isRunningStandalonePwa } from "@/lib/pwa";
 
 let intentionalSignOut = false;
 
@@ -62,6 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (event === "SIGNED_OUT") {
         clearSessionRestoredFlag();
+        void clearPwaCachesOnLogout();
         qc.removeQueries({ queryKey: ["my-profile"] });
         if (wasSignedInRef.current && !intentionalSignOut) {
           setSessionExpired(true);
@@ -154,6 +156,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       recordFirstMeaningfulSessionOnce(user.id);
     }
   }, [ready, user, profileQ.isLoading, profileQ.data]);
+
+  // Lightweight authenticated presence heartbeat for reliable Admin online-now & DAU/WAU/MAU telemetry
+  useEffect(() => {
+    if (!ready || !user || typeof window === "undefined") return;
+    const surface = isRunningStandalonePwa() ? "pwa" : "web";
+    const beat = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      void Promise.resolve(
+        (supabase as any).rpc("record_presence_heartbeat", { p_surface: surface }),
+      ).catch(() => {});
+    };
+    beat();
+    const timer = window.setInterval(beat, 120_000);
+    return () => window.clearInterval(timer);
+  }, [ready, user]);
 
   return (
     <Ctx.Provider

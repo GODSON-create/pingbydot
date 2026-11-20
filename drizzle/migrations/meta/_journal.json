@@ -246,6 +246,13 @@
       "when": 1796700000000,
       "tag": "0034_ping_learn_spotlight_and_clips",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1796800000000,
+      "tag": "0035_admin_control_centre_and_early_access",
+      "breakpoints": true
     }
   ]
 }

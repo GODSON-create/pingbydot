@@ -1,36 +1,57 @@
 import { z } from "zod";
+import { ADMIN_PERMISSIONS, type AdminPermission } from "./admin-rbac";
 
 export const ADMIN_PAGE_SIZE = 25;
+
+export const APPOINTABLE_ADMIN_ROLES = [
+  "admin",
+  "moderator",
+  "support",
+  "analyst",
+  "finance_admin",
+  "community_admin",
+  "spotlight_editor",
+] as const;
+
 export const adminListSchema = z.object({
   view: z.enum([
     "pings",
     "users",
     "reports",
     "signals",
+    "hubs",
     "verifications",
     "plans",
     "boosts",
+    "businesses",
     "learn",
+    "early_access",
+    "system_errors",
+    "staff",
     "audit",
   ]),
   page: z.number().int().min(0).max(100000),
   search: z.string().trim().max(100),
 });
+
 export const moderationSchema = z.object({
   id: z.string().uuid(),
   action: z.enum(["hide", "restore", "resolve_report"]),
   reason: z.string().trim().min(3).max(500),
 });
+
 export const verifySignalSchema = z.object({
   id: z.string().uuid(),
   status: z.enum(["verified", "rejected", "pending", "unverified"]),
 });
+
 export const reviewVerificationSchema = z.object({
   id: z.string().uuid(),
   status: z.enum(["verified", "rejected", "revoked", "pending"]),
   reviewerNote: z.string().trim().max(500).default(""),
   expiresAt: z.string().datetime().nullable().optional(),
 });
+
 export const upsertMembershipPlanSchema = z.object({
   slug: z.enum(["free", "plus", "pro", "business"]),
   name: z.string().trim().min(2).max(60),
@@ -45,12 +66,14 @@ export const upsertMembershipPlanSchema = z.object({
   perks: z.array(z.string().trim().max(180)).max(12).nullable().optional(),
   isActive: z.boolean(),
 });
+
 export const moderateBoostSchema = z.object({
   campaignId: z.string().uuid(),
   decision: z.enum(["paused", "rejected", "refunded"]),
   reason: z.string().trim().min(3).max(500),
   refundAmount: z.number().int().min(0).max(100000).default(0),
 });
+
 export const updateCourseScheduleSchema = z.object({
   requireLeapfrogCompletion: z.boolean(),
   releaseIntervalDays: z.number().int().min(7).max(180),
@@ -58,6 +81,7 @@ export const updateCourseScheduleSchema = z.object({
   minAssessmentScore: z.number().int().min(50).max(100),
   releaseOrder: z.array(z.string().trim().min(2).max(48)).min(1).max(20),
 });
+
 export const spotlightDecisionSchema = z.object({
   candidateId: z.string().uuid(),
   status: z.enum(["under_review", "shortlisted", "selected", "declined", "retracted"]),
@@ -66,6 +90,7 @@ export const spotlightDecisionSchema = z.object({
   weightedTotal: z.number().min(0).max(100).nullable().optional(),
   internalNotes: z.string().trim().max(2500).default(""),
 });
+
 export const spotlightPublishSchema = z.object({
   slug: z
     .string()
@@ -92,12 +117,42 @@ export const spotlightPublishSchema = z.object({
     .default("published"),
   correctionNote: z.string().trim().max(800).default(""),
 });
+
 export const economicReadinessSchema = z.object({
   days: z.number().int().min(7).max(90).default(30),
 });
+
+export const appointAdminSchema = z.object({
+  targetUserId: z.string().uuid(),
+  role: z.enum(APPOINTABLE_ADMIN_ROLES),
+  reason: z.string().trim().min(5).max(500),
+});
+
+export const revokeAdminSchema = z.object({
+  targetUserId: z.string().uuid(),
+  role: z.enum(APPOINTABLE_ADMIN_ROLES).nullable().optional(),
+  reason: z.string().trim().min(5).max(500),
+});
+
+export const setUserPermissionSchema = z.object({
+  targetUserId: z.string().uuid(),
+  permission: z.enum(ADMIN_PERMISSIONS),
+  effect: z.enum(["grant", "revoke", "clear"]),
+  reason: z.string().trim().min(5).max(500),
+});
+
 export function assertAdminRole(verified: boolean) {
   if (!verified) throw new Error("Access denied");
 }
+
+export function assertAdminPermission(verified: boolean, permission: AdminPermission) {
+  if (!verified) throw new Error(`Access denied: missing permission ${permission}`);
+}
+
+export function assertPlatformOwner(isOwner: boolean) {
+  if (!isOwner) throw new Error("Access denied: Platform Owner authority required");
+}
+
 export function assertEditorialRole(verified: boolean) {
   if (!verified) throw new Error("Spotlight editorial role required");
 }
