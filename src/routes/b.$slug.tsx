@@ -30,6 +30,7 @@ import {
   type EnquiryType,
 } from "@/lib/business";
 import { UniversalShareDialog } from "@/components/sharing/UniversalShareDialog";
+import { VerificationBadge } from "@/components/verification/VerificationBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -168,9 +169,12 @@ function BusinessStorefrontPage() {
                 {catLabel}
               </span>
               {business.verified_status === "verified" && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 text-primary px-2.5 py-0.5 text-xs font-bold">
-                  <CheckCircle2 className="size-3.5" /> Verified Business
-                </span>
+                <VerificationBadge
+                  businessVerified
+                  businessName={business.name}
+                  showLabel
+                  size="sm"
+                />
               )}
               {reputation.reviewCount > 0 && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-gold/15 text-gold px-2.5 py-0.5 text-xs font-bold">

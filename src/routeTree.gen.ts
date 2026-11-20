@@ -31,6 +31,7 @@ import { Route as TermsRouteImport } from './routes/terms'
 import { Route as WelcomeRouteImport } from './routes/welcome'
 import { Route as AuthenticatedAnalyticsRouteImport } from './routes/_authenticated/analytics'
 import { Route as AuthenticatedBalanceRouteImport } from './routes/_authenticated/balance'
+import { Route as AuthenticatedBoostsRouteImport } from './routes/_authenticated/boosts'
 import { Route as AuthenticatedBusinessRouteImport } from './routes/_authenticated/business'
 import { Route as AuthenticatedCreateRouteImport } from './routes/_authenticated/create'
 import { Route as AuthenticatedGriotRouteImport } from './routes/_authenticated/griot'
@@ -46,6 +47,7 @@ import { Route as SignalsSlugRouteImport } from './routes/signals.$slug'
 import { Route as SignalsChannelsRouteImport } from './routes/signals.channels'
 import { Route as SignalsCreateRouteImport } from './routes/signals.create'
 import { Route as SignalsOpportunitiesRouteImport } from './routes/signals.opportunities'
+import { Route as TagSlugRouteImport } from './routes/tag.$slug'
 import { Route as AuthenticatedEditIdRouteImport } from './routes/_authenticated/edit.$id'
 import { Route as ApiGriotAssistRouteImport } from './routes/api/griot/assist'
 import { Route as ApiV1HealthRouteImport } from './routes/api/v1/health'
@@ -165,6 +167,11 @@ const AuthenticatedBalanceRoute = AuthenticatedBalanceRouteImport.update({
   path: '/balance',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedBoostsRoute = AuthenticatedBoostsRouteImport.update({
+  id: '/boosts',
+  path: '/boosts',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedBusinessRoute = AuthenticatedBusinessRouteImport.update({
   id: '/business',
   path: '/business',
@@ -240,6 +247,11 @@ const SignalsOpportunitiesRoute = SignalsOpportunitiesRouteImport.update({
   path: '/opportunities',
   getParentRoute: () => SignalsRoute,
 } as any)
+const TagSlugRoute = TagSlugRouteImport.update({
+  id: '/tag/$slug',
+  path: '/tag/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedEditIdRoute = AuthenticatedEditIdRouteImport.update({
   id: '/edit/$id',
   path: '/edit/$id',
@@ -303,6 +315,7 @@ export interface FileRoutesByFullPath {
   '/welcome': typeof WelcomeRoute
   '/analytics': typeof AuthenticatedAnalyticsRoute
   '/balance': typeof AuthenticatedBalanceRoute
+  '/boosts': typeof AuthenticatedBoostsRoute
   '/business': typeof AuthenticatedBusinessRoute
   '/create': typeof AuthenticatedCreateRoute
   '/griot': typeof AuthenticatedGriotRoute
@@ -318,6 +331,7 @@ export interface FileRoutesByFullPath {
   '/signals/channels': typeof SignalsChannelsRoute
   '/signals/create': typeof SignalsCreateRoute
   '/signals/opportunities': typeof SignalsOpportunitiesRoute
+  '/tag/$slug': typeof TagSlugRoute
   '/edit/$id': typeof AuthenticatedEditIdRoute
   '/api/griot/assist': typeof ApiGriotAssistRoute
   '/api/v1/health': typeof ApiV1HealthRoute
@@ -349,6 +363,7 @@ export interface FileRoutesByTo {
   '/welcome': typeof WelcomeRoute
   '/analytics': typeof AuthenticatedAnalyticsRoute
   '/balance': typeof AuthenticatedBalanceRoute
+  '/boosts': typeof AuthenticatedBoostsRoute
   '/business': typeof AuthenticatedBusinessRoute
   '/create': typeof AuthenticatedCreateRoute
   '/griot': typeof AuthenticatedGriotRoute
@@ -364,6 +379,7 @@ export interface FileRoutesByTo {
   '/signals/channels': typeof SignalsChannelsRoute
   '/signals/create': typeof SignalsCreateRoute
   '/signals/opportunities': typeof SignalsOpportunitiesRoute
+  '/tag/$slug': typeof TagSlugRoute
   '/edit/$id': typeof AuthenticatedEditIdRoute
   '/api/griot/assist': typeof ApiGriotAssistRoute
   '/api/v1/health': typeof ApiV1HealthRoute
@@ -397,6 +413,7 @@ export interface FileRoutesById {
   '/welcome': typeof WelcomeRoute
   '/_authenticated/analytics': typeof AuthenticatedAnalyticsRoute
   '/_authenticated/balance': typeof AuthenticatedBalanceRoute
+  '/_authenticated/boosts': typeof AuthenticatedBoostsRoute
   '/_authenticated/business': typeof AuthenticatedBusinessRoute
   '/_authenticated/create': typeof AuthenticatedCreateRoute
   '/_authenticated/griot': typeof AuthenticatedGriotRoute
@@ -412,6 +429,7 @@ export interface FileRoutesById {
   '/signals/channels': typeof SignalsChannelsRoute
   '/signals/create': typeof SignalsCreateRoute
   '/signals/opportunities': typeof SignalsOpportunitiesRoute
+  '/tag/$slug': typeof TagSlugRoute
   '/_authenticated/edit/$id': typeof AuthenticatedEditIdRoute
   '/api/griot/assist': typeof ApiGriotAssistRoute
   '/api/v1/health': typeof ApiV1HealthRoute
@@ -445,6 +463,7 @@ export interface FileRouteTypes {
     | '/welcome'
     | '/analytics'
     | '/balance'
+    | '/boosts'
     | '/business'
     | '/create'
     | '/griot'
@@ -460,6 +479,7 @@ export interface FileRouteTypes {
     | '/signals/channels'
     | '/signals/create'
     | '/signals/opportunities'
+    | '/tag/$slug'
     | '/edit/$id'
     | '/api/griot/assist'
     | '/api/v1/health'
@@ -491,6 +511,7 @@ export interface FileRouteTypes {
     | '/welcome'
     | '/analytics'
     | '/balance'
+    | '/boosts'
     | '/business'
     | '/create'
     | '/griot'
@@ -506,6 +527,7 @@ export interface FileRouteTypes {
     | '/signals/channels'
     | '/signals/create'
     | '/signals/opportunities'
+    | '/tag/$slug'
     | '/edit/$id'
     | '/api/griot/assist'
     | '/api/v1/health'
@@ -538,6 +560,7 @@ export interface FileRouteTypes {
     | '/welcome'
     | '/_authenticated/analytics'
     | '/_authenticated/balance'
+    | '/_authenticated/boosts'
     | '/_authenticated/business'
     | '/_authenticated/create'
     | '/_authenticated/griot'
@@ -553,6 +576,7 @@ export interface FileRouteTypes {
     | '/signals/channels'
     | '/signals/create'
     | '/signals/opportunities'
+    | '/tag/$slug'
     | '/_authenticated/edit/$id'
     | '/api/griot/assist'
     | '/api/v1/health'
@@ -587,6 +611,7 @@ export interface RootRouteChildren {
   BSlugRoute: typeof BSlugRoute
   OauthAuthorizeRoute: typeof OauthAuthorizeRoute
   PIdRoute: typeof PIdRoute
+  TagSlugRoute: typeof TagSlugRoute
   ApiGriotAssistRoute: typeof ApiGriotAssistRoute
   ApiV1HealthRoute: typeof ApiV1HealthRoute
   ApiV1OpenapiDotjsonRoute: typeof ApiV1OpenapiDotjsonRoute
@@ -752,6 +777,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBalanceRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/boosts': {
+      id: '/_authenticated/boosts'
+      path: '/boosts'
+      fullPath: '/boosts'
+      preLoaderRoute: typeof AuthenticatedBoostsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/business': {
       id: '/_authenticated/business'
       path: '/business'
@@ -857,6 +889,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SignalsOpportunitiesRouteImport
       parentRoute: typeof SignalsRoute
     }
+    '/tag/$slug': {
+      id: '/tag/$slug'
+      path: '/tag/$slug'
+      fullPath: '/tag/$slug'
+      preLoaderRoute: typeof TagSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/edit/$id': {
       id: '/_authenticated/edit/$id'
       path: '/edit/$id'
@@ -919,6 +958,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAnalyticsRoute: typeof AuthenticatedAnalyticsRoute
   AuthenticatedBalanceRoute: typeof AuthenticatedBalanceRoute
+  AuthenticatedBoostsRoute: typeof AuthenticatedBoostsRoute
   AuthenticatedBusinessRoute: typeof AuthenticatedBusinessRoute
   AuthenticatedCreateRoute: typeof AuthenticatedCreateRoute
   AuthenticatedGriotRoute: typeof AuthenticatedGriotRoute
@@ -931,6 +971,7 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAnalyticsRoute: AuthenticatedAnalyticsRoute,
   AuthenticatedBalanceRoute: AuthenticatedBalanceRoute,
+  AuthenticatedBoostsRoute: AuthenticatedBoostsRoute,
   AuthenticatedBusinessRoute: AuthenticatedBusinessRoute,
   AuthenticatedCreateRoute: AuthenticatedCreateRoute,
   AuthenticatedGriotRoute: AuthenticatedGriotRoute,
@@ -996,6 +1037,7 @@ const rootRouteChildren: RootRouteChildren = {
   BSlugRoute: BSlugRoute,
   OauthAuthorizeRoute: OauthAuthorizeRoute,
   PIdRoute: PIdRoute,
+  TagSlugRoute: TagSlugRoute,
   ApiGriotAssistRoute: ApiGriotAssistRoute,
   ApiV1HealthRoute: ApiV1HealthRoute,
   ApiV1OpenapiDotjsonRoute: ApiV1OpenapiDotjsonRoute,

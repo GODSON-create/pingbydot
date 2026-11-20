@@ -22,6 +22,7 @@ import {
   Play,
   ChevronUp,
   ChevronDown,
+  Megaphone,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNowStrict } from "date-fns";
@@ -35,6 +36,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { FounderAvatar } from "@/components/ping/Avatar";
+import { VerificationBadge } from "@/components/verification/VerificationBadge";
+import { BoostContentDialog, PromotedBadge } from "@/components/boost/BoostContentDialog";
+import { activeBoostsMapQuery } from "@/lib/boosts";
 import {
   useViewMoment,
   useLikeMoment,
@@ -84,12 +88,14 @@ export function MomentViewerModal({
   const [repingModalOpen, setRepingModalOpen] = useState(false);
   const [highlightDialogOpen, setHighlightDialogOpen] = useState(false);
   const [activityDialogOpen, setActivityDialogOpen] = useState(false);
+  const [boostDialogOpen, setBoostDialogOpen] = useState(false);
   const [newHighlightTitle, setNewHighlightTitle] = useState("");
 
   const addHighlightItemMutation = useAddMomentToHighlight();
   const removeHighlightItemMutation = useRemoveMomentFromHighlight();
   const createHighlightMutation = useCreateHighlight();
   const { data: userHighlights = [] } = useQuery(userHighlightsQuery(user?.id ?? ""));
+  const { data: activeBoostsMap } = useQuery(activeBoostsMapQuery());
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const pointerDownAtRef = useRef<number>(0);
@@ -103,6 +109,7 @@ export function MomentViewerModal({
   const currentSequence = sequences[seqIdx];
   const currentMoment: Moment | undefined = currentSequence?.moments[momentIdx];
   const isOwner = Boolean(user?.id && currentMoment && user.id === currentMoment.author_id);
+  const activeBoost = currentMoment ? activeBoostsMap?.[`moment:${currentMoment.id}`] : undefined;
 
   const { data: activity } = useQuery(
     momentActivityQuery(currentMoment?.id, open && isOwner && activityDialogOpen),
@@ -128,12 +135,25 @@ export function MomentViewerModal({
   useEffect(() => {
     const vid = videoRef.current;
     if (!vid) return;
-    if (isPaused || repingModalOpen || highlightDialogOpen || activityDialogOpen) {
+    if (
+      isPaused ||
+      repingModalOpen ||
+      highlightDialogOpen ||
+      activityDialogOpen ||
+      boostDialogOpen
+    ) {
       vid.pause();
     } else {
       void vid.play().catch(() => {});
     }
-  }, [isPaused, repingModalOpen, highlightDialogOpen, activityDialogOpen, currentMoment?.id]);
+  }, [
+    isPaused,
+    repingModalOpen,
+    highlightDialogOpen,
+    activityDialogOpen,
+    boostDialogOpen,
+    currentMoment?.id,
+  ]);
 
   // Record view once per moment per session
   useEffect(() => {
@@ -183,7 +203,8 @@ export function MomentViewerModal({
       isPaused ||
       repingModalOpen ||
       highlightDialogOpen ||
-      activityDialogOpen
+      activityDialogOpen ||
+      boostDialogOpen
     ) {
       return;
     }
@@ -213,6 +234,7 @@ export function MomentViewerModal({
     repingModalOpen,
     highlightDialogOpen,
     activityDialogOpen,
+    boostDialogOpen,
     videoDurationSec,
     advanceNext,
   ]);
@@ -387,21 +409,25 @@ export function MomentViewerModal({
                 size="sm"
               />
               <div className="text-xs min-w-0">
-                <Link
-                  to="/@{$username}"
-                  params={{ username: currentSequence.author.username }}
-                  onClick={() => onOpenChange(false)}
-                  className="font-bold text-white hover:underline flex items-center gap-1 truncate"
-                >
-                  <span className="truncate">
-                    {currentSequence.author.display_name || currentSequence.author.username}
-                  </span>
-                  <span className="font-normal text-white/70 shrink-0">
-                    @{currentSequence.author.username}
-                  </span>
-                </Link>
+                <div className="flex items-center gap-1 min-w-0">
+                  <Link
+                    to="/@{$username}"
+                    params={{ username: currentSequence.author.username }}
+                    onClick={() => onOpenChange(false)}
+                    className="font-bold text-white hover:underline flex items-center gap-1 truncate"
+                  >
+                    <span className="truncate">
+                      {currentSequence.author.display_name || currentSequence.author.username}
+                    </span>
+                    <span className="font-normal text-white/70 shrink-0">
+                      @{currentSequence.author.username}
+                    </span>
+                  </Link>
+                  <VerificationBadge userId={currentMoment.author_id} size="xs" />
+                </div>
 
                 <div className="flex items-center gap-1.5 text-[10px] text-white/70">
+                  {activeBoost && <PromotedBadge campaignId={activeBoost.id} />}
                   {currentMoment.audience === "hub" ? (
                     <span className="inline-flex items-center gap-0.5 rounded bg-white/20 px-1.5 py-0.5 text-white">
                       <Users className="size-2.5" />
@@ -475,6 +501,12 @@ export function MomentViewerModal({
                         className="rounded-xl"
                       >
                         <Sparkles className="size-4 mr-2 text-[#c7f36b]" /> Add to Highlights
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => setBoostDialogOpen(true)}
+                        className="rounded-xl text-[#d8b66a]"
+                      >
+                        <Megaphone className="size-4 mr-2" /> Boost Moment with DOT
                       </DropdownMenuItem>
                       {highlightId && (
                         <DropdownMenuItem
@@ -949,6 +981,24 @@ export function MomentViewerModal({
           open={repingModalOpen}
           onOpenChange={setRepingModalOpen}
         />
+
+        {/* Boost Moment Dialog */}
+        {isOwner && (
+          <BoostContentDialog
+            open={boostDialogOpen}
+            onOpenChange={setBoostDialogOpen}
+            target={{
+              contentType: "moment",
+              contentId: currentMoment.id,
+              previewText:
+                currentMoment.caption ||
+                currentMoment.overlay_text ||
+                `Moment by @${currentSequence.author.username}`,
+              momentExpiresAt: currentMoment.expires_at,
+              momentAudience: currentMoment.audience,
+            }}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

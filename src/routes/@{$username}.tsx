@@ -90,6 +90,7 @@ import {
 import { MomentViewerModal } from "@/components/moments/MomentViewerModal";
 import { dotSummaryQuery, publicAccountTierQuery } from "@/lib/economy";
 import { formatProfessionalBadgeLabel, publicVerificationQuery } from "@/lib/verification";
+import { VerificationBadge } from "@/components/verification/VerificationBadge";
 import { followQuery, myHubsQuery } from "@/lib/hub-queries";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -626,6 +627,7 @@ function ProfileContent({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h1 className="font-display text-2xl font-extrabold sm:text-4xl">{name}</h1>
+                  <VerificationBadge userId={profile.id} badges={verificationBadges} size="md" />
                   {verificationBadge}
                 </div>
                 <p className="text-muted-foreground text-sm mt-0.5">

@@ -45,6 +45,7 @@ import { HUB_CATEGORIES, type Hub, type HubCategory } from "@/lib/hubs";
 import { blockedUsersQuery, userConversationsQuery } from "@/lib/messages";
 import { mutedUsersQuery } from "@/lib/mutes";
 import { extractTrendingTopics, rankFeedPings, type FeedMode } from "@/lib/feed-engine";
+import { CURATED_DOT_TAGS } from "@/lib/dot-tags";
 import { followedTopicsQuery, useToggleFollowTopic } from "@/lib/social";
 import { INTENT_FORMATS, parseStructuredPing, type Category } from "@/lib/validation";
 import { supabase } from "@/integrations/supabase/client";
@@ -499,45 +500,65 @@ function HomeFeedContent() {
             </Link>
           </div>
 
-          {trendingTopics.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5" aria-label="Topics to follow">
-              <span className="text-[11px] font-semibold text-muted-foreground mr-1">Topics:</span>
-              {trendingTopics.map((topic) => {
-                const isFollowingTopic = followedTopics.includes(topic.slug);
-                return (
-                  <button
-                    key={topic.slug}
-                    type="button"
-                    onClick={() => {
-                      if (!user) {
-                        toast.info("Sign in to follow topics and personalise your feed");
-                        return;
-                      }
-                      toggleFollowTopic.mutate(
-                        { topicSlug: topic.slug, currentlyFollowing: isFollowingTopic },
-                        {
-                          onSuccess: (nowFollowing) =>
-                            toast.success(
-                              nowFollowing
-                                ? `Following #${topic.slug}`
-                                : `Unfollowed #${topic.slug}`,
-                            ),
-                        },
-                      );
-                    }}
-                    className={cn(
-                      "rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors",
-                      isFollowingTopic
-                        ? "border-primary bg-primary/15 text-primary font-semibold"
-                        : "border-border/70 bg-card text-muted-foreground hover:border-border hover:text-foreground",
-                    )}
-                  >
-                    #{topic.slug} {isFollowingTopic ? "✓" : "+"}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          {(() => {
+            const mergedDotTags = Array.from(
+              new Set([
+                ...trendingTopics.map((t) => t.slug),
+                ...CURATED_DOT_TAGS.slice(0, 8).map((t) => t.slug),
+              ]),
+            ).slice(0, 8);
+            return (
+              <div className="flex flex-wrap items-center gap-1.5" aria-label="DOT Tags to explore">
+                <span className="text-[11px] font-semibold text-muted-foreground mr-1">
+                  DOT Tags:
+                </span>
+                {mergedDotTags.map((slug) => {
+                  const isFollowingTopic = followedTopics.includes(slug);
+                  return (
+                    <div
+                      key={slug}
+                      className={cn(
+                        "inline-flex items-center rounded-full border text-[11px] overflow-hidden transition-colors",
+                        isFollowingTopic
+                          ? "border-primary bg-primary/15 text-primary"
+                          : "border-border/70 bg-card text-foreground",
+                      )}
+                    >
+                      <Link
+                        to="/tag/$slug"
+                        params={{ slug }}
+                        className="px-2.5 py-0.5 font-semibold hover:bg-secondary/70"
+                      >
+                        .{slug}
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!user) {
+                            toast.info("Sign in to follow DOT Tags and personalise your feed");
+                            return;
+                          }
+                          toggleFollowTopic.mutate(
+                            { topicSlug: slug, currentlyFollowing: isFollowingTopic },
+                            {
+                              onSuccess: (nowFollowing) =>
+                                toast.success(
+                                  nowFollowing ? `Following .${slug}` : `Unfollowed .${slug}`,
+                                ),
+                            },
+                          );
+                        }}
+                        aria-label={isFollowingTopic ? `Unfollow .${slug}` : `Follow .${slug}`}
+                        className="border-l border-border/60 px-2 py-0.5 font-bold text-muted-foreground hover:text-primary transition-colors"
+                      >
+                        {isFollowingTopic ? "✓" : "+"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
 
           {/* Intent Category Filter Bar */}
           <nav

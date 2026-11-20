@@ -82,6 +82,7 @@ export interface AccountVerificationRecord {
   reviewer_id: string | null;
   reviewer_note: string;
   verified_at: string | null;
+  expires_at?: string | null;
   reviewed_at: string | null;
   created_at: string;
   updated_at: string;
@@ -91,6 +92,50 @@ export interface PublicVerificationBadges {
   identity_verified: boolean;
   professional_verified: boolean;
   professional_pathway: ProfessionalVerificationPathway | null;
+  identity_verified_at?: string | null;
+  identity_expires_at?: string | null;
+  professional_verified_at?: string | null;
+  professional_expires_at?: string | null;
+  organization_name?: string | null;
+}
+
+export function isVerificationExpired(expiresAt?: string | null, nowMs = Date.now()): boolean {
+  if (!expiresAt) return false;
+  const ts = new Date(expiresAt).getTime();
+  return Number.isFinite(ts) && ts <= nowMs;
+}
+
+const RESERVED_IMPERSONATION_PATTERNS = [
+  /^(ping|dot)[_.-]?(official|support|staff|admin|team|security|verify)$/i,
+  /^official[_.-]?(ping|dot)/i,
+  /^verified[_.-]/i,
+  /\bverified\s+(account|user|profile|business|badge)\b/i,
+  /[✓✔☑✅]/,
+];
+
+/**
+ * Anti-impersonation check preventing misleading official/verified handles or checkmark glyphs.
+ */
+export function detectImpersonationRisk(
+  username?: string | null,
+  displayName?: string | null,
+): { risky: boolean; reason?: string } {
+  const u = (username ?? "").trim();
+  const d = (displayName ?? "").trim();
+  if (/[✓✔☑✅]/.test(d)) {
+    return {
+      risky: true,
+      reason: "Display names cannot include verification checkmark symbols.",
+    };
+  }
+  if (RESERVED_IMPERSONATION_PATTERNS.some((re) => re.test(u) || re.test(d))) {
+    return {
+      risky: true,
+      reason:
+        "This username or display name resembles an official Ping system or verification label.",
+    };
+  }
+  return { risky: false };
 }
 
 export interface MyVerificationsState {
@@ -218,10 +263,31 @@ export function publicVerificationQuery(userId?: string) {
         ? (rawPathway as ProfessionalVerificationPathway)
         : null;
 
+      const identityExpiresAt =
+        typeof raw["identity_expires_at"] === "string" ? raw["identity_expires_at"] : null;
+      const profExpiresAt =
+        typeof raw["professional_expires_at"] === "string" ? raw["professional_expires_at"] : null;
+      const identityValid =
+        raw["identity_verified"] === true && !isVerificationExpired(identityExpiresAt);
+      const profValid =
+        raw["professional_verified"] === true &&
+        pathway !== null &&
+        !isVerificationExpired(profExpiresAt);
+
       return {
-        identity_verified: raw["identity_verified"] === true,
-        professional_verified: raw["professional_verified"] === true && pathway !== null,
-        professional_pathway: raw["professional_verified"] === true ? pathway : null,
+        identity_verified: identityValid,
+        professional_verified: profValid,
+        professional_pathway: profValid ? pathway : null,
+        identity_verified_at:
+          typeof raw["identity_verified_at"] === "string" ? raw["identity_verified_at"] : null,
+        identity_expires_at: identityExpiresAt,
+        professional_verified_at:
+          typeof raw["professional_verified_at"] === "string"
+            ? raw["professional_verified_at"]
+            : null,
+        professional_expires_at: profExpiresAt,
+        organization_name:
+          typeof raw["organization_name"] === "string" ? raw["organization_name"] : null,
       };
     },
   });

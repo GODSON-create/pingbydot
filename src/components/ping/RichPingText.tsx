@@ -29,14 +29,27 @@ export function RichPingText({
             </Link>
           );
         }
+        if (tok.type === "dot_tag") {
+          return (
+            <Link
+              key={idx}
+              to="/tag/$slug"
+              params={{ slug: tok.tag }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative z-20 inline-flex items-baseline font-semibold text-primary hover:underline"
+            >
+              {tok.value}
+            </Link>
+          );
+        }
         if (tok.type === "hashtag") {
           return (
             <Link
               key={idx}
-              to="/explore"
-              search={{ q: `#${tok.tag}` }}
+              to="/tag/$slug"
+              params={{ slug: tok.tag }}
               onClick={(e) => e.stopPropagation()}
-              className="relative z-20 font-semibold text-primary/90 hover:underline"
+              className="relative z-20 font-semibold text-primary/85 hover:underline"
             >
               {tok.value}
             </Link>

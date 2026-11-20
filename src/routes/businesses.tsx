@@ -27,6 +27,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { QueryErrorCard } from "@/components/QueryErrorCard";
+import { VerificationBadge } from "@/components/verification/VerificationBadge";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/businesses")({
@@ -234,9 +235,12 @@ function BusinessesDirectoryPage() {
                       {catLabel}
                     </span>
                     {biz.verified_status === "verified" && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 text-primary px-2 py-0.5 text-[10px] font-bold">
-                        <CheckCircle2 className="size-3" /> Verified
-                      </span>
+                      <VerificationBadge
+                        businessVerified
+                        businessName={biz.name}
+                        showLabel
+                        size="xs"
+                      />
                     )}
                   </div>
                   <h2 className="mt-2.5 font-display text-lg font-bold text-foreground">

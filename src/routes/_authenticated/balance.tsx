@@ -11,6 +11,7 @@ import {
   Flame,
   History,
   Info,
+  Megaphone,
   Receipt,
   ShieldCheck,
   Sparkles,
@@ -119,7 +120,13 @@ function BalancePage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button asChild variant="outline" size="sm" className="rounded-full">
+            <Link to="/boosts">
+              <Megaphone className="size-4 text-gold" />
+              Boosts
+            </Link>
+          </Button>
           <Button asChild variant="outline" size="sm" className="rounded-full">
             <Link to="/analytics">
               <TrendingUp className="size-4" />
@@ -129,7 +136,7 @@ function BalancePage() {
           <Button asChild variant="hero" size="sm" className="rounded-full">
             <Link to="/upgrades">
               <Crown className="size-4" />
-              Upgrades
+              Memberships
             </Link>
           </Button>
         </div>

@@ -1,6 +1,13 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { formatDistanceToNowStrict } from "date-fns";
-import { ArrowUpRight, Bookmark, MessageCircle, MessageSquare, Repeat2 } from "lucide-react";
+import {
+  ArrowUpRight,
+  Bookmark,
+  Megaphone,
+  MessageCircle,
+  MessageSquare,
+  Repeat2,
+} from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { mySavedPingsQuery, replyCount, useToggleSavePing, type Ping } from "@/lib/pings";
@@ -8,6 +15,9 @@ import { CATEGORIES, parseStructuredPing } from "@/lib/validation";
 import { useAuth } from "@/lib/auth";
 import { LEAD_ELIGIBLE_PING_CATEGORIES, recordNetworkEvent } from "@/lib/economic-events";
 import { useGetOrCreateDirectConversation } from "@/lib/messages";
+import { activeBoostsMapQuery, recordObservedBoostEvent } from "@/lib/boosts";
+import { BoostContentDialog, PromotedBadge } from "@/components/boost/BoostContentDialog";
+import { VerificationBadge } from "@/components/verification/VerificationBadge";
 import { FounderAvatar } from "./Avatar";
 import { LikeButton, PingMenu, ShareMenu } from "./PingActions";
 import { PingPollCard } from "./PingPollCard";
@@ -104,16 +114,19 @@ export function PingCard({
   const navigate = useNavigate();
   const startChatMutation = useGetOrCreateDirectConversation();
   const { data: savedSet } = useQuery(mySavedPingsQuery(user?.id));
+  const { data: activeBoostsMap } = useQuery(activeBoostsMapQuery());
   const toggleSaveMutation = useToggleSavePing(user?.id);
 
   const name = ping.author?.display_name || ping.author?.username || "Founder";
   const [actions, setActions] = useState(false);
+  const [boostOpen, setBoostOpen] = useState(false);
   const [failedMedia, setFailedMedia] = useState<Set<string>>(() => new Set());
   const press = useLongPress(() => setActions(true));
 
   const structured = parseStructuredPing(ping);
   const isSaved = Boolean(savedSet?.has(ping.id));
   const isAuthor = Boolean(user?.id && ping.user_id === user.id);
+  const activeBoost = activeBoostsMap?.[`ping:${ping.id}`];
 
   const mediaList: string[] = [];
   if (ping.image_url) mediaList.push(ping.image_url);
@@ -190,26 +203,33 @@ export function PingCard({
       {/* Card Header: Author Identity, Timestamp & Intent Category */}
       <header className="relative z-10 flex items-start justify-between gap-3">
         {ping.author ? (
-          <Link
-            to="/@{$username}"
-            params={{ username: ping.author.username }}
-            className="flex min-w-0 flex-1 items-center gap-3"
-          >
-            <FounderAvatar name={name} src={ping.author.avatar_url} />
-            <span className="min-w-0">
-              <span className="flex items-center gap-1.5">
-                <span className="truncate font-semibold text-foreground hover:underline">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <Link
+              to="/@{$username}"
+              params={{ username: ping.author.username }}
+              className="shrink-0"
+            >
+              <FounderAvatar name={name} src={ping.author.avatar_url} />
+            </Link>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <Link
+                  to="/@{$username}"
+                  params={{ username: ping.author.username }}
+                  className="truncate font-semibold text-foreground hover:underline"
+                >
                   {name}
-                </span>
-              </span>
+                </Link>
+                <VerificationBadge userId={ping.user_id} size="xs" />
+              </div>
               <span className="block truncate text-xs text-muted-foreground">
                 @{ping.author.username} ·{" "}
                 <time dateTime={ping.created_at}>
                   {formatDistanceToNowStrict(new Date(ping.created_at))} ago
                 </time>
               </span>
-            </span>
-          </Link>
+            </div>
+          </div>
         ) : (
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <FounderAvatar name={name} src={null} />
@@ -217,7 +237,8 @@ export function PingCard({
           </div>
         )}
 
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+          {activeBoost && <PromotedBadge campaignId={activeBoost.id} />}
           {hubBadge && (
             <Link
               to="/hubs/$slug"
@@ -245,6 +266,11 @@ export function PingCard({
           <Link
             to="/p/$id"
             params={{ id: ping.id }}
+            onClick={() => {
+              if (activeBoost && !isAuthor) {
+                void recordObservedBoostEvent(activeBoost.id, "click");
+              }
+            }}
             className="block whitespace-pre-line break-words text-[15px] leading-relaxed text-foreground/95 after:absolute after:inset-0 after:content-[''] focus-visible:ring-2 focus-visible:ring-ring"
           >
             <RichPingText
@@ -408,7 +434,20 @@ export function PingCard({
         </div>
 
         <div className="flex items-center gap-1.5">
-          {!isAuthor && (
+          {isAuthor ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setBoostOpen(true);
+              }}
+              aria-label="Boost this Ping with DOT"
+              className="inline-flex items-center gap-1.5 rounded-full border border-gold/40 bg-gold/10 px-3 py-1 text-xs font-semibold text-gold transition-colors hover:bg-gold hover:text-obsidian active:scale-95"
+            >
+              <Megaphone className="size-3.5" />
+              <span>Boost</span>
+            </button>
+          ) : (
             <button
               type="button"
               onClick={handleRespondConnect}
@@ -422,6 +461,18 @@ export function PingCard({
           <PingMenu ping={ping} open={actions} onOpenChange={setActions} />
         </div>
       </footer>
+
+      {isAuthor && (
+        <BoostContentDialog
+          open={boostOpen}
+          onOpenChange={setBoostOpen}
+          target={{
+            contentType: "ping",
+            contentId: ping.id,
+            previewText: structured.headline || structured.body.slice(0, 140),
+          }}
+        />
+      )}
     </article>
   );
 }

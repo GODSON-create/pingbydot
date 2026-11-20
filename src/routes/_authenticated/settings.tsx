@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { detectImpersonationRisk } from "@/lib/verification";
 import { profileSchema, type ProfileVisibility } from "@/lib/validation";
 import {
   buildAccountDataExport,
@@ -322,6 +323,15 @@ function Settings() {
       const x: Record<string, string> = {};
       r.error.issues.forEach((i) => (x[String(i.path[0])] ??= i.message));
       return setErrs(x);
+    }
+    const impersonationCheck = detectImpersonationRisk(r.data.username, r.data.display_name);
+    if (impersonationCheck.risky) {
+      const msg =
+        impersonationCheck.reason ??
+        "That username or display name is protected against impersonation.";
+      setErrs({ display_name: msg, username: msg });
+      toast.error(msg);
+      return;
     }
     setErrs({});
     if (!user) {

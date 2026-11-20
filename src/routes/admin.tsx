@@ -17,8 +17,10 @@ import {
   checkAdminAccess,
   getAdminOverview,
   getAdminList,
+  moderateBoostCampaign,
   moderatePing,
   reviewVerification,
+  upsertMembershipPlan,
   verifySignal,
 } from "@/lib/admin.functions";
 import { ADMIN_PAGE_SIZE, moderationSchema } from "@/lib/admin-policy";
@@ -96,12 +98,24 @@ function AdminDashboard() {
   const moderateFn = useServerFn(moderatePing);
   const verifySignalFn = useServerFn(verifySignal);
   const reviewVerificationFn = useServerFn(reviewVerification);
+  const upsertPlanFn = useServerFn(upsertMembershipPlan);
+  const moderateBoostFn = useServerFn(moderateBoostCampaign);
   const [view, setView] = useState<
-    "pings" | "users" | "reports" | "signals" | "verifications" | "audit"
+    "pings" | "users" | "reports" | "signals" | "verifications" | "plans" | "boosts" | "audit"
   >("pings");
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState("");
   const [draftSearch, setDraftSearch] = useState("");
+  const [planDrafts, setPlanDrafts] = useState<
+    Record<string, { dotPrice: number; durationDays: number; isActive: boolean }>
+  >({});
+  const [boostMod, setBoostMod] = useState<{
+    campaignId: string;
+    decision: "paused" | "rejected" | "refunded";
+    maxRefund: number;
+  } | null>(null);
+  const [boostReason, setBoostReason] = useState("");
+  const [boostRefundAmt, setBoostRefundAmt] = useState(0);
   const [pending, setPending] = useState<{
     id: string;
     action: "hide" | "restore" | "resolve_report";
@@ -147,6 +161,7 @@ function AdminDashboard() {
       id: string;
       status: "verified" | "rejected" | "revoked" | "pending";
       reviewerNote?: string;
+      expiresAt?: string | null;
     }) => reviewVerificationFn({ data: { reviewerNote: "", ...data } }),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["admin-list"] });
@@ -154,6 +169,42 @@ function AdminDashboard() {
       toast.success("Account verification status updated.");
     },
     onError: (e: any) => toast.error(e?.message || "Couldn't update account verification status."),
+  });
+  const upsertPlanMutation = useMutation({
+    mutationFn: (data: {
+      slug: "free" | "plus" | "pro" | "business";
+      name: string;
+      badge: string;
+      tagline: string;
+      dotPrice: number;
+      durationDays: number;
+      benefits: Record<string, string | number | boolean | null>;
+      perks: string[];
+      isActive: boolean;
+    }) => upsertPlanFn({ data }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["admin-list"] });
+      await qc.invalidateQueries({ queryKey: ["membership-plans"] });
+      toast.success("Membership plan configuration updated.");
+    },
+    onError: (e: any) => toast.error(e?.message || "Couldn't update membership plan."),
+  });
+  const moderateBoostMutation = useMutation({
+    mutationFn: (data: {
+      campaignId: string;
+      decision: "paused" | "rejected" | "refunded";
+      reason: string;
+      refundAmount: number;
+    }) => moderateBoostFn({ data }),
+    onSuccess: async () => {
+      setBoostMod(null);
+      setBoostReason("");
+      setBoostRefundAmt(0);
+      await qc.invalidateQueries({ queryKey: ["admin-list"] });
+      await qc.invalidateQueries({ queryKey: ["active-boosts-map"] });
+      toast.success("Boost campaign moderation recorded.");
+    },
+    onError: (e: any) => toast.error(e?.message || "Couldn't moderate boost campaign."),
   });
   const metric = (key: string) => {
     const data = overview.data;
@@ -224,7 +275,18 @@ function AdminDashboard() {
         </p>
       </section>
       <div className="flex flex-wrap gap-2" role="tablist" aria-label="Administration views">
-        {(["pings", "users", "reports", "signals", "verifications", "audit"] as const).map((v) => (
+        {(
+          [
+            "pings",
+            "users",
+            "reports",
+            "signals",
+            "verifications",
+            "plans",
+            "boosts",
+            "audit",
+          ] as const
+        ).map((v) => (
           <Button
             key={v}
             role="tab"
@@ -245,9 +307,13 @@ function AdminDashboard() {
                   ? "Signal verification"
                   : v === "verifications"
                     ? "Account verifications"
-                    : v === "users"
-                      ? "Users"
-                      : "Pings"}
+                    : v === "plans"
+                      ? "Membership plans"
+                      : v === "boosts"
+                        ? "Boost campaigns"
+                        : v === "users"
+                          ? "Users"
+                          : "Pings"}
           </Button>
         ))}
       </div>
@@ -467,15 +533,32 @@ function AdminDashboard() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {vr.status !== "verified" && (
-                    <Button
-                      size="sm"
-                      disabled={reviewVerificationMutation.isPending}
-                      onClick={() =>
-                        reviewVerificationMutation.mutate({ id: vr.id, status: "verified" })
-                      }
-                    >
-                      Approve Verified
-                    </Button>
+                    <>
+                      <Button
+                        size="sm"
+                        disabled={reviewVerificationMutation.isPending}
+                        onClick={() =>
+                          reviewVerificationMutation.mutate({ id: vr.id, status: "verified" })
+                        }
+                      >
+                        Approve Verified
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={reviewVerificationMutation.isPending}
+                        onClick={() =>
+                          reviewVerificationMutation.mutate({
+                            id: vr.id,
+                            status: "verified",
+                            expiresAt: new Date(Date.now() + 365 * 24 * 3_600_000).toISOString(),
+                            reviewerNote: "Verified with 12-month renewal window",
+                          })
+                        }
+                      >
+                        Approve (1-yr)
+                      </Button>
+                    </>
                   )}
                   {vr.status !== "rejected" && vr.status !== "revoked" && (
                     <Button
@@ -496,9 +579,210 @@ function AdminDashboard() {
               </article>
             ))
           ))}
+        {list.data?.view === "plans" &&
+          (list.data.unmigrated ? (
+            <p className="py-8 text-sm text-muted-foreground">
+              Configurable membership_plans table is not yet present on the connected database
+              (migration 0033 pending).
+            </p>
+          ) : (
+            list.data.rows.map((plan) => {
+              const draft = planDrafts[plan.slug] ?? {
+                dotPrice: plan.dot_price,
+                durationDays: plan.duration_days,
+                isActive: plan.is_active,
+              };
+              return (
+                <article
+                  key={plan.slug}
+                  className="flex flex-wrap items-center justify-between gap-4 py-5"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold">{plan.name}</h3>
+                      <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-mono">
+                        {plan.slug}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {draft.isActive ? "Active" : "Hidden"}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">{plan.tagline}</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="w-24">
+                      <Label className="text-[10px]">DOT Price</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100000}
+                        value={draft.dotPrice}
+                        onChange={(e) =>
+                          setPlanDrafts((prev) => ({
+                            ...prev,
+                            [plan.slug]: {
+                              ...draft,
+                              dotPrice: Math.max(0, Number(e.target.value) || 0),
+                            },
+                          }))
+                        }
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                    <div className="w-24">
+                      <Label className="text-[10px]">Days</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={365}
+                        value={draft.durationDays}
+                        onChange={(e) =>
+                          setPlanDrafts((prev) => ({
+                            ...prev,
+                            [plan.slug]: {
+                              ...draft,
+                              durationDays: Math.max(0, Number(e.target.value) || 0),
+                            },
+                          }))
+                        }
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="mt-4 h-8 text-xs"
+                      onClick={() =>
+                        setPlanDrafts((prev) => ({
+                          ...prev,
+                          [plan.slug]: { ...draft, isActive: !draft.isActive },
+                        }))
+                      }
+                    >
+                      {draft.isActive ? "Disable" : "Enable"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="mt-4 h-8 text-xs"
+                      disabled={upsertPlanMutation.isPending}
+                      onClick={() =>
+                        upsertPlanMutation.mutate({
+                          slug: plan.slug,
+                          name: plan.name,
+                          badge: plan.badge,
+                          tagline: plan.tagline,
+                          dotPrice: draft.dotPrice,
+                          durationDays: draft.durationDays,
+                          benefits: plan.benefits,
+                          perks: plan.perks,
+                          isActive: draft.isActive,
+                        })
+                      }
+                    >
+                      Save Plan
+                    </Button>
+                  </div>
+                </article>
+              );
+            })
+          ))}
+        {list.data?.view === "boosts" &&
+          (list.data.unmigrated ? (
+            <p className="py-8 text-sm text-muted-foreground">
+              boost_campaigns table is not yet present on the connected database (migration 0033
+              pending).
+            </p>
+          ) : (
+            list.data.rows.map((bc) => (
+              <article
+                key={bc.id}
+                className="flex flex-wrap items-center justify-between gap-3 py-5"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-semibold capitalize">
+                      {bc.content_type} Boost · {bc.dot_cost} DOT
+                    </h3>
+                    <span className="rounded-full bg-gold/15 text-gold border border-gold/30 px-2 py-0.5 text-xs font-bold capitalize">
+                      {bc.status}
+                    </span>
+                    <span className="font-mono text-[11px] text-muted-foreground">
+                      {bc.receipt_number}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground tabular-nums">
+                    {bc.duration_hours}h · {bc.audience} · Reach {bc.reach_count} · Impressions{" "}
+                    {bc.impressions_count} · Clicks {bc.clicks_count} · Engagements{" "}
+                    {bc.engagement_count}
+                  </p>
+                  {bc.moderation_note && (
+                    <p className="mt-1 text-xs text-foreground/85">{bc.moderation_note}</p>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {bc.status === "active" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setBoostReason("");
+                        setBoostRefundAmt(0);
+                        setBoostMod({
+                          campaignId: bc.id,
+                          decision: "paused",
+                          maxRefund: bc.dot_cost,
+                        });
+                      }}
+                    >
+                      Pause
+                    </Button>
+                  )}
+                  {bc.status !== "rejected" && bc.status !== "refunded" && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setBoostReason("");
+                          setBoostRefundAmt(0);
+                          setBoostMod({
+                            campaignId: bc.id,
+                            decision: "rejected",
+                            maxRefund: bc.dot_cost,
+                          });
+                        }}
+                      >
+                        Reject
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => {
+                          setBoostReason("");
+                          setBoostRefundAmt(bc.dot_cost);
+                          setBoostMod({
+                            campaignId: bc.id,
+                            decision: "refunded",
+                            maxRefund: bc.dot_cost,
+                          });
+                        }}
+                      >
+                        Audited Refund
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </article>
+            ))
+          ))}
         {list.data?.rows.length === 0 &&
           !(
-            (list.data.view === "signals" || list.data.view === "verifications") &&
+            (list.data.view === "signals" ||
+              list.data.view === "verifications" ||
+              list.data.view === "plans" ||
+              list.data.view === "boosts") &&
             list.data.unmigrated
           ) && <p className="py-10 text-muted-foreground">No matching entries.</p>}
       </div>
@@ -569,6 +853,81 @@ function AdminDashboard() {
               }}
             >
               {mutation.isPending ? "Saving…" : "Confirm"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={boostMod !== null}
+        onOpenChange={(open) => {
+          if (!open && !moderateBoostMutation.isPending) setBoostMod(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="capitalize">Confirm Boost {boostMod?.decision}</DialogTitle>
+            <DialogDescription>
+              Every boost moderation decision or audited DOT refund is logged permanently in the
+              audit ledger.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="boost-mod-reason">Moderation / Refund Reason</Label>
+              <Input
+                id="boost-mod-reason"
+                value={boostReason}
+                maxLength={500}
+                onChange={(e) => setBoostReason(e.target.value)}
+                placeholder="State the policy or billing justification…"
+                className="mt-1"
+              />
+            </div>
+            {boostMod?.decision === "refunded" && (
+              <div>
+                <Label htmlFor="boost-refund-amount">
+                  Refund DOT Credits (max {boostMod.maxRefund} DOT)
+                </Label>
+                <Input
+                  id="boost-refund-amount"
+                  type="number"
+                  min={0}
+                  max={boostMod.maxRefund}
+                  value={boostRefundAmt}
+                  onChange={(e) =>
+                    setBoostRefundAmt(
+                      Math.max(0, Math.min(boostMod.maxRefund, Number(e.target.value) || 0)),
+                    )
+                  }
+                  className="mt-1"
+                />
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-2 mt-2">
+            <Button
+              variant="outline"
+              disabled={moderateBoostMutation.isPending}
+              onClick={() => setBoostMod(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={
+                moderateBoostMutation.isPending || boostReason.trim().length < 3 || !boostMod
+              }
+              onClick={() => {
+                if (!boostMod) return;
+                moderateBoostMutation.mutate({
+                  campaignId: boostMod.campaignId,
+                  decision: boostMod.decision,
+                  reason: boostReason.trim(),
+                  refundAmount: boostMod.decision === "refunded" ? boostRefundAmt : 0,
+                });
+              }}
+            >
+              {moderateBoostMutation.isPending ? "Recording…" : "Confirm Decision"}
             </Button>
           </div>
         </DialogContent>

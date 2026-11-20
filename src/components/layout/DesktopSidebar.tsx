@@ -19,6 +19,7 @@ import {
   BarChart3,
   Coins,
   Crown,
+  Megaphone,
   Sparkles,
   Code2,
   ArrowLeft,
@@ -468,7 +469,12 @@ export function DesktopSidebar() {
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild className="rounded-xl">
                   <Link to="/upgrades" onClick={closeOverlays} className="flex items-center gap-2">
-                    <Crown className="size-4 text-gold" /> Account Upgrades
+                    <Crown className="size-4 text-gold" /> DOT Memberships
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="rounded-xl">
+                  <Link to="/boosts" onClick={closeOverlays} className="flex items-center gap-2">
+                    <Megaphone className="size-4 text-gold" /> Boost Campaigns
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild className="rounded-xl">

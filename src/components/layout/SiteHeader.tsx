@@ -15,6 +15,7 @@ import {
   BarChart3,
   Coins,
   Crown,
+  Megaphone,
   Heart,
   MessageCircle,
   UserPlus,
@@ -380,7 +381,12 @@ export function SiteHeader() {
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild className="rounded-xl">
                         <Link to="/upgrades" onClick={closeOverlays}>
-                          <Crown className="text-gold" /> Account Upgrades
+                          <Crown className="text-gold" /> DOT Memberships
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild className="rounded-xl">
+                        <Link to="/boosts" onClick={closeOverlays}>
+                          <Megaphone className="text-gold" /> Boost Campaigns
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />

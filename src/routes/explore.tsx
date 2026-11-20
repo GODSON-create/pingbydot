@@ -7,6 +7,7 @@ import {
   ArrowRight,
   Building2,
   Compass,
+  Eye,
   Flame,
   MessageSquare,
   Search,
@@ -21,6 +22,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PingCard } from "@/components/ping/PingCard";
 import { FounderAvatar } from "@/components/ping/Avatar";
+import { VerificationBadge } from "@/components/verification/VerificationBadge";
+import { CascadingProfilePanel } from "@/components/profile/CascadingProfilePanel";
 import { MomentsTray } from "@/components/moments/MomentsTray";
 import { DiscoverableMomentsFeed } from "@/components/moments/DiscoverableMomentsFeed";
 import { AriseCallout } from "@/components/AriseCallout";
@@ -31,6 +34,7 @@ import { useAuth } from "@/lib/auth";
 import { blockedUsersQuery, useGetOrCreateDirectConversation } from "@/lib/messages";
 import { mutedUsersQuery } from "@/lib/mutes";
 import { extractTrendingTopics } from "@/lib/feed-engine";
+import { CURATED_DOT_TAGS } from "@/lib/dot-tags";
 import { followedTopicsQuery, useToggleFollowTopic } from "@/lib/social";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -87,11 +91,13 @@ function PeopleDiscoveryCard({
   currentUserId,
   followed,
   onFollowChanged,
+  onInspect,
 }: {
   person: Profile;
   currentUserId?: string | undefined;
   followed: boolean;
   onFollowChanged: () => void;
+  onInspect?: (person: Profile) => void;
 }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -135,20 +141,36 @@ function PeopleDiscoveryCard({
   return (
     <article className="surface-card flex flex-col justify-between rounded-3xl p-5 transition-all hover:border-primary/50">
       <div>
-        <div className="flex items-start justify-between gap-3">
-          <Link
-            to="/@{$username}"
-            params={{ username: person.username }}
-            className="flex min-w-0 items-center gap-3"
-          >
-            <FounderAvatar name={name} src={person.avatar_url} size="md" />
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-3">
+            <Link to="/@{$username}" params={{ username: person.username }} className="shrink-0">
+              <FounderAvatar name={name} src={person.avatar_url} size="md" />
+            </Link>
             <div className="min-w-0">
-              <p className="truncate font-display text-sm font-bold text-foreground hover:underline">
-                {name}
-              </p>
+              <div className="flex items-center gap-1">
+                <Link
+                  to="/@{$username}"
+                  params={{ username: person.username }}
+                  className="truncate font-display text-sm font-bold text-foreground hover:underline"
+                >
+                  {name}
+                </Link>
+                <VerificationBadge userId={person.id} size="xs" />
+              </div>
               <p className="truncate text-xs text-muted-foreground">@{person.username}</p>
             </div>
-          </Link>
+          </div>
+          {onInspect && (
+            <button
+              type="button"
+              onClick={() => onInspect(person)}
+              aria-label={`Inspect ${name}`}
+              title="Quick profile preview"
+              className="shrink-0 rounded-full p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+            >
+              <Eye className="size-3.5" />
+            </button>
+          )}
         </div>
         {person.bio ? (
           <p className="mt-3 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
@@ -200,6 +222,8 @@ function PeopleDiscoveryCard({
 
 function Explore() {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const startChat = useGetOrCreateDirectConversation();
   const { c, filter: filterParam, q, page } = Route.useSearch();
   const initialExplorePings = Route.useLoaderData();
   const cat = c ?? null;
@@ -221,6 +245,7 @@ function Explore() {
   );
   const [sortBy, setSortBy] = useState<"relevant" | "recent" | "popular">("relevant");
   const [searchQuery, setSearchQuery] = useState(q ?? "");
+  const [inspectedPerson, setInspectedPerson] = useState<Profile | null>(null);
   const deferredQuery = useDeferredValue(searchQuery.trim().toLowerCase());
 
   const { data: mutedUsers = [] } = useQuery(mutedUsersQuery(user?.id));
@@ -295,7 +320,7 @@ function Explore() {
         const headline = (meta.headline ?? "").toLowerCase();
         const needs = meta.needs.join(" ").toLowerCase();
         const offers = meta.offers.join(" ").toLowerCase();
-        const cleanQuery = deferredQuery.replace(/^#/, "");
+        const cleanQuery = deferredQuery.replace(/^[#.]/, "");
         return (
           text.includes(deferredQuery) ||
           text.includes(cleanQuery) ||
@@ -455,56 +480,64 @@ function Explore() {
         </div>
       </div>
 
-      {/* Trending Topics & Hashtag Follow Chips */}
-      {trendingTopics.length > 0 && (
-        <div className="mt-3 flex flex-wrap items-center gap-1.5" aria-label="Trending topics">
-          <span className="text-[11px] font-semibold text-muted-foreground mr-1">
-            Trending topics:
-          </span>
-          {trendingTopics.map((topic) => {
-            const followed = followedTopics.includes(topic.slug);
-            return (
-              <div
-                key={topic.slug}
-                className="inline-flex items-center rounded-full border border-border/70 bg-card text-[11px] overflow-hidden"
-              >
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery(`#${topic.slug}`)}
-                  className="px-2.5 py-1 font-medium text-foreground hover:bg-secondary"
+      {/* Trending DOT Tags & Legacy Hashtag-Compatible Discovery Chips */}
+      {(() => {
+        const mergedTagSlugs = Array.from(
+          new Set([
+            ...trendingTopics.map((t) => t.slug),
+            ...CURATED_DOT_TAGS.slice(0, 10).map((t) => t.slug),
+          ]),
+        ).slice(0, 10);
+        return (
+          <div className="mt-3 flex flex-wrap items-center gap-1.5" aria-label="Trending DOT Tags">
+            <span className="text-[11px] font-semibold text-muted-foreground mr-1">
+              Trending DOT Tags:
+            </span>
+            {mergedTagSlugs.map((slug) => {
+              const followed = followedTopics.includes(slug);
+              return (
+                <div
+                  key={slug}
+                  className="inline-flex items-center rounded-full border border-border/70 bg-card text-[11px] overflow-hidden"
                 >
-                  #{topic.slug}
-                </button>
-                {user && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      toggleFollowTopic.mutate(
-                        { topicSlug: topic.slug, currentlyFollowing: followed },
-                        {
-                          onSuccess: (now) =>
-                            toast.success(
-                              now ? `Following #${topic.slug}` : `Unfollowed #${topic.slug}`,
-                            ),
-                        },
-                      )
-                    }
-                    className={cn(
-                      "px-2 py-1 border-l border-border/60 font-semibold transition-colors",
-                      followed
-                        ? "bg-primary/15 text-primary"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                    aria-label={followed ? `Unfollow ${topic.slug}` : `Follow ${topic.slug}`}
+                  <Link
+                    to="/tag/$slug"
+                    params={{ slug }}
+                    className="px-2.5 py-1 font-semibold text-primary hover:bg-secondary"
                   >
-                    {followed ? "✓" : "+"}
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+                    .{slug}
+                  </Link>
+                  {user && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        toggleFollowTopic.mutate(
+                          { topicSlug: slug, currentlyFollowing: followed },
+                          {
+                            onSuccess: (now) =>
+                              toast.success(now ? `Following .${slug}` : `Unfollowed .${slug}`),
+                          },
+                        )
+                      }
+                      className={cn(
+                        "px-2 py-1 border-l border-border/60 font-semibold transition-colors",
+                        followed
+                          ? "bg-primary/15 text-primary"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                      aria-label={
+                        followed ? `Remove .${slug} from your feed` : `Add .${slug} to your feed`
+                      }
+                    >
+                      {followed ? "✓" : "+"}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* C. Moments Discovery Rail (Always accessible on All & Moments) */}
       {(activeFilter === "all" || activeFilter === "moments") && (
@@ -596,6 +629,7 @@ function Explore() {
                     currentUserId={user?.id}
                     followed={followedIds.has(person.id)}
                     onFollowChanged={() => void refetchFollowed()}
+                    onInspect={setInspectedPerson}
                   />
                 ))}
               </div>
@@ -846,6 +880,37 @@ function Explore() {
       <div className="mt-14">
         <AriseCallout />
       </div>
+
+      {/* Reusable Cascading Profile Inspection Drawer (Section 6 & 10) */}
+      {inspectedPerson && (
+        <div
+          className="fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-[2px]"
+          onClick={() => setInspectedPerson(null)}
+        >
+          <div
+            className="h-full w-full max-w-sm bg-card shadow-lift border-l border-border"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <CascadingProfilePanel
+              profile={inspectedPerson}
+              onClose={() => setInspectedPerson(null)}
+              onStartChat={async (targetUserId) => {
+                if (!user) {
+                  navigate({ to: "/login", search: { next: "/explore" } });
+                  return;
+                }
+                try {
+                  const convId = await startChat.mutateAsync(targetUserId);
+                  setInspectedPerson(null);
+                  navigate({ to: "/messages", search: { conversationId: convId } });
+                } catch {
+                  toast.error("Couldn't start conversation.");
+                }
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

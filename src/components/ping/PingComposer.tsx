@@ -52,6 +52,8 @@ import {
   MusicAttachmentPicker,
   type SelectedMusicDraft,
 } from "@/components/music/MusicAttachmentPicker";
+import { DotTagAutocomplete, DotTagSuggestionBar } from "@/components/tags/DotTagBar";
+import { detectActiveDotTagQuery, extractDotTags } from "@/lib/dot-tags";
 
 export type PingDraft = {
   category: Category;
@@ -74,6 +76,7 @@ export type PingDraft = {
   hub_id?: string | null;
   hub_intent?: HubIntent | null;
   scheduled_for?: string | null;
+  dot_tags?: string[];
   poll?: {
     question: string;
     options: string[];
@@ -145,6 +148,8 @@ export function PingComposer({
   const [failedMediaFile, setFailedMediaFile] = useState<File | null>(null);
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const mediaFileInputRef = useRef<HTMLInputElement | null>(null);
+  const contentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [contentCursor, setContentCursor] = useState(0);
   const [showCoordinationDetails, setShowCoordinationDetails] = useState(
     Boolean(
       (initial?.needs && initial.needs.length > 0) ||
@@ -425,12 +430,35 @@ export function PingComposer({
       hub_id: d.hub_id || null,
       hub_intent: d.hub_id ? d.hub_intent || null : null,
       scheduled_for: showSchedule && scheduledFor ? new Date(scheduledFor).toISOString() : null,
+      dot_tags: extractDotTags(finalContent),
       poll: pollPayload,
       music: musicDraft,
     });
   };
 
   const left = PING_MAX - d.content.length;
+  const activeDotTagMatch = detectActiveDotTagQuery(d.content, contentCursor);
+
+  const insertDotTagAtCursor = (displayTag: string) => {
+    if (activeDotTagMatch) {
+      const before = d.content.slice(0, activeDotTagMatch.startIndex);
+      const after = d.content.slice(activeDotTagMatch.endIndex);
+      const nextText = `${before}${displayTag} ${after}`;
+      setD({ ...d, content: nextText });
+      const nextPos = before.length + displayTag.length + 1;
+      setContentCursor(nextPos);
+      requestAnimationFrame(() => {
+        contentTextareaRef.current?.focus();
+        contentTextareaRef.current?.setSelectionRange(nextPos, nextPos);
+      });
+      return;
+    }
+    const sep = d.content.length > 0 && !/\s$/.test(d.content) ? " " : "";
+    const nextText = `${d.content}${sep}${displayTag} `;
+    setD({ ...d, content: nextText });
+    setContentCursor(nextText.length);
+    requestAnimationFrame(() => contentTextareaRef.current?.focus());
+  };
 
   return (
     <form onSubmit={submit} className="surface-card rounded-3xl p-5 sm:p-7" noValidate>
@@ -501,15 +529,27 @@ export function PingComposer({
           Description
         </Label>
         <Textarea
+          ref={contentTextareaRef}
           id="content"
           value={d.content}
-          onChange={(e) => setD({ ...d, content: e.target.value })}
+          onChange={(e) => {
+            setD({ ...d, content: e.target.value });
+            setContentCursor(e.target.selectionStart ?? e.target.value.length);
+          }}
+          onClick={(e) => setContentCursor(e.currentTarget.selectionStart ?? d.content.length)}
+          onKeyUp={(e) => setContentCursor(e.currentTarget.selectionStart ?? d.content.length)}
           rows={6}
-          placeholder="Share what you're building, what you need, or how others can collaborate with you…"
+          placeholder="Share what you're building, what you need, or add DOT Tags like .startups .africa .technology…"
           className="mt-1.5 resize-y rounded-2xl text-base leading-relaxed"
           aria-invalid={!!errors.content}
           aria-describedby="content-help"
         />
+        {activeDotTagMatch && (
+          <DotTagAutocomplete
+            query={activeDotTagMatch.query}
+            onSelect={(tag) => insertDotTagAtCursor(tag.display_tag)}
+          />
+        )}
         <div id="content-help" className="mt-1.5 flex justify-between text-xs">
           <span className="text-destructive">{errors.content}</span>
           <span
@@ -518,6 +558,7 @@ export function PingComposer({
             {left}
           </span>
         </div>
+        <DotTagSuggestionBar content={d.content} onInsertTag={insertDotTagAtCursor} />
       </div>
 
       {/* 4. Progressive Disclosure: Needs, Offers, Media & Desired Outcome */}

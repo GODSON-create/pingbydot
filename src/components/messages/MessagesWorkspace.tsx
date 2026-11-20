@@ -1,22 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import {
-  Building2,
-  ExternalLink,
-  MessageSquare,
-  Plus,
-  Radio,
-  Search,
-  Shield,
-  Sparkles,
-  X,
-} from "lucide-react";
+import { Building2, MessageSquare, Plus, Radio, Search, Sparkles, X } from "lucide-react";
 import { useDeferredValue, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { QueryErrorCard } from "@/components/QueryErrorCard";
 import { ConversationList } from "@/components/messages/ConversationList";
 import { DirectMessageChat } from "@/components/messages/DirectMessageChat";
 import { NewGroupChatDialog } from "@/components/messages/NewGroupChatDialog";
+import { CascadingProfilePanel } from "@/components/profile/CascadingProfilePanel";
 import { FounderAvatar } from "@/components/ping/Avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,6 +30,7 @@ import {
   useGetOrCreateDirectConversation,
   useInboxRealtime,
   useRemoveGroupMember,
+  useUpdateConversationPrefs,
   userConversationsQuery,
 } from "@/lib/messages";
 import type { Profile } from "@/lib/pings";
@@ -290,6 +282,7 @@ export function MessagesWorkspace({
     ),
   );
   const removeGroupMember = useRemoveGroupMember(activeConversation?.id ?? "");
+  const updateConvPrefs = useUpdateConversationPrefs(user?.id);
 
   const otherUser = activeConversation?.other_member;
 
@@ -644,70 +637,42 @@ export function MessagesWorkspace({
           activeConversation &&
           activeConversation.type !== "group" &&
           otherUser && (
-            <aside
-              aria-label="Participant profile details"
-              data-testid="chat-peer-profile-drawer"
-              className="fixed inset-0 z-50 lg:static lg:z-auto flex flex-col w-full lg:w-72 shrink-0 h-full bg-card lg:bg-card/60 lg:rounded-3xl border border-border/70 p-5 overflow-y-auto shadow-lift lg:shadow-none"
-            >
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                  Participant
-                </span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="size-7 rounded-full"
-                  onClick={closeOverlays}
-                  aria-label="Close participant profile"
-                >
-                  <X className="size-4" />
-                </Button>
-              </div>
-              <div className="flex flex-col items-center text-center pb-5 border-b border-border/50">
-                <FounderAvatar
-                  name={otherUser.display_name || otherUser.username}
-                  src={otherUser.avatar_url}
-                  size="xl"
-                />
-                <h4 className="mt-3 font-display font-bold text-base text-foreground">
-                  {otherUser.display_name || otherUser.username}
-                </h4>
-                <p className="text-xs text-muted-foreground font-mono">@{otherUser.username}</p>
-
-                {otherUser.bio && (
-                  <p className="text-xs text-foreground/80 mt-3 line-clamp-3 leading-relaxed">
-                    {otherUser.bio}
-                  </p>
-                )}
-
-                <Button
-                  asChild
-                  size="sm"
-                  variant="outline"
-                  className="rounded-full mt-4 text-xs w-full"
-                >
-                  <Link
-                    to="/@{$username}"
-                    params={{ username: otherUser.username }}
-                    onClick={closeOverlays}
-                  >
-                    <ExternalLink className="size-3.5 mr-1.5" /> View Profile
-                  </Link>
-                </Button>
-              </div>
-
-              <div className="mt-5 space-y-4 text-xs">
-                <div className="flex items-center gap-2.5 text-muted-foreground">
-                  <Shield className="size-4 text-primary shrink-0" />
-                  <span>Direct messages are restricted to conversation participants.</span>
-                </div>
-                <div className="flex items-center gap-2.5 text-muted-foreground">
-                  <Sparkles className="size-4 text-primary shrink-0" />
-                  <span>Real-time presence and read states are synchronized.</span>
-                </div>
-              </div>
-            </aside>
+            <div data-testid="chat-peer-profile-drawer" className="contents">
+              <CascadingProfilePanel
+                profile={otherUser}
+                messages={messages}
+                isChatMuted={Boolean(activeConversation.my_membership?.is_muted)}
+                isChatArchived={Boolean(activeConversation.my_membership?.is_archived)}
+                onToggleChatMute={() => {
+                  const nextMuted = !activeConversation.my_membership?.is_muted;
+                  updateConvPrefs.mutate(
+                    { conversationId: activeConversation.id, isMuted: nextMuted },
+                    {
+                      onSuccess: () =>
+                        toast.success(nextMuted ? "Conversation muted" : "Conversation unmuted"),
+                    },
+                  );
+                }}
+                onToggleChatArchive={() => {
+                  const nextArchived = !activeConversation.my_membership?.is_archived;
+                  updateConvPrefs.mutate(
+                    { conversationId: activeConversation.id, isArchived: nextArchived },
+                    {
+                      onSuccess: () =>
+                        toast.success(
+                          nextArchived ? "Conversation archived" : "Conversation unarchived",
+                        ),
+                    },
+                  );
+                }}
+                onClose={closeOverlays}
+                onBlocked={() => {
+                  clearedByUserRef.current = true;
+                  setActiveConversationId(undefined);
+                  navigate({ to: basePath, search: {} as any });
+                }}
+              />
+            </div>
           )}
       </div>
 

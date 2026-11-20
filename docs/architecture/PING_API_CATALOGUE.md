@@ -29,10 +29,12 @@
 | `readPublicComments` | `src/lib/public-comments.functions.ts` | Public (publishable client) | Paginated root comments & nested replies for a public Ping |
 | `checkAdminAccess` | `src/lib/admin.functions.ts` | Authenticated (verified `user_roles`) | Verifies whether current user holds an active admin role |
 | `getAdminOverview` | `src/lib/admin.functions.ts` | Admin only | Platform totals (accounts, 30d active creators, Pings, hidden Pings, likes, open reports) |
-| `getAdminList` | `src/lib/admin.functions.ts` | Admin only | Paginated moderation & management lists (`pings`, `users`, `reports`, `signals`, `verifications`, `audit`) |
+| `getAdminList` | `src/lib/admin.functions.ts` | Admin only | Paginated moderation & management lists (`pings`, `users`, `reports`, `signals`, `verifications`, `plans`, `boosts`, `audit`) |
 | `moderatePing` | `src/lib/admin.functions.ts` | Admin only | Atomic hide/restore Ping or resolve report with mandatory audit trail reason |
 | `verifySignal` | `src/lib/admin.functions.ts` | Admin only | Approve/reject institutional Signal verification status |
-| `reviewVerification` | `src/lib/admin.functions.ts` | Admin only (anti-self-approval) | Approve/reject/revoke optional identity or professional verification request |
+| `reviewVerification` | `src/lib/admin.functions.ts` | Admin only (anti-self-approval) | Approve/reject/revoke optional identity or professional verification request (with optional expiry via `v2`) |
+| `upsertMembershipPlan` | `src/lib/admin.functions.ts` | Admin only | Update configurable DOT membership plan pricing, duration, and active state |
+| `moderateBoostCampaign` | `src/lib/admin.functions.ts` | Admin only | Pause, reject, or issue audited DOT refunds on boost campaigns |
 
 ---
 
@@ -68,6 +70,10 @@
 | `get_oauth_app_public_info(...)` / `create_oauth_authorization_code(...)` | `0032` | `authenticated` | Safe OAuth app metadata lookup & single-use PKCE (`S256`) authorization code issuance (rejects private-message scopes) |
 | `verify_api_key_hash(...)` | `0032` | `service_role` ONLY | Server-only SHA-256 API key lookup and `last_used_at` update for Business Messaging API |
 | `check_server_rate_limit(...)` | `0032` | `authenticated` | Atomic sliding-window server-side rate limiting complementing client `PING SHIELD` |
+| `review_verification_request_v2(...)` | `0033` | `authenticated` (admin) | Admin verification review with optional expiry timestamp and anti-self-approval check |
+| `subscribe_with_dots(...)` / `cancel_my_dot_subscription(...)` / `admin_upsert_membership_plan(...)` | `0033` | `authenticated` / admin | Idempotent server-verified DOT membership debit, entitlement activation, cancellation, receipts & admin pricing config |
+| `create_boost_campaign(...)` / `update_my_boost_status(...)` / `record_boost_event(...)` / `admin_moderate_boost_campaign(...)` | `0033` | `authenticated` / admin | Idempotent DOT Ping/Moment boosting w/ Moment lifetime validation, observed telemetry & audited admin refunds |
+| `admin_moderate_dot_tag(...)` | `0033` | `authenticated` (admin) | Admin moderation & featuring of native `.dotTags` |
 
 ---
 

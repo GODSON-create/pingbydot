@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Profile } from "@/lib/pings";
+import { validateDotTag } from "@/lib/dot-tags";
 
 export type PingReactionKey = "like" | "fire" | "insightful" | "celebrate" | "support";
 
@@ -44,11 +45,13 @@ export interface PingReactionSummary {
 export type RichTextToken =
   | { type: "text"; value: string }
   | { type: "mention"; value: string; username: string }
+  | { type: "dot_tag"; value: string; tag: string }
   | { type: "hashtag"; value: string; tag: string };
 
 const HASHTAG_RE = /(?:^|[\s(])#([a-zA-Z0-9_]{2,40})\b/g;
 const MENTION_RE = /(?:^|[\s(])@([a-zA-Z0-9_]{2,32})\b/g;
-const RICH_TOKEN_RE = /(@[a-zA-Z0-9_]{2,32}|#[a-zA-Z0-9_]{2,40})/g;
+const RICH_TOKEN_SCAN_RE =
+  /(https?:\/\/[^\s]+)|(@[a-zA-Z0-9_]{2,32})|(#[a-zA-Z0-9_]{2,40})|((?:^|[\s(])\.[a-zA-Z][a-zA-Z0-9_]{1,31})(?=$|[\s),!?;:])/g;
 
 export function extractHashtags(text: string): string[] {
   const found = new Set<string>();
@@ -72,17 +75,44 @@ export function extractMentions(text: string): string[] {
 
 export function tokenizeRichText(text: string): RichTextToken[] {
   if (!text) return [];
-  const parts = text.split(RICH_TOKEN_RE);
   const tokens: RichTextToken[] = [];
-  for (const part of parts) {
-    if (!part) continue;
-    if (part.startsWith("@") && /^@[a-zA-Z0-9_]{2,32}$/.test(part)) {
-      tokens.push({ type: "mention", value: part, username: part.slice(1).toLowerCase() });
-    } else if (part.startsWith("#") && /^#[a-zA-Z0-9_]{2,40}$/.test(part)) {
-      tokens.push({ type: "hashtag", value: part, tag: part.slice(1).toLowerCase() });
-    } else {
-      tokens.push({ type: "text", value: part });
+  const re = new RegExp(RICH_TOKEN_SCAN_RE.source, "g");
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = re.exec(text)) !== null) {
+    const start = match.index;
+    const full = match[0];
+    if (start > lastIndex) {
+      tokens.push({ type: "text", value: text.slice(lastIndex, start) });
     }
+
+    if (match[1]) {
+      // Preserve URLs verbatim so `.com` / `.app` never become DOT Tags
+      tokens.push({ type: "text", value: full });
+    } else if (match[2]) {
+      tokens.push({ type: "mention", value: full, username: full.slice(1).toLowerCase() });
+    } else if (match[3]) {
+      tokens.push({ type: "hashtag", value: full, tag: full.slice(1).toLowerCase() });
+    } else if (match[4]) {
+      const dotPos = full.indexOf(".");
+      const leading = dotPos > 0 ? full.slice(0, dotPos) : "";
+      const rawDotTag = full.slice(dotPos);
+      const check = validateDotTag(rawDotTag);
+      if (leading) {
+        tokens.push({ type: "text", value: leading });
+      }
+      if (check.valid && check.slug) {
+        tokens.push({ type: "dot_tag", value: rawDotTag, tag: check.slug });
+      } else {
+        tokens.push({ type: "text", value: rawDotTag });
+      }
+    }
+    lastIndex = start + full.length;
+  }
+
+  if (lastIndex < text.length) {
+    tokens.push({ type: "text", value: text.slice(lastIndex) });
   }
   return tokens;
 }

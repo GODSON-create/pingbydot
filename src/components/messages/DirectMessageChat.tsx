@@ -9,12 +9,15 @@ import {
   Bookmark,
   Check,
   CheckCheck,
+  ChevronDown,
+  Copy,
   Flag,
   Forward,
   Loader2,
   MoreVertical,
   Pencil,
   Pin,
+  PinOff,
   Reply,
   RotateCcw,
   Search,
@@ -27,8 +30,17 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { FounderAvatar } from "@/components/ping/Avatar";
+import { VerificationBadge } from "@/components/verification/VerificationBadge";
+import { MessageEmojiPicker, recordRecentEmoji } from "@/components/messages/MessageEmojiPicker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import {
   Dialog,
   DialogContent,
@@ -81,9 +93,16 @@ import {
   validateMediaUpload,
 } from "@/lib/shield";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { format, isSameDay, isToday, isYesterday } from "date-fns";
 
 const QUICK_MESSAGE_EMOJIS = ["❤️", "👍", "🔥", "😂", "🙌"] as const;
+
+function formatChatDateSeparator(iso: string): string {
+  const d = new Date(iso);
+  if (isToday(d)) return "Today";
+  if (isYesterday(d)) return "Yesterday";
+  return format(d, "EEE, MMM d, yyyy");
+}
 
 interface DirectMessageChatProps {
   conversation: Conversation;
@@ -117,6 +136,44 @@ export function DirectMessageChat({
   const [replyingTo, setReplyingTo] = useState<PrivateMessage | null>(null);
   const [editingMsg, setEditingMsg] = useState<PrivateMessage | null>(null);
   const [forwardingMsg, setForwardingMsg] = useState<PrivateMessage | null>(null);
+  const [pinnedPanelOpen, setPinnedPanelOpen] = useState(false);
+  const [mobileActionMsg, setMobileActionMsg] = useState<PrivateMessage | null>(null);
+  const [swipeState, setSwipeState] = useState<{ id: string; dx: number } | null>(null);
+  const touchOriginRef = useRef<{
+    id: string;
+    x: number;
+    y: number;
+    timer: ReturnType<typeof setTimeout> | null;
+  } | null>(null);
+
+  const initialUnreadCountRef = useRef<number>(conversation.unread_count ?? 0);
+  useEffect(() => {
+    initialUnreadCountRef.current = conversation.unread_count ?? 0;
+  }, [conversation.id, conversation.unread_count]);
+
+  const handleCopyMessage = async (text: string) => {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Message copied");
+    } catch {
+      toast.error("Couldn't copy message");
+    }
+  };
+
+  const handleReactMessage = (messageId: string, emoji: string) => {
+    recordRecentEmoji(emoji);
+    reactMessageMutation.mutate({ messageId, emoji });
+  };
+
+  const scrollToMessage = (messageId: string) => {
+    if (typeof document === "undefined") return;
+    const el = document.getElementById(`dm-msg-${messageId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      setPinnedPanelOpen(false);
+    }
+  };
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const lastMarkedRef = useRef<string>("");
@@ -391,41 +448,87 @@ export function DirectMessageChat({
               </div>
             </button>
           ) : otherUser ? (
-            <Link
-              to="/@{$username}"
-              params={{ username: otherUser.username }}
-              className="flex items-center gap-2.5 group min-w-0"
-            >
-              <div className="relative shrink-0">
-                <FounderAvatar
-                  name={otherUser.display_name || otherUser.username}
-                  src={otherUser.avatar_url}
-                  size="sm"
-                />
-                {otherOnline && (
-                  <span
-                    className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full bg-emerald-500 ring-2 ring-card"
-                    title="Active now"
+            onTogglePeerProfile ? (
+              <button
+                type="button"
+                onClick={onTogglePeerProfile}
+                data-testid="chat-header-profile-trigger"
+                className="flex items-center gap-2.5 group min-w-0 text-left rounded-2xl px-1 py-0.5 hover:bg-secondary/60 transition-colors"
+                title={`Inspect ${otherUser.display_name || otherUser.username}'s profile`}
+              >
+                <div className="relative shrink-0">
+                  <FounderAvatar
+                    name={otherUser.display_name || otherUser.username}
+                    src={otherUser.avatar_url}
+                    size="sm"
                   />
-                )}
-              </div>
-              <div className="min-w-0">
-                <h3 className="font-display font-bold text-sm text-foreground group-hover:text-primary transition-colors truncate">
-                  {otherUser.display_name || otherUser.username}
-                </h3>
-                <p className="text-[11px] text-muted-foreground font-mono truncate">
-                  {otherTyping ? (
-                    <span className="text-primary font-sans font-semibold">typing…</span>
-                  ) : otherOnline ? (
-                    <span className="text-emerald-600 dark:text-emerald-400 font-sans font-medium">
-                      Active now · @{otherUser.username}
-                    </span>
-                  ) : (
-                    `@${otherUser.username}`
+                  {otherOnline && (
+                    <span
+                      className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full bg-emerald-500 ring-2 ring-card"
+                      title="Active now"
+                    />
                   )}
-                </p>
-              </div>
-            </Link>
+                </div>
+                <div className="min-w-0">
+                  <span className="flex items-center gap-1 min-w-0">
+                    <h3 className="font-display font-bold text-sm text-foreground group-hover:text-primary transition-colors truncate">
+                      {otherUser.display_name || otherUser.username}
+                    </h3>
+                    <VerificationBadge userId={otherUser.id} size="xs" />
+                  </span>
+                  <p className="text-[11px] text-muted-foreground font-mono truncate">
+                    {otherTyping ? (
+                      <span className="text-primary font-sans font-semibold">typing…</span>
+                    ) : otherOnline ? (
+                      <span className="text-emerald-600 dark:text-emerald-400 font-sans font-medium">
+                        Active now · @{otherUser.username}
+                      </span>
+                    ) : (
+                      `@${otherUser.username}`
+                    )}
+                  </p>
+                </div>
+              </button>
+            ) : (
+              <Link
+                to="/@{$username}"
+                params={{ username: otherUser.username }}
+                className="flex items-center gap-2.5 group min-w-0"
+              >
+                <div className="relative shrink-0">
+                  <FounderAvatar
+                    name={otherUser.display_name || otherUser.username}
+                    src={otherUser.avatar_url}
+                    size="sm"
+                  />
+                  {otherOnline && (
+                    <span
+                      className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full bg-emerald-500 ring-2 ring-card"
+                      title="Active now"
+                    />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <span className="flex items-center gap-1 min-w-0">
+                    <h3 className="font-display font-bold text-sm text-foreground group-hover:text-primary transition-colors truncate">
+                      {otherUser.display_name || otherUser.username}
+                    </h3>
+                    <VerificationBadge userId={otherUser.id} size="xs" />
+                  </span>
+                  <p className="text-[11px] text-muted-foreground font-mono truncate">
+                    {otherTyping ? (
+                      <span className="text-primary font-sans font-semibold">typing…</span>
+                    ) : otherOnline ? (
+                      <span className="text-emerald-600 dark:text-emerald-400 font-sans font-medium">
+                        Active now · @{otherUser.username}
+                      </span>
+                    ) : (
+                      `@${otherUser.username}`
+                    )}
+                  </p>
+                </div>
+              </Link>
+            )
           ) : (
             <div className="flex items-center gap-2.5">
               <div className="size-9 rounded-full bg-muted flex items-center justify-center font-bold text-sm">
@@ -596,19 +699,61 @@ export function DirectMessageChat({
         </div>
       )}
 
-      {/* PINNED MESSAGES BANNER */}
+      {/* PINNED MESSAGES BANNER & EXPANDABLE PANEL */}
       {pinnedMessages.length > 0 && (
-        <div className="px-4 py-2 border-b border-border/50 bg-primary/5 flex items-center justify-between gap-2 text-xs">
-          <div className="flex items-center gap-2 min-w-0">
-            <Pin className="size-3.5 text-primary shrink-0" />
-            <span className="truncate font-medium text-foreground">
-              Pinned: {pinnedMessages[pinnedMessages.length - 1]?.content || "Attachment"}
+        <div className="border-b border-border/50 bg-primary/5">
+          <button
+            type="button"
+            onClick={() => setPinnedPanelOpen((v) => !v)}
+            data-testid="pinned-messages-toggle"
+            className="w-full px-4 py-2 flex items-center justify-between gap-2 text-xs hover:bg-primary/10 transition-colors"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <Pin className="size-3.5 text-primary shrink-0" />
+              <span className="truncate font-medium text-foreground">
+                Pinned: {pinnedMessages[pinnedMessages.length - 1]?.content || "Attachment"}
+              </span>
+            </div>
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary shrink-0">
+              {pinnedMessages.length} pinned
+              <ChevronDown
+                className={cn("size-3 transition-transform", pinnedPanelOpen && "rotate-180")}
+              />
             </span>
-          </div>
-          {pinnedMessages.length > 1 && (
-            <span className="text-[10px] text-muted-foreground shrink-0">
-              +{pinnedMessages.length - 1} more
-            </span>
+          </button>
+
+          {pinnedPanelOpen && (
+            <div
+              data-testid="pinned-messages-panel"
+              className="px-4 pb-2.5 pt-1 space-y-1.5 max-h-40 overflow-y-auto border-t border-border/40"
+            >
+              {pinnedMessages.map((pm) => (
+                <div
+                  key={`pin-${pm.id}`}
+                  className="flex items-center justify-between gap-2 rounded-xl bg-card/80 border border-border/60 px-3 py-1.5 text-xs"
+                >
+                  <button
+                    type="button"
+                    onClick={() => scrollToMessage(pm.id)}
+                    className="min-w-0 flex-1 text-left truncate text-foreground hover:text-primary"
+                  >
+                    {pm.content || "Attachment"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      pinMessageMutation.mutate(pm.id, {
+                        onSuccess: () => toast.success("Message unpinned"),
+                      })
+                    }
+                    className="text-[10px] font-semibold text-muted-foreground hover:text-destructive inline-flex items-center gap-1 shrink-0"
+                    aria-label="Unpin message"
+                  >
+                    <PinOff className="size-3" /> Unpin
+                  </button>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}
@@ -642,7 +787,16 @@ export function DirectMessageChat({
             </p>
           </div>
         ) : (
-          visibleMessages.map((msg) => {
+          visibleMessages.map((msg, idx) => {
+            const prevMsg = idx > 0 ? visibleMessages[idx - 1] : null;
+            const showDateSep =
+              !prevMsg || !isSameDay(new Date(prevMsg.created_at), new Date(msg.created_at));
+            const unreadThresholdIdx =
+              !searchQuery && initialUnreadCountRef.current > 0
+                ? Math.max(0, visibleMessages.length - initialUnreadCountRef.current)
+                : -1;
+            const showUnreadSep = idx === unreadThresholdIdx && msg.sender_id !== user?.id;
+
             const isMe = msg.sender_id === user?.id;
             const msgReactions = reactionsMap[msg.id] ?? [];
             const isSaved = savedMessages.has(msg.id);
@@ -654,196 +808,401 @@ export function DirectMessageChat({
               reactionTally.set(r.emoji, curr);
             }
 
+            const swipeDx = swipeState?.id === msg.id ? swipeState.dx : 0;
+
             return (
-              <div
-                key={msg.id}
-                className={cn("group flex flex-col max-w-[84%] sm:max-w-[72%]", {
-                  "ml-auto items-end": isMe,
-                  "mr-auto items-start": !isMe,
-                })}
-              >
-                {isGroup && !isMe && msg.sender && (
-                  <span className="mb-0.5 px-1 text-[10px] font-semibold text-muted-foreground">
-                    {msg.sender.display_name || `@${msg.sender.username}`}
-                  </span>
-                )}
-
-                <div className="flex items-end gap-1.5">
+              <div key={msg.id} id={`dm-msg-${msg.id}`} className="space-y-2">
+                {showDateSep && (
                   <div
-                    className={cn("rounded-2xl px-4 py-2.5 shadow-sm text-sm break-words", {
-                      "bg-primary text-primary-foreground rounded-br-sm": isMe,
-                      "bg-secondary text-foreground border border-border/60 rounded-bl-sm": !isMe,
-                    })}
+                    data-testid="chat-date-separator"
+                    className="flex items-center justify-center py-1.5"
                   >
-                    {msg.is_pinned && (
-                      <div className="mb-1 flex items-center gap-1 text-[10px] opacity-80">
-                        <Pin className="size-2.5" /> Pinned
-                      </div>
-                    )}
-
-                    {msg.media_url && (
-                      <div className="mb-2 rounded-xl overflow-hidden">
-                        <ResolvedChatMedia mediaUrl={msg.media_url} mediaType={msg.media_type} />
-                      </div>
-                    )}
-
-                    {(() => {
-                      const sticker = !msg.media_url ? parseStickerMessage(msg.content) : null;
-                      if (sticker) {
-                        return <ChatStickerBubble sticker={sticker} />;
-                      }
-                      return msg.content ? (
-                        <p className="whitespace-pre-wrap">{msg.content}</p>
-                      ) : null;
-                    })()}
-                  </div>
-                </div>
-
-                {/* Message reactions pills */}
-                {reactionTally.size > 0 && (
-                  <div className="mt-1 flex flex-wrap gap-1 px-1">
-                    {Array.from(reactionTally.entries()).map(([emoji, info]) => (
-                      <button
-                        key={emoji}
-                        type="button"
-                        onClick={() => reactMessageMutation.mutate({ messageId: msg.id, emoji })}
-                        className={cn(
-                          "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px]",
-                          info.mine
-                            ? "border-primary/50 bg-primary/15 text-foreground font-semibold"
-                            : "border-border/70 bg-card text-muted-foreground",
-                        )}
-                      >
-                        <span>{emoji}</span>
-                        <span>{info.count}</span>
-                      </button>
-                    ))}
+                    <span className="rounded-full bg-secondary/80 border border-border/60 px-3 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                      {formatChatDateSeparator(msg.created_at)}
+                    </span>
                   </div>
                 )}
 
-                {/* Quick message actions + timestamp */}
-                <div className="flex flex-wrap items-center gap-1.5 mt-1 px-1 text-[10px] text-muted-foreground font-mono">
-                  <span>{format(new Date(msg.created_at), "h:mm a")}</span>
-                  {msg.edited_at && <span className="italic font-sans">edited</span>}
-                  {isMe && (
-                    <span title={msg.status === "read" ? "Read" : "Sent"}>
-                      {msg.status === "sending" ? (
-                        <Loader2 className="size-3 animate-spin text-muted-foreground" />
-                      ) : msg.status === "read" ? (
-                        <CheckCheck className="size-3 text-primary font-bold" />
-                      ) : (
-                        <Check className="size-3 text-muted-foreground" />
-                      )}
+                {showUnreadSep && (
+                  <div
+                    data-testid="chat-unread-separator"
+                    className="flex items-center gap-2 py-1 text-[10px] font-bold uppercase tracking-wider text-primary"
+                  >
+                    <span className="h-px flex-1 bg-primary/30" />
+                    <span>Unread messages</span>
+                    <span className="h-px flex-1 bg-primary/30" />
+                  </div>
+                )}
+
+                <div
+                  style={
+                    swipeDx > 0
+                      ? { transform: `translateX(${Math.min(56, swipeDx)}px)` }
+                      : undefined
+                  }
+                  onTouchStart={(e) => {
+                    const touch = e.touches[0];
+                    if (!touch) return;
+                    const timer = setTimeout(() => {
+                      setMobileActionMsg(msg);
+                    }, 520);
+                    touchOriginRef.current = {
+                      id: msg.id,
+                      x: touch.clientX,
+                      y: touch.clientY,
+                      timer,
+                    };
+                  }}
+                  onTouchMove={(e) => {
+                    const origin = touchOriginRef.current;
+                    const touch = e.touches[0];
+                    if (!origin || !touch || origin.id !== msg.id) return;
+                    const dx = touch.clientX - origin.x;
+                    const dy = Math.abs(touch.clientY - origin.y);
+                    if (Math.abs(dx) > 10 || dy > 10) {
+                      if (origin.timer) {
+                        clearTimeout(origin.timer);
+                        origin.timer = null;
+                      }
+                    }
+                    if (dx > 12 && dy < 32) {
+                      setSwipeState({ id: msg.id, dx: Math.min(60, dx) });
+                    }
+                  }}
+                  onTouchEnd={() => {
+                    const origin = touchOriginRef.current;
+                    if (origin?.timer) clearTimeout(origin.timer);
+                    if (swipeState?.id === msg.id && swipeState.dx >= 44) {
+                      setEditingMsg(null);
+                      setReplyingTo(msg);
+                    }
+                    touchOriginRef.current = null;
+                    setSwipeState(null);
+                  }}
+                  className={cn(
+                    "group flex flex-col max-w-[84%] sm:max-w-[72%] transition-transform",
+                    {
+                      "ml-auto items-end": isMe,
+                      "mr-auto items-start": !isMe,
+                    },
+                  )}
+                >
+                  {isGroup && !isMe && msg.sender && (
+                    <span className="mb-0.5 px-1 text-[10px] font-semibold text-muted-foreground">
+                      {msg.sender.display_name || `@${msg.sender.username}`}
                     </span>
                   )}
 
-                  <div className="flex items-center gap-0.5 opacity-80 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity ml-1">
-                    {QUICK_MESSAGE_EMOJIS.slice(0, 3).map((emoji) => (
-                      <button
-                        key={emoji}
-                        type="button"
-                        onClick={() => reactMessageMutation.mutate({ messageId: msg.id, emoji })}
-                        className="rounded-full px-1 py-0.5 text-[11px] hover:bg-secondary"
-                        aria-label={`React ${emoji}`}
+                  <ContextMenu>
+                    <ContextMenuTrigger asChild>
+                      <div className="flex items-end gap-1.5">
+                        <div
+                          className={cn("rounded-2xl px-4 py-2.5 shadow-sm text-sm break-words", {
+                            "bg-primary text-primary-foreground rounded-br-sm": isMe,
+                            "bg-secondary text-foreground border border-border/60 rounded-bl-sm":
+                              !isMe,
+                          })}
+                        >
+                          {msg.is_pinned && (
+                            <div className="mb-1 flex items-center gap-1 text-[10px] opacity-80">
+                              <Pin className="size-2.5" /> Pinned
+                            </div>
+                          )}
+
+                          {msg.media_url && (
+                            <div className="mb-2 rounded-xl overflow-hidden">
+                              <ResolvedChatMedia
+                                mediaUrl={msg.media_url}
+                                mediaType={msg.media_type}
+                              />
+                            </div>
+                          )}
+
+                          {(() => {
+                            const sticker = !msg.media_url
+                              ? parseStickerMessage(msg.content)
+                              : null;
+                            if (sticker) {
+                              return <ChatStickerBubble sticker={sticker} />;
+                            }
+                            return msg.content ? (
+                              <p className="whitespace-pre-wrap">{msg.content}</p>
+                            ) : null;
+                          })()}
+                        </div>
+                      </div>
+                    </ContextMenuTrigger>
+
+                    <ContextMenuContent className="w-48 rounded-2xl p-1.5">
+                      <ContextMenuItem
+                        className="rounded-xl text-xs cursor-pointer"
+                        onClick={() => {
+                          setEditingMsg(null);
+                          setReplyingTo(msg);
+                        }}
                       >
-                        {emoji}
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingMsg(null);
-                        setReplyingTo(msg);
-                      }}
-                      className="p-1 rounded-full hover:bg-secondary hover:text-foreground"
-                      aria-label="Reply to message"
-                      title="Reply"
-                    >
-                      <Reply className="size-3" />
-                    </button>
-                    {forwardTargets.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setForwardingMsg(msg)}
-                        className="p-1 rounded-full hover:bg-secondary hover:text-foreground"
-                        aria-label="Forward message"
-                        title="Forward"
-                      >
-                        <Forward className="size-3" />
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        saveMessageMutation.mutate(
-                          { messageId: msg.id, currentlySaved: isSaved },
-                          {
-                            onSuccess: (saved) =>
-                              toast.success(saved ? "Message saved" : "Removed from saved"),
-                          },
-                        );
-                      }}
-                      className={cn(
-                        "p-1 rounded-full hover:bg-secondary",
-                        isSaved ? "text-primary" : "hover:text-foreground",
+                        <Reply className="size-3.5 mr-2" /> Reply
+                      </ContextMenuItem>
+                      {msg.content && (
+                        <ContextMenuItem
+                          className="rounded-xl text-xs cursor-pointer"
+                          onClick={() => void handleCopyMessage(msg.content)}
+                        >
+                          <Copy className="size-3.5 mr-2" /> Copy text
+                        </ContextMenuItem>
                       )}
-                      aria-label={isSaved ? "Unsave message" : "Save message"}
-                      title={isSaved ? "Saved" : "Save message"}
-                    >
-                      <Bookmark className={cn("size-3", isSaved && "fill-current")} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        pinMessageMutation.mutate(msg.id, {
-                          onSuccess: (res) =>
-                            toast.success(res.is_pinned ? "Message pinned" : "Message unpinned"),
-                          onError: (err) =>
-                            toast.error(err instanceof Error ? err.message : "Could not pin"),
-                        });
-                      }}
-                      className="p-1 rounded-full hover:bg-secondary hover:text-foreground"
-                      aria-label="Pin message"
-                      title="Pin message"
-                    >
-                      <Pin className="size-3" />
-                    </button>
-                    {isMe && !msg.media_url && (
+                      {forwardTargets.length > 0 && (
+                        <ContextMenuItem
+                          className="rounded-xl text-xs cursor-pointer"
+                          onClick={() => setForwardingMsg(msg)}
+                        >
+                          <Forward className="size-3.5 mr-2" /> Forward
+                        </ContextMenuItem>
+                      )}
+                      <ContextMenuItem
+                        className="rounded-xl text-xs cursor-pointer"
+                        onClick={() =>
+                          pinMessageMutation.mutate(msg.id, {
+                            onSuccess: (res) =>
+                              toast.success(res.is_pinned ? "Message pinned" : "Message unpinned"),
+                            onError: (err) =>
+                              toast.error(err instanceof Error ? err.message : "Could not pin"),
+                          })
+                        }
+                      >
+                        {msg.is_pinned ? (
+                          <>
+                            <PinOff className="size-3.5 mr-2" /> Unpin
+                          </>
+                        ) : (
+                          <>
+                            <Pin className="size-3.5 mr-2" /> Pin message
+                          </>
+                        )}
+                      </ContextMenuItem>
+                      <ContextMenuItem
+                        className="rounded-xl text-xs cursor-pointer"
+                        onClick={() =>
+                          saveMessageMutation.mutate(
+                            { messageId: msg.id, currentlySaved: isSaved },
+                            {
+                              onSuccess: (saved) =>
+                                toast.success(saved ? "Message saved" : "Removed from saved"),
+                            },
+                          )
+                        }
+                      >
+                        <Bookmark className="size-3.5 mr-2" /> {isSaved ? "Unsave" : "Save message"}
+                      </ContextMenuItem>
+                      {isMe && !msg.media_url && (
+                        <>
+                          <ContextMenuSeparator />
+                          <ContextMenuItem
+                            className="rounded-xl text-xs cursor-pointer"
+                            onClick={() => {
+                              setReplyingTo(null);
+                              setEditingMsg(msg);
+                              setContent(msg.content);
+                            }}
+                          >
+                            <Pencil className="size-3.5 mr-2" /> Edit message
+                          </ContextMenuItem>
+                        </>
+                      )}
+                      {isMe && (
+                        <ContextMenuItem
+                          className="rounded-xl text-xs text-destructive focus:text-destructive cursor-pointer"
+                          onClick={async () => {
+                            try {
+                              await deleteMessageMutation.mutateAsync({
+                                messageId: msg.id,
+                                conversationId: conversation.id,
+                              });
+                              toast.success("Message removed");
+                            } catch {
+                              toast.error("Couldn't remove message");
+                            }
+                          }}
+                        >
+                          <Trash2 className="size-3.5 mr-2" /> Delete / Unsend
+                        </ContextMenuItem>
+                      )}
+                    </ContextMenuContent>
+                  </ContextMenu>
+
+                  {/* Message reactions pills */}
+                  {reactionTally.size > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-1 px-1">
+                      {Array.from(reactionTally.entries()).map(([emoji, info]) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => handleReactMessage(msg.id, emoji)}
+                          className={cn(
+                            "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] transition-transform active:scale-95",
+                            info.mine
+                              ? "border-primary/50 bg-primary/15 text-foreground font-semibold"
+                              : "border-border/70 bg-card text-muted-foreground",
+                          )}
+                        >
+                          <span>{emoji}</span>
+                          <span>{info.count}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Quick message actions + timestamp */}
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1 px-1 text-[10px] text-muted-foreground font-mono">
+                    <span>{format(new Date(msg.created_at), "h:mm a")}</span>
+                    {msg.edited_at && <span className="italic font-sans">edited</span>}
+                    {isMe && (
+                      <span
+                        title={
+                          msg.status === "sending"
+                            ? "Sending"
+                            : msg.status === "read"
+                              ? "Read"
+                              : msg.status === "delivered"
+                                ? "Delivered"
+                                : "Sent"
+                        }
+                      >
+                        {msg.status === "sending" ? (
+                          <Loader2 className="size-3 animate-spin text-muted-foreground" />
+                        ) : msg.status === "read" ? (
+                          <CheckCheck className="size-3 text-primary font-bold" />
+                        ) : msg.status === "delivered" ? (
+                          <CheckCheck className="size-3 text-muted-foreground" />
+                        ) : (
+                          <Check className="size-3 text-muted-foreground" />
+                        )}
+                      </span>
+                    )}
+
+                    <div className="flex items-center gap-0.5 opacity-80 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity ml-1">
+                      {QUICK_MESSAGE_EMOJIS.slice(0, 3).map((emoji) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => handleReactMessage(msg.id, emoji)}
+                          className="rounded-full px-1 py-0.5 text-[11px] hover:bg-secondary"
+                          aria-label={`React ${emoji}`}
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                      <MessageEmojiPicker
+                        onSelect={(emoji) => handleReactMessage(msg.id, emoji)}
+                        ariaLabel="More emoji reactions"
+                      />
                       <button
                         type="button"
                         onClick={() => {
-                          setReplyingTo(null);
-                          setEditingMsg(msg);
-                          setContent(msg.content);
+                          setEditingMsg(null);
+                          setReplyingTo(msg);
                         }}
                         className="p-1 rounded-full hover:bg-secondary hover:text-foreground"
-                        aria-label="Edit message"
-                        title="Edit message"
+                        aria-label="Reply to message"
+                        title="Reply"
                       >
-                        <Pencil className="size-3" />
+                        <Reply className="size-3" />
                       </button>
-                    )}
-                    {isMe && (
+                      {msg.content && (
+                        <button
+                          type="button"
+                          onClick={() => void handleCopyMessage(msg.content)}
+                          className="p-1 rounded-full hover:bg-secondary hover:text-foreground"
+                          aria-label="Copy message"
+                          title="Copy"
+                        >
+                          <Copy className="size-3" />
+                        </button>
+                      )}
+                      {forwardTargets.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setForwardingMsg(msg)}
+                          className="p-1 rounded-full hover:bg-secondary hover:text-foreground"
+                          aria-label="Forward message"
+                          title="Forward"
+                        >
+                          <Forward className="size-3" />
+                        </button>
+                      )}
                       <button
                         type="button"
-                        onClick={async () => {
-                          try {
-                            await deleteMessageMutation.mutateAsync({
-                              messageId: msg.id,
-                              conversationId: conversation.id,
-                            });
-                            toast.success("Message removed");
-                          } catch {
-                            toast.error("Couldn't remove message");
-                          }
+                        onClick={() => {
+                          saveMessageMutation.mutate(
+                            { messageId: msg.id, currentlySaved: isSaved },
+                            {
+                              onSuccess: (saved) =>
+                                toast.success(saved ? "Message saved" : "Removed from saved"),
+                            },
+                          );
                         }}
-                        className="p-1 rounded-full text-muted-foreground hover:text-destructive"
-                        aria-label="Delete message"
-                        title="Unsend message"
+                        className={cn(
+                          "p-1 rounded-full hover:bg-secondary",
+                          isSaved ? "text-primary" : "hover:text-foreground",
+                        )}
+                        aria-label={isSaved ? "Unsave message" : "Save message"}
+                        title={isSaved ? "Saved" : "Save message"}
                       >
-                        <Trash2 className="size-3" />
+                        <Bookmark className={cn("size-3", isSaved && "fill-current")} />
                       </button>
-                    )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          pinMessageMutation.mutate(msg.id, {
+                            onSuccess: (res) =>
+                              toast.success(res.is_pinned ? "Message pinned" : "Message unpinned"),
+                            onError: (err) =>
+                              toast.error(err instanceof Error ? err.message : "Could not pin"),
+                          });
+                        }}
+                        className="p-1 rounded-full hover:bg-secondary hover:text-foreground"
+                        aria-label={msg.is_pinned ? "Unpin message" : "Pin message"}
+                        title={msg.is_pinned ? "Unpin message" : "Pin message"}
+                      >
+                        {msg.is_pinned ? <PinOff className="size-3" /> : <Pin className="size-3" />}
+                      </button>
+                      {isMe && !msg.media_url && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setReplyingTo(null);
+                            setEditingMsg(msg);
+                            setContent(msg.content);
+                          }}
+                          className="p-1 rounded-full hover:bg-secondary hover:text-foreground"
+                          aria-label="Edit message"
+                          title="Edit message"
+                        >
+                          <Pencil className="size-3" />
+                        </button>
+                      )}
+                      {isMe && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              await deleteMessageMutation.mutateAsync({
+                                messageId: msg.id,
+                                conversationId: conversation.id,
+                              });
+                              toast.success("Message removed");
+                            } catch {
+                              toast.error("Couldn't remove message");
+                            }
+                          }}
+                          className="p-1 rounded-full text-muted-foreground hover:text-destructive"
+                          aria-label="Delete message"
+                          title="Unsend message"
+                        >
+                          <Trash2 className="size-3" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1023,15 +1382,36 @@ export function DirectMessageChat({
         </form>
       )}
 
-      {/* Forward Message Dialog */}
+      {/* Forward Message Dialog with Attribution Preview */}
       <Dialog open={Boolean(forwardingMsg)} onOpenChange={(o) => !o && setForwardingMsg(null)}>
         <DialogContent className="sm:max-w-sm rounded-3xl p-5">
           <DialogHeader>
             <DialogTitle className="font-display text-base">Forward message</DialogTitle>
             <DialogDescription className="text-xs">
-              Select a conversation to forward this message to.
+              Select an authorised conversation to forward this message to.
             </DialogDescription>
           </DialogHeader>
+          {forwardingMsg && (
+            <div
+              data-testid="forward-message-preview"
+              className="rounded-2xl border border-border/70 bg-secondary/45 p-3 text-xs space-y-1"
+            >
+              <span className="text-[10px] font-bold uppercase tracking-wider text-primary">
+                ↪ Forward preview ·{" "}
+                {forwardingMsg.sender?.display_name || forwardingMsg.sender?.username || "Sender"}
+              </span>
+              {forwardingMsg.content && (
+                <p className="text-foreground line-clamp-3 whitespace-pre-wrap">
+                  {forwardingMsg.content}
+                </p>
+              )}
+              {forwardingMsg.media_url && (
+                <p className="text-[11px] text-muted-foreground">
+                  Includes {forwardingMsg.media_type || "media"} attachment
+                </p>
+              )}
+            </div>
+          )}
           <div className="mt-2 space-y-1.5 max-h-64 overflow-y-auto">
             {forwardTargets.map((target) => (
               <button
@@ -1052,6 +1432,127 @@ export function DirectMessageChat({
               </button>
             ))}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Mobile Long-Press Message Action Sheet */}
+      <Dialog open={Boolean(mobileActionMsg)} onOpenChange={(o) => !o && setMobileActionMsg(null)}>
+        <DialogContent className="sm:max-w-xs rounded-3xl p-5 space-y-3">
+          <DialogHeader>
+            <DialogTitle className="font-display text-base">Message actions</DialogTitle>
+            <DialogDescription className="text-xs line-clamp-2">
+              {mobileActionMsg?.content || "Attachment"}
+            </DialogDescription>
+          </DialogHeader>
+          {mobileActionMsg && (
+            <div className="space-y-2">
+              <div className="flex justify-between gap-1 rounded-2xl bg-secondary/60 p-2">
+                {QUICK_MESSAGE_EMOJIS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => {
+                      handleReactMessage(mobileActionMsg.id, emoji);
+                      setMobileActionMsg(null);
+                    }}
+                    className="size-9 rounded-xl hover:bg-card flex items-center justify-center text-lg"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+              <div className="grid gap-1 text-xs">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="justify-start rounded-xl gap-2"
+                  onClick={() => {
+                    setEditingMsg(null);
+                    setReplyingTo(mobileActionMsg);
+                    setMobileActionMsg(null);
+                  }}
+                >
+                  <Reply className="size-4" /> Reply
+                </Button>
+                {mobileActionMsg.content && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="justify-start rounded-xl gap-2"
+                    onClick={() => {
+                      void handleCopyMessage(mobileActionMsg.content);
+                      setMobileActionMsg(null);
+                    }}
+                  >
+                    <Copy className="size-4" /> Copy text
+                  </Button>
+                )}
+                {forwardTargets.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="justify-start rounded-xl gap-2"
+                    onClick={() => {
+                      setForwardingMsg(mobileActionMsg);
+                      setMobileActionMsg(null);
+                    }}
+                  >
+                    <Forward className="size-4" /> Forward
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="justify-start rounded-xl gap-2"
+                  onClick={() => {
+                    pinMessageMutation.mutate(mobileActionMsg.id, {
+                      onSuccess: (res) =>
+                        toast.success(res.is_pinned ? "Message pinned" : "Message unpinned"),
+                    });
+                    setMobileActionMsg(null);
+                  }}
+                >
+                  <Pin className="size-4" /> {mobileActionMsg.is_pinned ? "Unpin" : "Pin message"}
+                </Button>
+                {mobileActionMsg.sender_id === user?.id && !mobileActionMsg.media_url && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="justify-start rounded-xl gap-2"
+                    onClick={() => {
+                      setReplyingTo(null);
+                      setEditingMsg(mobileActionMsg);
+                      setContent(mobileActionMsg.content);
+                      setMobileActionMsg(null);
+                    }}
+                  >
+                    <Pencil className="size-4" /> Edit message
+                  </Button>
+                )}
+                {mobileActionMsg.sender_id === user?.id && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="justify-start rounded-xl gap-2 text-destructive hover:text-destructive"
+                    onClick={async () => {
+                      try {
+                        await deleteMessageMutation.mutateAsync({
+                          messageId: mobileActionMsg.id,
+                          conversationId: conversation.id,
+                        });
+                        toast.success("Message removed");
+                      } catch {
+                        toast.error("Couldn't remove message");
+                      }
+                      setMobileActionMsg(null);
+                    }}
+                  >
+                    <Trash2 className="size-4" /> Delete / Unsend
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

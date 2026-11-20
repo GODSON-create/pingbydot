@@ -9,6 +9,7 @@ import { clearPingComposerDraft } from "@/lib/draft-store";
 import { attachMusicToContent } from "@/lib/music";
 import { enqueueOfflineAction } from "@/lib/offline-queue";
 import { createPingPoll, extractHashtags, extractMentions } from "@/lib/social";
+import { extractDotTags, syncPingDotTags } from "@/lib/dot-tags";
 import { pingSchema } from "@/lib/validation";
 import { ensureClientProfileRow } from "@/lib/ensure-profile";
 import { sanitizeErrorMessage } from "@/lib/error-diagnostics";
@@ -109,6 +110,7 @@ function Create() {
             : null;
       const imageUrl = mediaUrls?.[0] ?? null;
       const hashtags = extractHashtags(draft.content);
+      const dotTags = extractDotTags(draft.content);
       const mentions = extractMentions(draft.content);
       const baseInsertPayload = {
         user_id: authorId,
@@ -128,6 +130,7 @@ function Create() {
         ...baseInsertPayload,
         ...(d.scheduled_for ? { scheduled_for: d.scheduled_for } : {}),
         ...(hashtags.length > 0 ? { hashtags } : {}),
+        ...(dotTags.length > 0 ? { dot_tags: dotTags } : {}),
         ...(mentions.length > 0 ? { mentions } : {}),
         ...(d.content_format ? { content_format: d.content_format } : {}),
         ...(d.poster_url ? { poster_url: d.poster_url } : {}),
@@ -183,6 +186,10 @@ function Create() {
 
       if (error || !data) {
         throw error ?? new Error("Database did not return the published Ping ID.");
+      }
+
+      if (dotTags.length > 0) {
+        await syncPingDotTags(data.id, dotTags, authorId).catch(() => {});
       }
 
       if (d.poll && d.poll.question && d.poll.options.length >= 2) {
@@ -241,6 +248,7 @@ function Create() {
       void qc.invalidateQueries({ queryKey: ["my-pings"] });
       void qc.invalidateQueries({ queryKey: ["media-feed"] });
       void qc.invalidateQueries({ queryKey: ["hub"] });
+      void qc.invalidateQueries({ queryKey: ["dot-tags-directory"] });
       if (hubShareError) {
         toast.warning(`Ping published, but sharing to the Hub failed: ${hubShareError}`);
       } else {

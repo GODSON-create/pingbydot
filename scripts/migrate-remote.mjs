@@ -430,6 +430,28 @@ async function runSchemaVerification(sql, releaseEntries) {
     );
   }
 
+  const [{ p6_rls_count, auth_ent_ins, anon_sub_exec, anon_boost_exec }] = await sql`
+    SELECT
+      (
+        SELECT count(*)::int FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relrowsecurity = true
+          AND c.relname = ANY(ARRAY[
+            'membership_plans', 'subscription_entitlements', 'subscription_receipts',
+            'boost_campaigns', 'boost_campaign_events', 'boost_campaign_reports',
+            'boost_refund_audit', 'dot_tags', 'ping_dot_tags', 'user_dot_tag_follows'
+          ])
+      ) AS p6_rls_count,
+      has_table_privilege('authenticated', 'public.subscription_entitlements', 'INSERT') AS auth_ent_ins,
+      has_function_privilege('anon', 'public.subscribe_with_dots(text, text)', 'EXECUTE') AS anon_sub_exec,
+      has_function_privilege('anon', 'public.create_boost_campaign(text, uuid, integer, text, text[], text[], text)', 'EXECUTE') AS anon_boost_exec
+  `;
+  if (p6_rls_count < 10 || auth_ent_ins || anon_sub_exec || anon_boost_exec) {
+    throw new Error(
+      `Schema Verification FAILED — Premium UX/DOT economy security mismatch (rls_count=${p6_rls_count}/10, auth_ent_ins=${auth_ent_ins}, anon_sub=${anon_sub_exec}, anon_boost=${anon_boost_exec})`,
+    );
+  }
+
   console.log(
     `[SCHEMA VERIFIED] Ledger ${minTag}–${maxTag}: ${releaseEntries.length}/${releaseEntries.length} recorded (total rows=${ledgerRows.length}); ${REQUIRED_TABLES_0011_0020.length}/${REQUIRED_TABLES_0011_0020.length} tables with RLS; storage 'media' bucket, hardened indexes & privileges intact.`,
   );

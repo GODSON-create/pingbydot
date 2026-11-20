@@ -1,5 +1,5 @@
 import { likeCount, replyCount, type Ping } from "@/lib/pings";
-import { extractHashtags } from "@/lib/social";
+import { extractAllDiscoveryTags } from "@/lib/dot-tags";
 import { parseStructuredPing } from "@/lib/validation";
 
 export type FeedMode = "foryou" | "following" | "latest" | "trending" | "opportunities";
@@ -46,19 +46,19 @@ export function scorePingForFeed(ping: Ping, ctx: FeedRankingContext): number {
     ctx.mode === "trending" ? 1 / Math.pow(ageHours + 2, 0.85) : 1 / Math.pow(ageHours + 3, 0.65);
 
   const structured = parseStructuredPing(ping);
-  const hashtags = extractHashtags(ping.content);
+  const discoveryTags = extractAllDiscoveryTags(ping.content);
   const textLower =
     `${ping.category} ${structured.headline ?? ""} ${structured.body}`.toLowerCase();
 
   let relevanceBonus = 0;
   const userTopics = new Set([
     ...(ctx.interests ?? []).map((t) => t.toLowerCase()),
-    ...(ctx.followedTopics ?? []).map((t) => t.toLowerCase().replace(/^#/, "")),
+    ...(ctx.followedTopics ?? []).map((t) => t.toLowerCase().replace(/^[.#]+/, "")),
   ]);
 
   for (const topic of userTopics) {
     if (!topic) continue;
-    if (hashtags.includes(topic) || textLower.includes(topic)) {
+    if (discoveryTags.includes(topic) || textLower.includes(topic)) {
       relevanceBonus += 4.5;
     }
   }
@@ -135,7 +135,7 @@ export function extractTrendingTopics(
 ): Array<{ slug: string; count: number }> {
   const counts = new Map<string, number>();
   for (const ping of pings) {
-    for (const tag of extractHashtags(ping.content)) {
+    for (const tag of extractAllDiscoveryTags(ping.content)) {
       counts.set(tag, (counts.get(tag) ?? 0) + 1);
     }
     if (ping.category) {

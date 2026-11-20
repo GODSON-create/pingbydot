@@ -12,7 +12,7 @@
 | --- | --- | --- |
 | **UI & Client Runtime** | React 19, TypeScript 5.8, Tailwind CSS v4, Radix UI, Lucide Icons, Sonner, Recharts | Design system (Obsidian `#090B0A`, Graphite `#171B18`, Electric Ping Green `#C7F36B`, Champagne Gold `#D8B66A`), WCAG AA/AAA contrast |
 | **Routing & SSR** | TanStack Start (`@tanstack/react-start`), TanStack Router, TanStack Query v5, Vite 8, Nitro (Cloudflare target) | File-based SSR routes, validated URL search params, server functions (`createServerFn`), public social PNG card endpoint (`/api/public/ping-card/$id`) |
-| **Backend & Database** | Supabase (PostgreSQL 15+, Auth, PostgREST, Realtime, Storage) + Drizzle ORM (`drizzle/migrations/0000`–`0032`) | Row Level Security (RLS) on all tables, SECURITY DEFINER / INVOKER RPCs, append-only audit & economic event ledgers, GIN full-text search indexes, server rate limiting |
+| **Backend & Database** | Supabase (PostgreSQL 15+, Auth, PostgREST, Realtime, Storage) + Drizzle ORM (`drizzle/migrations/0000`–`0033`) | Row Level Security (RLS) on all tables, SECURITY DEFINER / INVOKER RPCs, append-only audit & economic event ledgers, configurable DOT memberships, boost campaigns, DOT Tags, GIN full-text search indexes, server rate limiting |
 | **Rich Sharing & OG Cards** | Satori + `@cf-wasm/resvg` | Shared Satori artwork tree for browser PNG export and public social image endpoint without arbitrary remote server-side fetches |
 | **Mobile Native Wrapper** | Capacitor 8 (`@capacitor/android`, `@capacitor/ios`, App, Browser, Camera, Keyboard, Network, PushNotifications, Share, SplashScreen, StatusBar) | Shared web codebase compiled to `.output/mobile` SPA for Android (`app.lovable.pingbydot`) and iOS |
 | **Testing & Quality** | Vitest 4, React Testing Library, jsdom, ESLint 9, Prettier | Unit, component, security policy, migration audit, and responsive layout verification |
@@ -42,11 +42,13 @@ SECONDARY DESTINATIONS (Account Menu / Top Utility Controls)
 ├── Notifications  (Sheet)         — Replies, likes, and new followers with read-state tracking
 ├── DOT Wallet     (/balance)      — Non-cash DOT credit balance, daily streak check-in, ledger history
 ├── Analytics      (/analytics)    — 7/30/90-day creator engagement charts, category breakdown, top Pings
-├── Upgrades       (/upgrades)     — Non-cash DOT tiers, Optional Identity/Professional Verification, Monetization catalog
-├── Settings       (/settings)     — Profile, Location/Country/Website, Visibility, Language/RTL & Data Saver, Social Connections, Privacy, Blocked, Muted, Data Export, Account Deletion
+├── Memberships    (/upgrades)     — Configurable DOT membership plans (Free/Plus/Pro/Business), separated entitlements, receipts, Optional Verification
+├── Boosts         (/boosts)       — DOT-powered Ping & Moment promotion campaigns, honest observed telemetry & reporting
+├── DOT Tags       (/tag/$slug)    — Native .tag discovery pages, analytics, related tags & legacy #hashtag compatibility
+├── Settings       (/settings)     — Profile (anti-impersonation protected), Curated Appearance & Themes, Location/Country/Website, Visibility, Language/RTL & Data Saver, Social Connections, Privacy, Blocked, Muted, Data Export, Account Deletion
 ├── GRIOT AI       (/griot)        — Permission-bounded opt-in AI workbench, granular consent switches (private DMs hard-locked off), invocation audit log
 ├── Developers     (/developers)   — Public API docs, OpenAPI 3.1, OAuth 2.0 PKCE app registry (/oauth/authorize), scoped API keys, HMAC-SHA256 webhooks, Business Messaging API & TypeScript SDK
-└── Administration (/admin)        — Role-verified moderation queue, Signal verification, Account verification review, Audit trail
+└── Administration (/admin)        — Role-verified moderation queue, Signal & Account verification (with expiry), Membership plan pricing, Boost moderation & audited refunds, Audit trail
 ```
 
 ---

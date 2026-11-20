@@ -4,8 +4,10 @@ import {
   ADMIN_PAGE_SIZE,
   adminListSchema,
   economicReadinessSchema,
+  moderateBoostSchema,
   moderationSchema,
   reviewVerificationSchema,
+  upsertMembershipPlanSchema,
   verifySignalSchema,
   assertAdminRole,
 } from "./admin-policy";
@@ -156,6 +158,84 @@ export const getAdminList = createServerFn({ method: "POST" })
         unmigrated: false,
       };
     }
+    if (data.view === "plans") {
+      const result = await (supabaseAdmin as any)
+        .from("membership_plans")
+        .select(
+          "slug,name,badge,tagline,dot_price,duration_days,benefits,perks,is_active,sort_order",
+          {
+            count: "exact",
+          },
+        )
+        .order("sort_order", { ascending: true });
+      if (result.error) {
+        const code = result.error.code;
+        if (code === "42P01" || code === "PGRST205") {
+          return { view: "plans" as const, rows: [], total: 0, unmigrated: true };
+        }
+        throw new Error("Couldn't load membership plans.");
+      }
+      return {
+        view: "plans" as const,
+        rows: (result.data ?? []) as Array<{
+          slug: "free" | "plus" | "pro" | "business";
+          name: string;
+          badge: string;
+          tagline: string;
+          dot_price: number;
+          duration_days: number;
+          benefits: Record<string, string | number | boolean | null>;
+          perks: string[];
+          is_active: boolean;
+          sort_order: number;
+        }>,
+        total: Number(result.count ?? 0),
+        unmigrated: false,
+      };
+    }
+    if (data.view === "boosts") {
+      let q = (supabaseAdmin as any)
+        .from("boost_campaigns")
+        .select(
+          "id,user_id,content_type,content_id,status,duration_hours,audience,dot_cost,reach_count,impressions_count,clicks_count,engagement_count,receipt_number,moderation_note,starts_at,ends_at,created_at",
+          { count: "exact" },
+        );
+      if (search) q = q.or(`status.ilike.%${search}%,content_type.ilike.%${search}%`);
+      const result = await q
+        .order("created_at", { ascending: false })
+        .range(start, start + ADMIN_PAGE_SIZE - 1);
+      if (result.error) {
+        const code = result.error.code;
+        if (code === "42P01" || code === "PGRST205") {
+          return { view: "boosts" as const, rows: [], total: 0, unmigrated: true };
+        }
+        throw new Error("Couldn't load boost campaigns.");
+      }
+      return {
+        view: "boosts" as const,
+        rows: (result.data ?? []) as Array<{
+          id: string;
+          user_id: string;
+          content_type: "ping" | "moment";
+          content_id: string;
+          status: string;
+          duration_hours: number;
+          audience: string;
+          dot_cost: number;
+          reach_count: number;
+          impressions_count: number;
+          clicks_count: number;
+          engagement_count: number;
+          receipt_number: string;
+          moderation_note: string;
+          starts_at: string;
+          ends_at: string;
+          created_at: string;
+        }>,
+        total: Number(result.count ?? 0),
+        unmigrated: false,
+      };
+    }
     let q = supabaseAdmin
       .from("moderation_audit")
       .select("id,actor_id,action,target_id,reason,created_at", { count: "exact" });
@@ -209,6 +289,18 @@ export const reviewVerification = createServerFn({ method: "POST" })
     const { data: allowed, error: roleError } = await context.supabase.rpc("is_ping_admin");
     assertAdminRole(!roleError && allowed === true);
     // Execute with caller JWT so Postgres enforces auth.uid() != verification owner (no self-approval)
+    if (data.expiresAt) {
+      const v2 = await (context.supabase as any).rpc("review_verification_request_v2", {
+        _verification_id: data.id,
+        _status: data.status,
+        _reviewer_note: data.reviewerNote,
+        _expires_at: data.expiresAt,
+      });
+      if (!v2.error) return { ok: true };
+      if (v2.error.code !== "42883" && v2.error.code !== "PGRST202") {
+        throw new Error(v2.error.message || "Couldn't update account verification status.");
+      }
+    }
     const { error } = await context.supabase.rpc("review_verification_request", {
       _verification_id: data.id,
       _status: data.status,
@@ -217,6 +309,43 @@ export const reviewVerification = createServerFn({ method: "POST" })
     if (error) {
       throw new Error(error.message || "Couldn't update account verification status.");
     }
+    return { ok: true };
+  });
+
+export const upsertMembershipPlan = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator(upsertMembershipPlanSchema)
+  .handler(async ({ data, context }) => {
+    const { data: allowed, error: roleError } = await context.supabase.rpc("is_ping_admin");
+    assertAdminRole(!roleError && allowed === true);
+    const { error } = await (context.supabase as any).rpc("admin_upsert_membership_plan", {
+      p_slug: data.slug,
+      p_name: data.name,
+      p_badge: data.badge,
+      p_tagline: data.tagline,
+      p_dot_price: data.dotPrice,
+      p_duration_days: data.durationDays,
+      p_benefits: data.benefits ?? null,
+      p_perks: data.perks ?? null,
+      p_is_active: data.isActive,
+    });
+    if (error) throw new Error(error.message || "Couldn't update membership plan.");
+    return { ok: true };
+  });
+
+export const moderateBoostCampaign = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator(moderateBoostSchema)
+  .handler(async ({ data, context }) => {
+    const { data: allowed, error: roleError } = await context.supabase.rpc("is_ping_admin");
+    assertAdminRole(!roleError && allowed === true);
+    const { error } = await (context.supabase as any).rpc("admin_moderate_boost_campaign", {
+      p_campaign_id: data.campaignId,
+      p_decision: data.decision,
+      p_reason: data.reason,
+      p_refund_amount: data.refundAmount,
+    });
+    if (error) throw new Error(error.message || "Couldn't moderate boost campaign.");
     return { ok: true };
   });
 
