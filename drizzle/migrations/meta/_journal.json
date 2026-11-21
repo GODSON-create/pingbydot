@@ -253,6 +253,13 @@
       "when": 1796800000000,
       "tag": "0035_admin_control_centre_and_early_access",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1796900000000,
+      "tag": "0036_storage_buckets_dm_rls_and_voice_preview",
+      "breakpoints": true
     }
   ]
 }

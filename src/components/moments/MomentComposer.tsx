@@ -164,16 +164,29 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
     e.target.value = "";
   };
 
+  const handleChooseFromGallery = async () => {
+    const { pickMediaFromGallery } = await import("@/lib/media-picker");
+    const outcome = await pickMediaFromGallery({
+      mediaType: "all",
+      multiple: true,
+      limit: 10,
+      webFallbackInput: fileInputRef.current,
+    });
+    if (outcome.files.length > 0) {
+      appendFiles(outcome.files);
+    }
+  };
+
   const handleTakePhoto = async () => {
-    const { takePhoto } = await import("@/lib/native");
-    const file = await takePhoto();
-    if (file) appendFiles([file]);
+    const { capturePhotoWithCamera } = await import("@/lib/media-picker");
+    const outcome = await capturePhotoWithCamera();
+    if (outcome.files.length > 0) appendFiles(outcome.files);
   };
 
   const handleRecordVideo = async () => {
-    const { recordVideo } = await import("@/lib/native");
-    const file = await recordVideo();
-    if (file) appendFiles([file]);
+    const { captureVideoWithCamera } = await import("@/lib/media-picker");
+    const outcome = await captureVideoWithCamera();
+    if (outcome.files.length > 0) appendFiles(outcome.files);
   };
 
   const updateActiveDraft = (patch: Partial<MomentDraft>) => {
@@ -367,7 +380,7 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
+            accept="image/jpeg,image/png,image/webp,image/gif,image/heic,video/mp4,video/webm,video/quicktime"
             multiple
             className="hidden"
             onChange={handleFileSelect}
@@ -403,7 +416,7 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => void handleChooseFromGallery()}
                   className="rounded-2xl gap-2"
                 >
                   <Upload className="size-4" /> Choose from Gallery
@@ -442,7 +455,7 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
 
                 <button
                   type="button"
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => void handleChooseFromGallery()}
                   className="size-14 rounded-xl border border-dashed border-border flex items-center justify-center text-muted-foreground hover:bg-muted/40 transition-colors shrink-0"
                   title="Add another moment to sequence"
                 >
@@ -784,7 +797,7 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => void handleChooseFromGallery()}
                   className="rounded-xl text-xs"
                 >
                   + Add another

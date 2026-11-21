@@ -248,13 +248,30 @@ async function runSchemaVerification(sql, releaseEntries) {
     );
   }
 
-  const [{ media_bucket_present: mediaBucketPresent }] = await sql`
-    SELECT EXISTS (
-      SELECT 1 FROM storage.buckets WHERE id = 'media'
-    ) AS media_bucket_present
+  const [{ media_bucket_present: mediaBucketPresent, dm_bucket_private: dmBucketPrivate, dm_policy_count: dmPolicyCount }] = await sql`
+    SELECT
+      EXISTS (
+        SELECT 1 FROM storage.buckets WHERE id = 'media' AND public = true
+      ) AS media_bucket_present,
+      EXISTS (
+        SELECT 1 FROM storage.buckets WHERE id = 'dm-attachments' AND public = false
+      ) AS dm_bucket_private,
+      (
+        SELECT count(*)::int FROM pg_policies
+        WHERE schemaname = 'storage'
+          AND tablename = 'objects'
+          AND policyname IN (
+            'DM conversation participants read signed files',
+            'DM uploaders manage own files',
+            'DM uploaders update own files',
+            'DM uploaders delete own files'
+          )
+      ) AS dm_policy_count
   `;
-  if (!mediaBucketPresent) {
-    throw new Error("Schema Verification FAILED — missing storage.buckets row 'media' (migration 0021)");
+  if (!mediaBucketPresent || !dmBucketPrivate || dmPolicyCount < 4) {
+    throw new Error(
+      `Schema Verification FAILED — storage bucket/policy mismatch (media=${mediaBucketPresent}, dm_private=${dmBucketPrivate}, dm_policies=${dmPolicyCount}/4; apply migrations 0021/0027/0036)`,
+    );
   }
 
   const [{ pathways_col_present: pathwaysColPresent, onboarding_col_present: onboardingColPresent, country_col_present: countryColPresent, interests_col_present: interestsColPresent, anon_onb_exec: anonOnbExec }] = await sql`
@@ -642,6 +659,72 @@ async function runFeatureAuthTests(sql) {
         throw new Error(`DM isolation mismatch: A=${aMsgs}/${aMems}, B=${bMsgs}/${bMems} unread=${bConvUnread}, C=${cMsgs}/${cMems} inbox=${cConvCount}`);
       }
       results.push("Direct Messages two-account isolation & inbox RPC: PASS (A=1/2, B=1/2 unread=1, outsider C=0/0, spoofed probe blocked)");
+
+      // 2b. PRIVATE DM STORAGE BUCKET RLS & VOICE MESSAGE PREVIEW TEST (0036)
+      const voiceObjName = `${convId}/${userA}/voice-note-rls-verify.webm`;
+      await actAs(userA);
+      await tx`
+        INSERT INTO storage.objects (bucket_id, name, owner, metadata)
+        VALUES ('dm-attachments', ${voiceObjName}, ${userA}::uuid, '{"mimetype":"audio/webm"}'::jsonb)
+      `;
+      await assertExpectThrow(tx, "member uploading into another member's sender folder", async () => {
+        await tx`
+          INSERT INTO storage.objects (bucket_id, name, owner, metadata)
+          VALUES ('dm-attachments', ${`${convId}/${userB}/spoof.webm`}, ${userA}::uuid, '{"mimetype":"audio/webm"}'::jsonb)
+        `;
+      });
+      await tx`SELECT public.send_private_message(${convId}::uuid, '', ${voiceObjName}, 'audio')`;
+      const [convAfterVoice] = await tx`SELECT last_message_preview FROM public.conversations WHERE id = ${convId}::uuid`;
+
+      await actAs(userB);
+      const [{ cnt: bReadVoice }] = await tx`
+        SELECT count(*)::int AS cnt FROM storage.objects
+        WHERE bucket_id = 'dm-attachments' AND name = ${voiceObjName}
+      `;
+      const bDeletedOther = await tx`
+        DELETE FROM storage.objects
+        WHERE bucket_id = 'dm-attachments' AND name = ${voiceObjName}
+        RETURNING id
+      `;
+
+      await actAs(userC);
+      const [{ cnt: cReadVoice }] = await tx`
+        SELECT count(*)::int AS cnt FROM storage.objects
+        WHERE bucket_id = 'dm-attachments' AND name = ${voiceObjName}
+      `;
+      await assertExpectThrow(tx, "non-member uploading into private DM conversation bucket path", async () => {
+        await tx`
+          INSERT INTO storage.objects (bucket_id, name, owner, metadata)
+          VALUES ('dm-attachments', ${`${convId}/${userC}/intrusion.webm`}, ${userC}::uuid, '{"mimetype":"audio/webm"}'::jsonb)
+        `;
+      });
+
+      await actAs(null);
+      const [{ cnt: anonReadVoice }] = await tx`
+        SELECT count(*)::int AS cnt FROM storage.objects
+        WHERE bucket_id = 'dm-attachments' AND name = ${voiceObjName}
+      `;
+
+      await actAs(userA);
+      const aDeletedOwn = await tx`
+        DELETE FROM storage.objects
+        WHERE bucket_id = 'dm-attachments' AND name = ${voiceObjName}
+        RETURNING id
+      `;
+
+      if (
+        convAfterVoice?.last_message_preview !== "Voice message" ||
+        bReadVoice !== 1 ||
+        bDeletedOther.length !== 0 ||
+        cReadVoice !== 0 ||
+        anonReadVoice !== 0 ||
+        aDeletedOwn.length !== 1
+      ) {
+        throw new Error(
+          `Private DM Storage RLS mismatch: preview=${convAfterVoice?.last_message_preview}, bRead=${bReadVoice}, bDelOther=${bDeletedOther.length}, cRead=${cReadVoice}, anonRead=${anonReadVoice}, aDelOwn=${aDeletedOwn.length}`,
+        );
+      }
+      results.push("Private DM Storage RLS & Voice preview (0036): PASS (member read=1, outsider/anon=0, folder spoof/non-member upload blocked, uploader-only delete enforced, preview='Voice message')");
 
       // 3 & 4. HUB FORUMS, THREADS/REPLIES, INSTITUTIONAL BROADCASTS & SIGNALS TEST
       await actAs(userA);

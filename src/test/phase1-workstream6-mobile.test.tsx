@@ -28,9 +28,22 @@ const appMock = {
 const cameraMock = {
   checkPermissions: vi.fn().mockResolvedValue({ camera: "prompt", photos: "prompt" }),
   requestPermissions: vi.fn().mockResolvedValue({ camera: "granted", photos: "granted" }),
-  getPhoto: vi
-    .fn()
-    .mockResolvedValue({ webPath: "https://localhost/_capacitor_file_/pic.jpg", format: "jpeg" }),
+  chooseFromGallery: vi.fn().mockResolvedValue({
+    results: [
+      {
+        type: "photo",
+        saved: false,
+        webPath: "https://localhost/_capacitor_file_/pic.jpg",
+        metadata: { format: "jpeg" },
+      },
+    ],
+  }),
+  takePhoto: vi.fn().mockResolvedValue({
+    type: "photo",
+    saved: false,
+    webPath: "https://localhost/_capacitor_file_/pic.jpg",
+    metadata: { format: "jpeg" },
+  }),
 };
 const pushListeners = new Map<string, (payload: any) => void>();
 const pushMock = {
@@ -132,8 +145,17 @@ describe("Phase 1 Workstream 6: Native Mobile Application & Distribution Readine
     vi.doMock("@capacitor/keyboard", () => ({ Keyboard: keyboardMock }));
     vi.doMock("@capacitor/camera", () => ({
       Camera: cameraMock,
-      CameraResultType: { Uri: "uri" },
-      CameraSource: { Prompt: "PROMPT", Camera: "CAMERA", Photos: "PHOTOS" },
+      MediaType: { Photo: "photo", Video: "video" },
+      MediaTypeSelection: { Photo: "photo", Video: "video", All: "all" },
+      CameraErrorCode: {
+        ChooseMediaCancelled: "OS-PLUG-CAMR-0005",
+        TakePhotoCancelled: "OS-PLUG-CAMR-0003",
+        RecordVideoCancelled: "OS-PLUG-CAMR-0006",
+        EditPhotoCancelled: "OS-PLUG-CAMR-0007",
+        CameraPermissionDenied: "OS-PLUG-CAMR-0017",
+        GalleryPermissionDenied: "OS-PLUG-CAMR-0020",
+        NoCameraAvailable: "OS-PLUG-CAMR-0010",
+      },
     }));
     vi.doMock("@capacitor/share", () => ({ Share: { share: vi.fn() } }));
     vi.doMock("@capacitor/push-notifications", () => ({ PushNotifications: pushMock }));

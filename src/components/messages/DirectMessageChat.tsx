@@ -104,6 +104,15 @@ function formatChatDateSeparator(iso: string): string {
   return format(d, "EEE, MMM d, yyyy");
 }
 
+function formatMessageSummary(msg: PrivateMessage | null | undefined): string {
+  if (!msg) return "Attachment";
+  if (msg.content) return msg.content;
+  if (msg.media_type === "audio") return "Voice message";
+  if (msg.media_type === "image") return "Photo";
+  if (msg.media_type === "video") return "Video";
+  return "Attachment";
+}
+
 interface DirectMessageChatProps {
   conversation: Conversation;
   allConversations?: Conversation[];
@@ -150,6 +159,17 @@ export function DirectMessageChat({
   useEffect(() => {
     initialUnreadCountRef.current = conversation.unread_count ?? 0;
   }, [conversation.id, conversation.unread_count]);
+
+  // Clear pending composer attachments/reply/edit state when switching conversations
+  useEffect(() => {
+    setMediaUrl(null);
+    setMediaType(null);
+    setMediaPreviewName(null);
+    setUploadError(null);
+    setFailedFile(null);
+    setReplyingTo(null);
+    setEditingMsg(null);
+  }, [conversation.id]);
 
   const handleCopyMessage = async (text: string) => {
     if (!text) return;
@@ -274,7 +294,7 @@ export function DirectMessageChat({
     const currentReply = replyingTo;
 
     const outgoingContent = currentReply
-      ? `↩ ${currentReply.sender?.display_name || currentReply.sender?.username || "Reply"}: "${currentReply.content.slice(0, 80)}"\n${cleaned}`
+      ? `↩ ${currentReply.sender?.display_name || currentReply.sender?.username || "Reply"}: "${formatMessageSummary(currentReply).slice(0, 80)}"\n${cleaned}`
       : cleaned;
 
     try {
@@ -309,7 +329,9 @@ export function DirectMessageChat({
     try {
       const forwardedText = forwardingMsg.content
         ? `↪ Forwarded:\n${forwardingMsg.content}`
-        : "↪ Forwarded attachment";
+        : forwardingMsg.media_type === "audio"
+          ? "↪ Forwarded voice message"
+          : "↪ Forwarded attachment";
       await sendMutation.mutateAsync({
         conversationId: targetConversationId,
         content: forwardedText,
@@ -359,7 +381,7 @@ export function DirectMessageChat({
       setIsUploading(true);
       setUploadError(null);
       setFailedFile(null);
-      const { uploadPrivateDmMedia } = await import("@/lib/storage");
+      const { buildDmAttachmentPath, uploadPrivateDmMedia } = await import("@/lib/storage");
       const fallbackExt =
         detectedKind === "video"
           ? "mp4"
@@ -368,22 +390,125 @@ export function DirectMessageChat({
             : detectedKind === "document"
               ? "bin"
               : "jpg";
-      const ext = file.name.split(".").pop()?.toLowerCase() || fallbackExt;
-      const path = `${user.id}/dm/${conversation.id}/${Date.now()}.${ext}`;
+      const path = buildDmAttachmentPath(conversation.id, user.id, file.name, fallbackExt);
 
-      const { storageRef } = await uploadPrivateDmMedia(path, file, file.name);
-      setMediaUrl(storageRef);
+      const { storagePath } = await uploadPrivateDmMedia(path, file, file.name);
+      setMediaUrl(storagePath);
       setMediaType(detectedKind);
       setMediaPreviewName(file.name);
       toast.success("Private attachment ready");
     } catch (err: any) {
-      const { formatStorageUploadError } = await import("@/lib/storage");
-      const msg = formatStorageUploadError(err, "Upload failed");
+      const { DM_MEDIA_BUCKET, formatStorageUploadError } = await import("@/lib/storage");
+      const msg = formatStorageUploadError(err, "Upload failed", DM_MEDIA_BUCKET);
       setUploadError(msg);
       setFailedFile(file);
       toast.error(msg);
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const uploadSelectedFiles = async (files: File[]) => {
+    if (!user || files.length === 0) return;
+    if (files.length === 1 && files[0]) {
+      await uploadSelectedFile(files[0]);
+      return;
+    }
+
+    const rateCheck = checkShieldRateLimit("send_message", user.id);
+    if (!rateCheck.allowed) {
+      toast.error(rateCheck.reason || "You are sending messages too quickly.");
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadError(null);
+    setFailedFile(null);
+
+    try {
+      const { buildDmAttachmentPath, uploadPrivateDmMedia } = await import("@/lib/storage");
+      let sentCount = 0;
+
+      for (const file of files) {
+        const detectedKind = detectMediaKind(file);
+        const check = validateMediaUpload(
+          { type: file.type, size: file.size, name: file.name },
+          detectedKind,
+        );
+        if (!check.valid) {
+          toast.error(check.error || `Skipped unsupported file ${file.name}`);
+          continue;
+        }
+        const fallbackExt =
+          detectedKind === "video"
+            ? "mp4"
+            : detectedKind === "audio"
+              ? "webm"
+              : detectedKind === "document"
+                ? "bin"
+                : "jpg";
+        const path = buildDmAttachmentPath(conversation.id, user.id, file.name, fallbackExt);
+        const { storagePath } = await uploadPrivateDmMedia(path, file, file.name);
+        await sendMutation.mutateAsync({
+          conversationId: conversation.id,
+          content: "",
+          mediaUrl: storagePath,
+          mediaType: detectedKind,
+        });
+        sentCount += 1;
+      }
+
+      if (sentCount > 0) {
+        toast.success(`Sent ${sentCount} private attachments`);
+      }
+    } catch (err: any) {
+      const { DM_MEDIA_BUCKET, formatStorageUploadError } = await import("@/lib/storage");
+      const msg = formatStorageUploadError(err, "Upload failed", DM_MEDIA_BUCKET);
+      setUploadError(msg);
+      toast.error(msg);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleSendVoiceNote = async (file: File) => {
+    if (!user || postingRestricted) {
+      throw new Error("Sign in to send voice messages.");
+    }
+
+    const check = validateMediaUpload(
+      { type: file.type, size: file.size, name: file.name },
+      "audio",
+    );
+    if (!check.valid) {
+      const errMsg = check.error || "Invalid voice note recording.";
+      toast.error(errMsg);
+      throw new Error(errMsg);
+    }
+
+    const rateCheck = checkShieldRateLimit("send_message", user.id);
+    if (!rateCheck.allowed) {
+      const errMsg = rateCheck.reason || "You are sending messages too quickly.";
+      toast.error(errMsg);
+      throw new Error(errMsg);
+    }
+
+    try {
+      const { buildDmAttachmentPath, uploadPrivateDmMedia } = await import("@/lib/storage");
+      const path = buildDmAttachmentPath(conversation.id, user.id, file.name, "webm");
+      const { storagePath } = await uploadPrivateDmMedia(path, file, file.name);
+
+      await sendMutation.mutateAsync({
+        conversationId: conversation.id,
+        content: "",
+        mediaUrl: storagePath,
+        mediaType: "audio",
+      });
+    } catch (err: any) {
+      const { DM_MEDIA_BUCKET, formatStorageUploadError } = await import("@/lib/storage");
+      const msg = formatStorageUploadError(err, "Voice note upload failed.", DM_MEDIA_BUCKET);
+      toast.error(msg);
+      throw new Error(msg);
     }
   };
 
@@ -711,7 +836,7 @@ export function DirectMessageChat({
             <div className="flex items-center gap-2 min-w-0">
               <Pin className="size-3.5 text-primary shrink-0" />
               <span className="truncate font-medium text-foreground">
-                Pinned: {pinnedMessages[pinnedMessages.length - 1]?.content || "Attachment"}
+                Pinned: {formatMessageSummary(pinnedMessages[pinnedMessages.length - 1])}
               </span>
             </div>
             <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary shrink-0">
@@ -737,7 +862,7 @@ export function DirectMessageChat({
                     onClick={() => scrollToMessage(pm.id)}
                     className="min-w-0 flex-1 text-left truncate text-foreground hover:text-primary"
                   >
-                    {pm.content || "Attachment"}
+                    {formatMessageSummary(pm)}
                   </button>
                   <button
                     type="button"
@@ -914,6 +1039,7 @@ export function DirectMessageChat({
                               <ResolvedChatMedia
                                 mediaUrl={msg.media_url}
                                 mediaType={msg.media_type}
+                                isOwnMessage={isMe}
                               />
                             </div>
                           )}
@@ -1268,7 +1394,9 @@ export function DirectMessageChat({
                 ? "Editing message"
                 : `Replying to ${replyingTo?.sender?.display_name || replyingTo?.sender?.username || "message"}`}
             </span>
-            <p className="truncate text-muted-foreground">{(editingMsg ?? replyingTo)?.content}</p>
+            <p className="truncate text-muted-foreground">
+              {formatMessageSummary(editingMsg ?? replyingTo)}
+            </p>
           </div>
           <Button
             type="button"
@@ -1293,11 +1421,20 @@ export function DirectMessageChat({
       {mediaUrl && (
         <div className="px-4 py-2 bg-secondary/40 border-t border-border/50 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="max-w-[140px] max-h-12 overflow-hidden rounded-lg">
+            <div
+              className={
+                mediaType === "audio"
+                  ? "max-w-full rounded-lg"
+                  : "max-w-[140px] max-h-12 overflow-hidden rounded-lg"
+              }
+            >
               <ResolvedChatMedia mediaUrl={mediaUrl} mediaType={mediaType} />
             </div>
             <span className="text-xs font-semibold text-primary truncate">
-              {mediaPreviewName || "Attachment ready to send"}
+              {mediaPreviewName ||
+                (mediaType === "audio"
+                  ? "Voice message ready to send"
+                  : "Attachment ready to send")}
             </span>
           </div>
           <Button
@@ -1325,12 +1462,13 @@ export function DirectMessageChat({
       ) : (
         <form
           onSubmit={handleSend}
-          className="p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t border-border/60 bg-card/90 backdrop-blur-md flex items-center gap-1.5"
+          className="p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t border-border/60 bg-card/90 backdrop-blur-md flex flex-wrap sm:flex-nowrap items-center gap-1.5"
         >
           {!editingMsg && (
             <>
               <ChatAttachmentMenu
                 onFileSelected={uploadSelectedFile}
+                onFilesSelected={uploadSelectedFiles}
                 loading={isUploading}
                 disabled={sendMutation.isPending}
               />
@@ -1339,7 +1477,8 @@ export function DirectMessageChat({
                 disabled={sendMutation.isPending || isUploading}
               />
               <VoiceNoteButton
-                onRecorded={uploadSelectedFile}
+                conversationId={conversation.id}
+                onSendVoiceNote={handleSendVoiceNote}
                 disabled={sendMutation.isPending || isUploading}
               />
             </>
@@ -1407,7 +1546,9 @@ export function DirectMessageChat({
               )}
               {forwardingMsg.media_url && (
                 <p className="text-[11px] text-muted-foreground">
-                  Includes {forwardingMsg.media_type || "media"} attachment
+                  {forwardingMsg.media_type === "audio"
+                    ? "Includes voice message"
+                    : `Includes ${forwardingMsg.media_type || "media"} attachment`}
                 </p>
               )}
             </div>
@@ -1441,7 +1582,7 @@ export function DirectMessageChat({
           <DialogHeader>
             <DialogTitle className="font-display text-base">Message actions</DialogTitle>
             <DialogDescription className="text-xs line-clamp-2">
-              {mobileActionMsg?.content || "Attachment"}
+              {formatMessageSummary(mobileActionMsg)}
             </DialogDescription>
           </DialogHeader>
           {mobileActionMsg && (

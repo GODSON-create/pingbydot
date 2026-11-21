@@ -3,7 +3,22 @@ import { resolveNormalizedMime } from "@/lib/shield";
 
 export const MEDIA_BUCKET = "media";
 export const DM_MEDIA_BUCKET = "dm-attachments";
-const PRIVATE_DM_PREFIX = `storage://${DM_MEDIA_BUCKET}/`;
+const LEGACY_PRIVATE_DM_PREFIX = `storage://${DM_MEDIA_BUCKET}/`;
+
+/** Short-lived TTL for private DM attachment signed URLs (15 minutes). */
+export const DEFAULT_DM_SIGNED_URL_TTL_SEC = 900;
+const SIGNED_URL_REFRESH_BUFFER_MS = 60_000;
+
+interface CachedSignedUrl {
+  signedUrl: string;
+  expiresAtMs: number;
+}
+
+const signedUrlCache = new Map<string, CachedSignedUrl>();
+
+export function clearPrivateDmSignedUrlCache(): void {
+  signedUrlCache.clear();
+}
 
 export function formatStorageUploadError(
   error: unknown,
@@ -19,9 +34,9 @@ export function formatStorageUploadError(
 
   if (/bucket not found|nosuchbucket/i.test(message)) {
     if (bucket === DM_MEDIA_BUCKET) {
-      return "Private messaging storage bucket 'dm-attachments' is missing on this Supabase project. Apply migration 0027 and try again.";
+      return "Private messaging storage bucket 'dm-attachments' is missing on this Supabase project. Apply migration 0027 / 0036 and try again.";
     }
-    return "Storage bucket 'media' is missing on this Supabase project. Run database migration 0021 (or create the public 'media' bucket in Supabase Storage) and try again.";
+    return "Storage bucket 'media' is missing on this Supabase project. Run database migration 0021 / 0036 (or provision the public 'media' bucket in Supabase Storage) and try again.";
   }
 
   if (/row-level security|permission|not authorized|unauthorized/i.test(message)) {
@@ -120,25 +135,74 @@ export async function uploadUserMedia(
   return pub.publicUrl;
 }
 
-export function isPrivateDmMediaRef(url: string | null | undefined): boolean {
-  return Boolean(url && url.startsWith(PRIVATE_DM_PREFIX));
-}
-
-export function extractPrivateDmMediaPath(url: string): string | null {
-  if (!url.startsWith(PRIVATE_DM_PREFIX)) return null;
-  return url.slice(PRIVATE_DM_PREFIX.length) || null;
+/**
+ * Constructs the canonical conversation-scoped private storage object path:
+ *   `{conversation_id}/{sender_user_id}/{unique_filename}`
+ *
+ * Enforced by Migration `0036` Storage RLS policies on private bucket `dm-attachments`.
+ */
+export function buildDmAttachmentPath(
+  conversationId: string,
+  senderUserId: string,
+  fileName: string,
+  fallbackExt = "bin",
+): string {
+  const safeConv = conversationId.trim().replace(/[^a-zA-Z0-9_-]/g, "");
+  const safeSender = senderUserId.trim().replace(/[^a-zA-Z0-9_-]/g, "");
+  const rawExt =
+    fileName
+      .split(".")
+      .pop()
+      ?.toLowerCase()
+      .replace(/[^a-z0-9]/g, "") || fallbackExt;
+  const ext = rawExt.slice(0, 8) || fallbackExt;
+  const rand =
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID().slice(0, 8)
+      : Math.random().toString(36).slice(2, 10);
+  return `${safeConv}/${safeSender}/${Date.now()}-${rand}.${ext}`;
 }
 
 /**
- * Uploads sensitive direct-message attachments (voice notes, private documents,
- * private media) into a non-public Supabase bucket (`dm-attachments`) and
- * returns a `storage://dm-attachments/<path>` reference resolved via signed URLs.
+ * Returns true if `urlOrPath` represents a private `dm-attachments` object path
+ * (either canonical `{conversation_id}/{sender_user_id}/{file}` OR legacy
+ * `storage://dm-attachments/...`), and false for older absolute `https://` URLs.
+ */
+export function isPrivateDmMediaRef(urlOrPath: string | null | undefined): boolean {
+  if (!urlOrPath) return false;
+  const trimmed = urlOrPath.trim();
+  if (!trimmed) return false;
+  if (trimmed.startsWith(LEGACY_PRIVATE_DM_PREFIX)) return true;
+  if (/^(https?:|blob:|data:|\/)/i.test(trimmed)) return false;
+  return trimmed.includes("/") && !trimmed.includes("..");
+}
+
+/**
+ * Extracts the bucket-relative object path for private DM attachments, or `null`
+ * for legacy public/absolute URLs.
+ */
+export function extractPrivateDmMediaPath(urlOrPath: string): string | null {
+  const trimmed = urlOrPath.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith(LEGACY_PRIVATE_DM_PREFIX)) {
+    return trimmed.slice(LEGACY_PRIVATE_DM_PREFIX.length) || null;
+  }
+  if (/^(https?:|blob:|data:|\/)/i.test(trimmed)) return null;
+  if (!trimmed.includes("/") || trimmed.includes("..")) return null;
+  return trimmed;
+}
+
+/**
+ * Uploads sensitive direct-message attachments (voice notes, private images, videos,
+ * and documents) strictly into the non-public `dm-attachments` bucket and returns
+ * the raw private object path (`storagePath`) to store in `private_messages.media_url`
+ * plus an immediate short-lived signed URL for rendering. Never stores a public URL.
  */
 export async function uploadPrivateDmMedia(
   path: string,
   file: File | Blob,
   fileName?: string,
-): Promise<{ storageRef: string; signedUrl: string }> {
+): Promise<{ storagePath: string; storageRef: string; signedUrl: string; expiresAtMs: number }> {
   const inferredName = fileName || (file instanceof File ? file.name : `attachment-${Date.now()}`);
   const contentType =
     resolveNormalizedMime({ type: file.type, name: inferredName }) || "application/octet-stream";
@@ -163,9 +227,10 @@ export async function uploadPrivateDmMedia(
     );
   });
 
+  const ttlSec = DEFAULT_DM_SIGNED_URL_TTL_SEC;
   const { data: signed, error: signErr } = await supabase.storage
     .from(DM_MEDIA_BUCKET)
-    .createSignedUrl(uploadedPath, 3600);
+    .createSignedUrl(uploadedPath, ttlSec);
 
   if (signErr || !signed?.signedUrl) {
     throw new Error(
@@ -173,18 +238,50 @@ export async function uploadPrivateDmMedia(
     );
   }
 
+  const expiresAtMs = Date.now() + ttlSec * 1000;
+  signedUrlCache.set(uploadedPath, { signedUrl: signed.signedUrl, expiresAtMs });
+
   return {
-    storageRef: `${PRIVATE_DM_PREFIX}${uploadedPath}`,
+    storagePath: uploadedPath,
+    storageRef: uploadedPath,
     signedUrl: signed.signedUrl,
+    expiresAtMs,
   };
 }
 
-export async function createPrivateDmSignedUrl(urlOrRef: string): Promise<string | null> {
+/**
+ * Resolves a stored `private_messages.media_url` value into a short-lived signed URL
+ * when it is a private attachment path (canonical or legacy `storage://dm-attachments/`),
+ * or returns legacy absolute `https://` URLs unchanged. Automatically caches and refreshes
+ * near-expiry URLs, and supports forced refresh on media playback errors.
+ */
+export async function createPrivateDmSignedUrl(
+  urlOrRef: string,
+  options: { forceRefresh?: boolean; expiresInSec?: number } = {},
+): Promise<string | null> {
   if (!urlOrRef) return null;
-  const path = extractPrivateDmMediaPath(urlOrRef);
-  if (!path) return urlOrRef;
+  const objectPath = extractPrivateDmMediaPath(urlOrRef);
+  if (!objectPath) return urlOrRef;
 
-  const { data, error } = await supabase.storage.from(DM_MEDIA_BUCKET).createSignedUrl(path, 3600);
-  if (error || !data?.signedUrl) return null;
+  const now = Date.now();
+  const cached = signedUrlCache.get(objectPath);
+  if (!options.forceRefresh && cached && cached.expiresAtMs - SIGNED_URL_REFRESH_BUFFER_MS > now) {
+    return cached.signedUrl;
+  }
+
+  const ttlSec = Math.max(60, options.expiresInSec ?? DEFAULT_DM_SIGNED_URL_TTL_SEC);
+  const { data, error } = await supabase.storage
+    .from(DM_MEDIA_BUCKET)
+    .createSignedUrl(objectPath, ttlSec);
+
+  if (error || !data?.signedUrl) {
+    signedUrlCache.delete(objectPath);
+    return null;
+  }
+
+  signedUrlCache.set(objectPath, {
+    signedUrl: data.signedUrl,
+    expiresAtMs: Date.now() + ttlSec * 1000,
+  });
   return data.signedUrl;
 }

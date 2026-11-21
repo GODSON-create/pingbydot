@@ -670,7 +670,13 @@ export function HubChat({ hubId, isMember, isPrivate, isStaff = false }: HubChat
       {mediaUrl && (
         <div className="flex items-center justify-between border-t border-border bg-secondary/40 px-4 py-2 text-xs gap-3">
           <div className="flex items-center gap-2 min-w-0">
-            <div className="max-w-[140px] max-h-12 overflow-hidden rounded-lg">
+            <div
+              className={
+                mediaKind === "audio"
+                  ? "max-w-full rounded-lg"
+                  : "max-w-[140px] max-h-12 overflow-hidden rounded-lg"
+              }
+            >
               <ResolvedChatMedia mediaUrl={mediaUrl} mediaType={mediaKind} />
             </div>
             <span className="font-semibold text-primary truncate">
@@ -705,6 +711,7 @@ export function HubChat({ hubId, isMember, isPrivate, isStaff = false }: HubChat
               disabled={sendMutation.isPending || isUploading}
             />
             <VoiceNoteButton
+              conversationId={hubId}
               onRecorded={uploadHubFile}
               disabled={sendMutation.isPending || isUploading}
             />

@@ -8,6 +8,13 @@ import type { Conversation } from "@/lib/messages";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 
+export function formatConversationPreview(preview: string | null | undefined): string {
+  const trimmed = preview?.trim();
+  if (!trimmed) return "No messages yet";
+  if (/^(?:🎵\s*)?audio\s+message$/i.test(trimmed)) return "Voice message";
+  return trimmed;
+}
+
 interface ConversationListProps {
   conversations: Conversation[];
   selectedId?: string | undefined;
@@ -184,7 +191,7 @@ export function ConversationList({
 
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-xs text-muted-foreground truncate">
-                      {conv.last_message_preview || "No messages yet"}
+                      {formatConversationPreview(conv.last_message_preview)}
                     </p>
 
                     {conv.unread_count > 0 && (

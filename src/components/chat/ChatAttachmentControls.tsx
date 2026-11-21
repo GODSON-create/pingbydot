@@ -6,6 +6,8 @@ import {
   Loader2,
   Mic,
   Paperclip,
+  RotateCcw,
+  Send,
   Smile,
   Square,
   Trash2,
@@ -20,8 +22,26 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { chooseFromGallery, recordVideo, takePhoto } from "@/lib/native";
-import { createPrivateDmSignedUrl, isPrivateDmMediaRef } from "@/lib/storage";
+import {
+  capturePhotoWithCamera,
+  captureVideoWithCamera,
+  pickMediaFromGallery,
+} from "@/lib/media-picker";
+import {
+  createPrivateDmSignedUrl,
+  DEFAULT_DM_SIGNED_URL_TTL_SEC,
+  isPrivateDmMediaRef,
+} from "@/lib/storage";
+import {
+  buildVoiceNoteFile,
+  formatMicrophoneError,
+  formatVoiceDuration,
+  isVoiceRecordingSupported,
+  selectSupportedAudioMimeType,
+  VOICE_NOTE_MAX_DURATION_SEC,
+  type NegotiatedVoiceFormat,
+} from "@/lib/voice-recorder";
+import { cn } from "@/lib/utils";
 
 export interface PingStickerItem {
   id: string;
@@ -156,62 +176,145 @@ export function ChatStickerPicker({
   );
 }
 
+type VoiceStage = "idle" | "recording" | "preview" | "uploading";
+
+export interface VoiceNoteButtonProps {
+  /** Active conversation/hub ID — changing conversations cancels active recording & revokes previews. */
+  conversationId?: string;
+  /** Primary voice-note send handler (uploads audio & sends immediately; throws on failure for retry). */
+  onSendVoiceNote?: (file: File) => Promise<void>;
+  /** Backward-compatible fallback (attaches voice note to composer). */
+  onRecorded?: (file: File) => void | Promise<void>;
+  disabled?: boolean;
+}
+
 export function VoiceNoteButton({
+  conversationId,
+  onSendVoiceNote,
   onRecorded,
   disabled,
-}: {
-  onRecorded: (file: File) => void | Promise<void>;
-  disabled?: boolean;
-}) {
-  const [recording, setRecording] = useState(false);
+}: VoiceNoteButtonProps) {
+  const [stage, setStage] = useState<VoiceStage>("idle");
   const [elapsedSec, setElapsedSec] = useState(0);
+  const [recordedFile, setRecordedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
+
   const recorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const canceledRef = useRef(false);
-
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-      try {
-        if (recorderRef.current?.state === "recording") {
-          canceledRef.current = true;
-          recorderRef.current.stop();
-        }
-      } catch {
-        // Ignore teardown errors
-      }
-    };
-  }, []);
+  const negotiatedRef = useRef<NegotiatedVoiceFormat | null>(null);
+  const previewUrlRef = useRef<string | null>(null);
+  const prevConvIdRef = useRef<string | undefined>(conversationId);
 
   const stopTracks = (stream?: MediaStream | null) => {
-    stream?.getTracks().forEach((t) => t.stop());
+    stream?.getTracks().forEach((track) => {
+      try {
+        track.onended = null;
+        track.stop();
+      } catch {
+        // Ignore already-stopped tracks
+      }
+    });
   };
 
+  const clearTimer = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  };
+
+  const revokePreviewUrl = () => {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
+  };
+
+  const teardownRecording = (cancel: boolean) => {
+    clearTimer();
+    canceledRef.current = cancel;
+    try {
+      if (recorderRef.current && recorderRef.current.state !== "inactive") {
+        recorderRef.current.stop();
+      }
+    } catch {
+      // Ignore teardown errors
+    }
+    recorderRef.current = null;
+    stopTracks(streamRef.current);
+    streamRef.current = null;
+  };
+
+  const discardPreview = () => {
+    revokePreviewUrl();
+    setPreviewUrl(null);
+    setRecordedFile(null);
+    setSendError(null);
+    setElapsedSec(0);
+    setStage("idle");
+  };
+
+  // Cleanup microphone tracks and object URLs on unmount
+  useEffect(() => {
+    return () => {
+      teardownRecording(true);
+      revokePreviewUrl();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Cancel active recording and discard unsent preview when switching conversations
+  useEffect(() => {
+    if (prevConvIdRef.current !== conversationId) {
+      prevConvIdRef.current = conversationId;
+      teardownRecording(true);
+      discardPreview();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId]);
+
   const startRecording = async () => {
-    if (
-      typeof navigator === "undefined" ||
-      !navigator.mediaDevices?.getUserMedia ||
-      typeof MediaRecorder === "undefined"
-    ) {
-      toast.error("Voice recording isn't supported in this browser.");
+    if (!isVoiceRecordingSupported()) {
+      toast.error("Voice recording isn't supported in this browser or device.");
       return;
     }
 
+    discardPreview();
+
+    let stream: MediaStream | null = null;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const preferredMime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-        ? "audio/webm"
-        : MediaRecorder.isTypeSupported("audio/mp4")
-          ? "audio/mp4"
-          : "";
-      const recorder = preferredMime
-        ? new MediaRecorder(stream, { mimeType: preferredMime })
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+
+      const negotiated = selectSupportedAudioMimeType();
+      negotiatedRef.current = negotiated;
+
+      const recorder = negotiated
+        ? new MediaRecorder(stream, { mimeType: negotiated.recorderMimeType })
         : new MediaRecorder(stream);
 
       chunksRef.current = [];
       canceledRef.current = false;
       recorderRef.current = recorder;
+
+      // Handle unexpected hardware/OS interruption while recording
+      stream.getAudioTracks().forEach((track) => {
+        track.onended = () => {
+          if (recorderRef.current?.state === "recording") {
+            toast.error("Voice recording was interrupted by another audio source.");
+            try {
+              recorderRef.current.stop();
+            } catch {
+              teardownRecording(true);
+              setStage("idle");
+            }
+          }
+        };
+      });
 
       recorder.ondataavailable = (ev) => {
         if (ev.data && ev.data.size > 0) {
@@ -219,75 +322,138 @@ export function VoiceNoteButton({
         }
       };
 
-      recorder.onstop = () => {
-        if (timerRef.current) {
-          clearInterval(timerRef.current);
-          timerRef.current = null;
-        }
-        stopTracks(stream);
-        setRecording(false);
+      recorder.onerror = () => {
+        clearTimer();
+        stopTracks(streamRef.current);
+        streamRef.current = null;
+        recorderRef.current = null;
+        setStage("idle");
         setElapsedSec(0);
+        toast.error("Voice recording failed unexpectedly. Please try again.");
+      };
 
-        if (canceledRef.current) return;
-        const mime = recorder.mimeType?.split(";")[0] || preferredMime || "audio/webm";
-        const blob = new Blob(chunksRef.current, { type: mime });
-        if (blob.size <= 0) {
-          toast.error("Recording was empty. Hold a little longer and retry.");
+      recorder.onstop = () => {
+        clearTimer();
+        stopTracks(stream);
+        if (streamRef.current === stream) {
+          streamRef.current = null;
+        }
+        if (recorderRef.current === recorder) {
+          recorderRef.current = null;
+        }
+
+        if (canceledRef.current) {
+          chunksRef.current = [];
+          setStage("idle");
+          setElapsedSec(0);
           return;
         }
-        const ext = mime.includes("mp4") ? "m4a" : mime.includes("ogg") ? "ogg" : "webm";
-        const file = new File([blob], `voice-note-${Date.now()}.${ext}`, { type: mime });
-        void onRecorded(file);
+
+        const built = buildVoiceNoteFile(
+          chunksRef.current,
+          recorder.mimeType,
+          negotiatedRef.current,
+        );
+        chunksRef.current = [];
+
+        if ("error" in built) {
+          toast.error(built.error);
+          setStage("idle");
+          setElapsedSec(0);
+          return;
+        }
+
+        revokePreviewUrl();
+        const url = URL.createObjectURL(built.file);
+        previewUrlRef.current = url;
+        setRecordedFile(built.file);
+        setPreviewUrl(url);
+        setSendError(null);
+        setStage("preview");
       };
 
       recorder.start();
-      setRecording(true);
+      setStage("recording");
       setElapsedSec(0);
+
       timerRef.current = setInterval(() => {
         setElapsedSec((prev) => {
-          if (prev >= 179) {
-            recorder.stop();
-            return 180;
+          if (prev >= VOICE_NOTE_MAX_DURATION_SEC - 1) {
+            try {
+              if (recorder.state === "recording") {
+                recorder.stop();
+              }
+            } catch {
+              // Ignore stop race
+            }
+            return VOICE_NOTE_MAX_DURATION_SEC;
           }
           return prev + 1;
         });
       }, 1000);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "";
-      if (/denied|notallowed/i.test(msg)) {
-        toast.error("Microphone permission denied. Allow microphone access in Settings.");
-      } else {
-        toast.error("Couldn't access microphone.");
-      }
+      stopTracks(stream);
+      streamRef.current = null;
+      recorderRef.current = null;
+      setStage("idle");
+      toast.error(formatMicrophoneError(err));
     }
   };
 
   const finishRecording = (cancel: boolean) => {
     canceledRef.current = cancel;
+    clearTimer();
     try {
       if (recorderRef.current && recorderRef.current.state === "recording") {
         recorderRef.current.stop();
       } else {
-        setRecording(false);
+        stopTracks(streamRef.current);
+        streamRef.current = null;
+        setStage("idle");
+        setElapsedSec(0);
       }
     } catch {
-      setRecording(false);
+      stopTracks(streamRef.current);
+      streamRef.current = null;
+      setStage("idle");
+      setElapsedSec(0);
     }
   };
 
-  if (recording) {
-    const mins = Math.floor(elapsedSec / 60);
-    const secs = String(elapsedSec % 60).padStart(2, "0");
+  const handleSendRecorded = async () => {
+    if (!recordedFile || stage === "uploading") return;
+    setStage("uploading");
+    setSendError(null);
+
+    try {
+      if (onSendVoiceNote) {
+        await onSendVoiceNote(recordedFile);
+      } else if (onRecorded) {
+        await onRecorded(recordedFile);
+      }
+      discardPreview();
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : "Voice note upload failed. Tap retry to send.";
+      setSendError(msg);
+      setStage("preview");
+    }
+  };
+
+  if (stage === "recording") {
     return (
-      <div className="inline-flex items-center gap-1.5 rounded-full border border-destructive/40 bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive shrink-0">
+      <div
+        data-testid="voice-note-recording"
+        className="inline-flex items-center gap-1.5 rounded-full border border-destructive/40 bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive shrink-0"
+      >
         <span className="size-2 rounded-full bg-destructive animate-pulse" aria-hidden />
-        <span className="tabular-nums font-mono">{`${mins}:${secs}`}</span>
+        <span className="tabular-nums font-mono">{formatVoiceDuration(elapsedSec)}</span>
         <button
           type="button"
           onClick={() => finishRecording(false)}
-          aria-label="Stop and attach voice note"
+          aria-label="Stop recording to preview"
           className="rounded-full p-1 hover:bg-destructive/20 transition-colors"
-          title="Attach voice note"
+          title="Stop & preview voice note"
         >
           <Square className="size-3.5 fill-current" />
         </button>
@@ -300,6 +466,67 @@ export function VoiceNoteButton({
         >
           <Trash2 className="size-3.5" />
         </button>
+      </div>
+    );
+  }
+
+  if ((stage === "preview" || stage === "uploading") && previewUrl && recordedFile) {
+    const isUploading = stage === "uploading";
+    return (
+      <div
+        data-testid="voice-note-preview"
+        className="flex flex-wrap items-center gap-1.5 rounded-2xl border border-primary/35 bg-primary/10 px-2.5 py-1.5 text-xs max-w-full shrink-0"
+      >
+        <audio
+          src={previewUrl}
+          controls
+          preload="metadata"
+          aria-label="Voice note preview"
+          className="h-8 w-36 sm:w-44 max-w-full"
+        />
+        <span className="tabular-nums font-mono text-[11px] font-semibold text-primary">
+          {formatVoiceDuration(elapsedSec)}
+        </span>
+        <button
+          type="button"
+          disabled={isUploading}
+          onClick={() => void handleSendRecorded()}
+          aria-label={sendError ? "Retry sending voice note" : "Send voice note"}
+          title={sendError ? `Retry: ${sendError}` : "Send voice note"}
+          className="inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-[11px] font-bold text-primary-foreground hover:opacity-90 disabled:opacity-60 transition-opacity"
+        >
+          {isUploading ? (
+            <>
+              <Loader2 className="size-3 animate-spin" />
+              <span>Sending…</span>
+            </>
+          ) : sendError ? (
+            <>
+              <RotateCcw className="size-3" />
+              <span>Retry</span>
+            </>
+          ) : (
+            <>
+              <Send className="size-3" />
+              <span>Send</span>
+            </>
+          )}
+        </button>
+        <button
+          type="button"
+          disabled={isUploading}
+          onClick={discardPreview}
+          aria-label="Discard voice note"
+          title="Discard voice note"
+          className="rounded-full p-1 text-muted-foreground hover:text-destructive disabled:opacity-50 transition-colors"
+        >
+          <Trash2 className="size-3.5" />
+        </button>
+        {sendError && (
+          <span role="alert" className="w-full text-[11px] text-destructive truncate">
+            {sendError}
+          </span>
+        )}
       </div>
     );
   }
@@ -322,10 +549,12 @@ export function VoiceNoteButton({
 
 export function ChatAttachmentMenu({
   onFileSelected,
+  onFilesSelected,
   disabled,
   loading,
 }: {
   onFileSelected: (file: File) => void | Promise<void>;
+  onFilesSelected?: (files: File[]) => void | Promise<void>;
   disabled?: boolean;
   loading?: boolean;
 }) {
@@ -352,8 +581,9 @@ export function ChatAttachmentMenu({
         <DropdownMenuItem
           className="rounded-xl cursor-pointer gap-2"
           onClick={() => {
-            void takePhoto().then((file) => {
-              if (file) return onFileSelected(file);
+            void capturePhotoWithCamera().then((outcome) => {
+              const first = outcome.files[0];
+              if (first) return onFileSelected(first);
             });
           }}
         >
@@ -362,8 +592,9 @@ export function ChatAttachmentMenu({
         <DropdownMenuItem
           className="rounded-xl cursor-pointer gap-2"
           onClick={() => {
-            void recordVideo().then((file) => {
-              if (file) return onFileSelected(file);
+            void captureVideoWithCamera().then((outcome) => {
+              const first = outcome.files[0];
+              if (first) return onFileSelected(first);
             });
           }}
         >
@@ -372,8 +603,17 @@ export function ChatAttachmentMenu({
         <DropdownMenuItem
           className="rounded-xl cursor-pointer gap-2"
           onClick={() => {
-            void chooseFromGallery("image/*,video/*").then((file) => {
-              if (file) return onFileSelected(file);
+            void pickMediaFromGallery({
+              mediaType: "all",
+              multiple: Boolean(onFilesSelected),
+              limit: 5,
+            }).then((outcome) => {
+              if (outcome.files.length === 0) return;
+              if (onFilesSelected && outcome.files.length > 1) {
+                return onFilesSelected(outcome.files);
+              }
+              const first = outcome.files[0];
+              if (first) return onFileSelected(first);
             });
           }}
         >
@@ -382,10 +622,12 @@ export function ChatAttachmentMenu({
         <DropdownMenuItem
           className="rounded-xl cursor-pointer gap-2"
           onClick={() => {
-            void chooseFromGallery(
-              ".pdf,.txt,.csv,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,application/pdf",
-            ).then((file) => {
-              if (file) return onFileSelected(file);
+            void pickMediaFromGallery({
+              accept: ".pdf,.txt,.csv,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,application/pdf",
+              multiple: false,
+            }).then((outcome) => {
+              const first = outcome.files[0];
+              if (first) return onFileSelected(first);
             });
           }}
         >
@@ -399,41 +641,106 @@ export function ChatAttachmentMenu({
 export function ResolvedChatMedia({
   mediaUrl,
   mediaType,
+  isOwnMessage = false,
 }: {
   mediaUrl: string;
   mediaType?: "image" | "video" | "audio" | "document" | null;
+  isOwnMessage?: boolean;
 }) {
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(() =>
     isPrivateDmMediaRef(mediaUrl) ? null : mediaUrl,
   );
   const [failed, setFailed] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const retryCountRef = useRef(0);
 
   useEffect(() => {
     let active = true;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    setFailed(false);
+    setRefreshing(false);
+    retryCountRef.current = 0;
+
+    if (!isPrivateDmMediaRef(mediaUrl)) {
+      setResolvedUrl(mediaUrl);
+      return;
+    }
+
+    const fetchSigned = async (forceRefresh: boolean) => {
+      const url = await createPrivateDmSignedUrl(mediaUrl, { forceRefresh });
+      if (!active) return;
+      if (!url) {
+        setFailed(true);
+        setResolvedUrl(null);
+        return;
+      }
+      setFailed(false);
+      setResolvedUrl(url);
+
+      // Proactively renew short-lived signed URLs before expiry while chat stays open
+      const renewDelayMs = Math.max(60_000, (DEFAULT_DM_SIGNED_URL_TTL_SEC - 90) * 1000);
+      refreshTimer = setTimeout(() => {
+        if (active) void fetchSigned(true);
+      }, renewDelayMs);
+    };
+
+    void fetchSigned(false);
+    return () => {
+      active = false;
+      if (refreshTimer) clearTimeout(refreshTimer);
+    };
+  }, [mediaUrl]);
+
+  const handleMediaLoadError = async () => {
+    if (isPrivateDmMediaRef(mediaUrl) && retryCountRef.current < 1) {
+      retryCountRef.current += 1;
+      setRefreshing(true);
+      const freshUrl = await createPrivateDmSignedUrl(mediaUrl, { forceRefresh: true });
+      setRefreshing(false);
+      if (freshUrl) {
+        setFailed(false);
+        setResolvedUrl(freshUrl);
+        return;
+      }
+    }
+    setFailed(true);
+  };
+
+  const handleManualRefresh = async () => {
     setFailed(false);
     if (!isPrivateDmMediaRef(mediaUrl)) {
       setResolvedUrl(mediaUrl);
       return;
     }
-    void createPrivateDmSignedUrl(mediaUrl).then((url) => {
-      if (!active) return;
-      if (!url) setFailed(true);
-      setResolvedUrl(url);
-    });
-    return () => {
-      active = false;
-    };
-  }, [mediaUrl]);
+    setRefreshing(true);
+    const freshUrl = await createPrivateDmSignedUrl(mediaUrl, { forceRefresh: true });
+    setRefreshing(false);
+    if (freshUrl) {
+      setResolvedUrl(freshUrl);
+    } else {
+      setFailed(true);
+    }
+  };
 
   if (failed) {
     return (
-      <div className="rounded-xl bg-background/40 px-3 py-2 text-xs text-muted-foreground">
-        Attachment unavailable
+      <div className="flex items-center justify-between gap-2 rounded-xl bg-background/40 px-3 py-2 text-xs text-muted-foreground">
+        <span>Attachment unavailable</span>
+        {isPrivateDmMediaRef(mediaUrl) && (
+          <button
+            type="button"
+            onClick={() => void handleManualRefresh()}
+            className="inline-flex items-center gap-1 font-semibold text-primary hover:underline"
+            aria-label="Retry loading attachment"
+          >
+            <RotateCcw className="size-3" /> Retry
+          </button>
+        )}
       </div>
     );
   }
 
-  if (!resolvedUrl) {
+  if (!resolvedUrl || refreshing) {
     return (
       <div className="flex items-center gap-2 rounded-xl bg-background/30 px-3 py-2 text-xs text-muted-foreground">
         <Loader2 className="size-3.5 animate-spin" /> Loading attachment…
@@ -443,10 +750,11 @@ export function ResolvedChatMedia({
 
   const inferredType =
     mediaType ??
-    (/\.(mp4|webm|mov)(\?|$)/i.test(resolvedUrl)
-      ? "video"
-      : /\.(mp3|m4a|ogg|wav|aac|webm)(\?|$)/i.test(resolvedUrl)
-        ? "audio"
+    (/voice-note-.*\.webm(\?|$)/i.test(resolvedUrl) ||
+    /\.(mp3|m4a|ogg|wav|aac)(\?|$)/i.test(resolvedUrl)
+      ? "audio"
+      : /\.(mp4|webm|mov)(\?|$)/i.test(resolvedUrl)
+        ? "video"
         : /\.(pdf|txt|csv|doc|docx|xls|xlsx|ppt|pptx|zip)(\?|$)/i.test(resolvedUrl)
           ? "document"
           : "image");
@@ -456,7 +764,7 @@ export function ResolvedChatMedia({
       <img
         src={resolvedUrl}
         alt="Attachment"
-        onError={() => setFailed(true)}
+        onError={() => void handleMediaLoadError()}
         className="max-h-60 rounded-lg object-cover"
         loading="lazy"
       />
@@ -470,7 +778,7 @@ export function ResolvedChatMedia({
         controls
         playsInline
         preload="metadata"
-        onError={() => setFailed(true)}
+        onError={() => void handleMediaLoadError()}
         className="max-h-60 rounded-lg"
       />
     );
@@ -478,13 +786,35 @@ export function ResolvedChatMedia({
 
   if (inferredType === "audio") {
     return (
-      <audio
-        src={resolvedUrl}
-        controls
-        preload="metadata"
-        onError={() => setFailed(true)}
-        className="h-10 max-w-full"
-      />
+      <div
+        data-testid="voice-note-player"
+        className={cn(
+          "flex flex-col gap-1.5 rounded-xl px-2.5 py-2 min-w-[220px] max-w-full",
+          isOwnMessage
+            ? "bg-primary-foreground/15 text-primary-foreground"
+            : "bg-background/70 text-foreground border border-border/50",
+        )}
+      >
+        <div className="flex items-center gap-1.5 text-[11px] font-semibold">
+          <span
+            className={cn(
+              "inline-flex size-5 items-center justify-center rounded-full shrink-0",
+              isOwnMessage ? "bg-primary-foreground/20" : "bg-primary/15 text-primary",
+            )}
+          >
+            <Mic className="size-3" />
+          </span>
+          <span>Voice message</span>
+        </div>
+        <audio
+          src={resolvedUrl}
+          controls
+          preload="metadata"
+          onError={() => void handleMediaLoadError()}
+          className="h-9 w-full max-w-[260px]"
+          aria-label="Voice message playback"
+        />
+      </div>
     );
   }
 

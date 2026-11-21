@@ -5,7 +5,6 @@ import { Browser } from "@capacitor/browser";
 import { StatusBar, Style } from "@capacitor/status-bar";
 import { SplashScreen } from "@capacitor/splash-screen";
 import { Share } from "@capacitor/share";
-import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
 import { Keyboard } from "@capacitor/keyboard";
 import { Network } from "@capacitor/network";
 import {
@@ -16,6 +15,11 @@ import {
 } from "@capacitor/push-notifications";
 import { toast } from "sonner";
 import { buildAuthRedirectUri, buildSignupConfirmationRedirect } from "@/lib/auth-return";
+import {
+  capturePhotoWithCamera,
+  captureVideoWithCamera,
+  pickMediaFromGallery,
+} from "@/lib/media-picker";
 import { SITE_ORIGIN } from "@/lib/site";
 
 /**
@@ -356,170 +360,86 @@ export async function nativeShare({
 }
 
 /**
- * Native Camera & Gallery capture — requests permissions only when invoked by user action.
- */
-export async function captureNativePhoto(
-  mode: "prompt" | "camera" | "photos" = "prompt",
-): Promise<{ webPath: string; format: string } | null> {
-  if (!isNative) return null;
-
-  try {
-    const perms = await Camera.checkPermissions().catch(() => null);
-    const needsCamera = mode === "camera" || mode === "prompt";
-    const needsPhotos = mode === "photos" || mode === "prompt";
-    const camDenied = needsCamera && perms?.camera === "denied";
-    const photosDenied = needsPhotos && perms?.photos === "denied";
-
-    if (camDenied || photosDenied) {
-      toast.error("Camera or Photos access is denied. Enable permission in your device Settings.");
-      return null;
-    }
-
-    if (
-      (needsCamera && perms?.camera === "prompt") ||
-      (needsPhotos && perms?.photos === "prompt")
-    ) {
-      const requested = await Camera.requestPermissions({
-        permissions:
-          mode === "camera" ? ["camera"] : mode === "photos" ? ["photos"] : ["camera", "photos"],
-      }).catch(() => null);
-      if (
-        (mode === "camera" && requested?.camera === "denied") ||
-        (mode === "photos" && requested?.photos === "denied")
-      ) {
-        toast.error("Permission denied. Update app permissions in Settings to capture photos.");
-        return null;
-      }
-    }
-
-    const source =
-      mode === "camera"
-        ? CameraSource.Camera
-        : mode === "photos"
-          ? CameraSource.Photos
-          : CameraSource.Prompt;
-
-    const photo = await Camera.getPhoto({
-      quality: 85,
-      allowEditing: false,
-      resultType: CameraResultType.Uri,
-      source,
-    });
-
-    if (!photo.webPath) return null;
-    return { webPath: photo.webPath, format: photo.format || "jpeg" };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "";
-    if (!/cancel/i.test(msg)) {
-      console.warn("Camera capture error:", err);
-      toast.error("Couldn't access camera or photo library.");
-    }
-    return null;
-  }
-}
-
-/**
- * Captures a photo via native Camera/Photos prompt and converts it into a standard File
- * compatible with Ping's upload pipelines. Returns null on web or cancellation.
+ * Captures a photo via `@capacitor/camera` v8 (`takePhoto` / `chooseFromGallery`)
+ * and converts it into a standard File compatible with Ping's upload pipelines.
+ * Never relies on deprecated `Camera.getPhoto()`.
  */
 export async function captureNativeMediaFile(
   mode: "prompt" | "camera" | "photos" = "prompt",
 ): Promise<File | null> {
-  const captured = await captureNativePhoto(mode);
-  if (!captured) return null;
-
-  const response = await fetch(captured.webPath);
-  const blob = await response.blob();
-  const ext = captured.format === "png" ? "png" : captured.format === "webp" ? "webp" : "jpg";
-  const fallbackMime = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
-  const mime = blob.type.startsWith("image/") ? blob.type : fallbackMime;
-  return new File([blob], `ping-capture-${Date.now()}.${ext}`, { type: mime });
+  if (!Capacitor.isNativePlatform()) return null;
+  if (mode === "camera") {
+    const out = await capturePhotoWithCamera();
+    return out.files[0] ?? null;
+  }
+  const out = await pickMediaFromGallery({ mediaType: "photo", multiple: false });
+  return out.files[0] ?? null;
 }
 
 /**
- * On web, clicks the hidden file input; on native Android/iOS, prompts Camera or Photo Library
- * directly and passes the resulting File to `onFile`.
+ * On web, clicks the hidden file input; on native Android/iOS, opens the native gallery
+ * via `Camera.chooseFromGallery()` and passes the resulting File to `onFile`.
  */
 export async function pickOrCaptureImage(
   fileInput: HTMLInputElement | null,
   onFile: (file: File) => void | Promise<void>,
 ): Promise<void> {
-  if (!isNative) {
-    fileInput?.click();
-    return;
-  }
-  const file = await captureNativeMediaFile("prompt");
-  if (file) {
-    await onFile(file);
-  }
-}
-
-function pickFileViaInput(options: { accept: string; capture?: string }): Promise<File | null> {
-  if (typeof document === "undefined") return Promise.resolve(null);
-  return new Promise((resolve) => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = options.accept;
-    if (options.capture) {
-      input.setAttribute("capture", options.capture);
-    }
-    let settled = false;
-    const finish = (file: File | null) => {
-      if (settled) return;
-      settled = true;
-      input.remove();
-      resolve(file);
-    };
-    input.onchange = () => finish(input.files?.[0] ?? null);
-    window.addEventListener(
-      "focus",
-      () => setTimeout(() => finish(input.files?.[0] ?? null), 400),
-      {
-        once: true,
-      },
-    );
-    input.style.position = "fixed";
-    input.style.opacity = "0";
-    input.style.pointerEvents = "none";
-    document.body.appendChild(input);
-    input.click();
+  const outcome = await pickMediaFromGallery({
+    mediaType: "photo",
+    multiple: false,
+    webFallbackInput: fileInput,
   });
+  const first = outcome.files[0];
+  if (first) {
+    await onFile(first);
+  }
 }
 
 /**
- * Captures a photo directly via Capacitor Camera (`CameraSource.Camera`) on native,
+ * Captures a photo directly via Capacitor Camera `takePhoto()` on native Android/iOS,
  * or opens camera-mode photo capture on web/mobile browsers.
  */
 export async function takePhoto(): Promise<File | null> {
-  if (isNative) {
-    return captureNativeMediaFile("camera");
-  }
-  return pickFileViaInput({ accept: "image/*", capture: "environment" });
+  const out = await capturePhotoWithCamera();
+  return out.files[0] ?? null;
 }
 
 /**
- * Launches native or browser video capture (`capture="camcorder"`) for Moments, Chat & Hub uploads.
+ * Launches native `Camera.recordVideo()` on Android/iOS or browser video capture
+ * (`capture="camcorder"`) for Moments, Chat & Hub uploads.
  */
 export async function recordVideo(): Promise<File | null> {
-  return pickFileViaInput({
-    accept: "video/mp4,video/webm,video/quicktime,video/*",
-    capture: "camcorder",
-  });
+  const out = await captureVideoWithCamera();
+  return out.files[0] ?? null;
 }
 
 /**
- * Opens gallery / file chooser via Capacitor Photos (for image pick on native) or OS picker.
+ * Opens the native photo/video gallery via Capacitor Camera `chooseFromGallery()` on
+ * Android/iOS (supporting photo, video, and combined selection), or OS file picker on Web/PWA.
  */
 export async function chooseFromGallery(accept = "image/*,video/*"): Promise<File | null> {
-  if (
-    isNative &&
-    !accept.includes("video") &&
-    !accept.includes("audio") &&
-    !accept.includes("application")
-  ) {
-    return captureNativeMediaFile("photos");
-  }
-  return pickFileViaInput({ accept });
+  const wantsPhoto = accept.includes("image");
+  const wantsVideo = accept.includes("video");
+  const mediaType =
+    wantsPhoto && wantsVideo ? "all" : wantsVideo ? "video" : wantsPhoto ? "photo" : "all";
+  const out = await pickMediaFromGallery({
+    mediaType,
+    multiple: false,
+    accept,
+  });
+  return out.files[0] ?? null;
+}
+
+/**
+ * Opens multi-select photo/video gallery (`Camera.chooseFromGallery({ allowMultipleSelection: true })`
+ * on native Android/iOS; `<input type="file" multiple>` on Web/PWA).
+ */
+export async function chooseMultipleFromGallery(
+  mediaType: "photo" | "video" | "all" = "all",
+  limit = 10,
+): Promise<File[]> {
+  const out = await pickMediaFromGallery({ mediaType, multiple: true, limit });
+  return out.files;
 }
 
 /* -------------------------------------------------------------------------- */

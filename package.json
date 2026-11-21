@@ -23,7 +23,8 @@
     "android:release:signed": "node scripts/android-build.mjs release-apk --require-signed",
     "android:bundle:release": "node scripts/android-build.mjs release-aab",
     "db:migrate": "node scripts/migrate-remote.mjs",
-    "db:verify": "node scripts/migrate-remote.mjs --verify-only"
+    "db:verify": "node scripts/migrate-remote.mjs --verify-only",
+    "storage:check": "node scripts/provision-storage-buckets.mjs --check-only"
   },
   "overrides": {
     "rolldown": "1.2.1"

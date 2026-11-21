@@ -9,6 +9,7 @@ import { ensureClientProfileRow } from "@/lib/ensure-profile";
 import { captureLandingAttribution, recordFirstMeaningfulSessionOnce } from "@/lib/economic-events";
 import { clearSessionRestoredFlag, trackSessionRestoredOnce } from "@/lib/telemetry";
 import { clearPwaCachesOnLogout, isRunningStandalonePwa } from "@/lib/pwa";
+import { clearPrivateDmSignedUrlCache } from "@/lib/storage";
 
 let intentionalSignOut = false;
 
@@ -63,6 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (event === "SIGNED_OUT") {
         clearSessionRestoredFlag();
+        clearPrivateDmSignedUrlCache();
         void clearPwaCachesOnLogout();
         qc.removeQueries({ queryKey: ["my-profile"] });
         if (wasSignedInRef.current && !intentionalSignOut) {
