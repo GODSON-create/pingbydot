@@ -396,21 +396,34 @@ export async function executeGriotAssist(
 
   if (status.liveProviderConfigured && typeof fetch === "function") {
     try {
-      const resp = await fetch("/api/griot/assist", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: req.action,
-          inputText: req.inputText,
-          tone: req.tone ?? "concise",
-          targetLocale: req.targetLocale,
-        }),
-      });
-      if (resp.ok) {
-        const json = (await resp.json()) as GriotAssistResult;
-        result = { ...json, privateMessagesAccessed: false };
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (accessToken) {
+        const resp = await fetch("/api/griot/assist", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            action: req.action,
+            inputText: req.inputText,
+            tone: req.tone ?? "concise",
+            targetLocale: req.targetLocale,
+          }),
+        });
+        if (resp.status === 429) {
+          throw new Error("GRIOT AI rate limit reached. Please wait a moment and try again.");
+        }
+        if (resp.ok) {
+          const json = (await resp.json()) as GriotAssistResult;
+          result = { ...json, privateMessagesAccessed: false };
+        }
       }
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.message.includes("rate limit")) {
+        throw err;
+      }
       // Fall back transparently to local deterministic structuring
     }
   }

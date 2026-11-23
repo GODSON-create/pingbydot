@@ -74,6 +74,8 @@ import {
   useMarkConversationRead,
   useHideConversation,
   useBlockUser,
+  useAcceptMessageRequest,
+  useDeclineMessageRequest,
   useDeletePrivateMessage,
   useEditPrivateMessage,
   useTogglePinPrivateMessage,
@@ -83,6 +85,7 @@ import {
   useConversationRealtime,
   useConversationPresence,
 } from "@/lib/messages";
+import { useUserPrivacy } from "@/lib/privacy";
 import { useAuth } from "@/lib/auth";
 import { useChatDraft } from "@/lib/draft-store";
 import { supabase } from "@/integrations/supabase/client";
@@ -202,12 +205,15 @@ export function DirectMessageChat({
   const { mutate: markRead } = useMarkConversationRead();
   const hideMutation = useHideConversation();
   const blockMutation = useBlockUser();
+  const acceptRequestMutation = useAcceptMessageRequest();
+  const declineRequestMutation = useDeclineMessageRequest();
   const deleteMessageMutation = useDeletePrivateMessage();
   const editMessageMutation = useEditPrivateMessage(conversation.id);
   const pinMessageMutation = useTogglePinPrivateMessage(conversation.id);
   const reactMessageMutation = useToggleMessageReaction(conversation.id, user?.id);
   const saveMessageMutation = useToggleSaveMessage(user?.id);
   const updatePrefsMutation = useUpdateConversationPrefs(user?.id);
+  const { preferences: myPrivacy } = useUserPrivacy(user?.id);
 
   const messageIds = useMemo(() => messages.map((m) => m.id), [messages]);
   const { data: reactionsMap = {} } = useQuery(
@@ -220,9 +226,30 @@ export function DirectMessageChat({
   const isMuted = Boolean(conversation.my_membership?.is_muted);
   const isArchived = Boolean(conversation.my_membership?.is_archived);
   const myRole = conversation.my_membership?.role ?? "member";
-  const postingRestricted = Boolean(
-    isGroup && conversation.only_admins_can_post && myRole !== "owner" && myRole !== "admin",
+  const requestStatus = conversation.request_status ?? "accepted";
+  const isIncomingPendingRequest =
+    !isGroup &&
+    requestStatus === "pending" &&
+    Boolean(user?.id) &&
+    conversation.request_recipient_id === user?.id;
+  const isOutgoingPendingRequest =
+    !isGroup &&
+    requestStatus === "pending" &&
+    Boolean(user?.id) &&
+    conversation.requested_by === user?.id;
+  const isDeclinedRequest = !isGroup && requestStatus === "declined";
+  const mySentCount = useMemo(
+    () => (user?.id ? messages.filter((m) => m.sender_id === user.id).length : 0),
+    [messages, user?.id],
   );
+  const outgoingRequestLimitReached = isOutgoingPendingRequest && mySentCount >= 1;
+  const postingRestricted = Boolean(
+    (isGroup && conversation.only_admins_can_post && myRole !== "owner" && myRole !== "admin") ||
+    isIncomingPendingRequest ||
+    isDeclinedRequest ||
+    outgoingRequestLimitReached,
+  );
+  const mediaRestricted = isOutgoingPendingRequest || postingRestricted;
 
   useConversationRealtime(conversation.id);
   const { otherOnline, otherTyping, notifyTyping } = useConversationPresence(
@@ -249,7 +276,7 @@ export function DirectMessageChat({
     const prefersReducedMotion =
       typeof window !== "undefined" &&
       window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    messagesEndRef.current?.scrollIntoView({
+    messagesEndRef.current?.scrollIntoView?.({
       behavior: prefersReducedMotion ? "auto" : "smooth",
     });
   }, [messages.length, otherTyping, searchQuery]);
@@ -327,6 +354,20 @@ export function DirectMessageChat({
   const handleForwardToConversation = async (targetConversationId: string) => {
     if (!forwardingMsg || !user) return;
     try {
+      let forwardedMediaUrl = forwardingMsg.media_url;
+      if (forwardedMediaUrl) {
+        const { isPrivateDmMediaRef, forwardPrivateDmAttachment } = await import("@/lib/storage");
+        if (isPrivateDmMediaRef(forwardedMediaUrl)) {
+          const copied = await forwardPrivateDmAttachment(
+            forwardedMediaUrl,
+            targetConversationId,
+            user.id,
+            forwardingMsg.media_type,
+          );
+          forwardedMediaUrl = copied.storagePath;
+        }
+      }
+
       const forwardedText = forwardingMsg.content
         ? `↪ Forwarded:\n${forwardingMsg.content}`
         : forwardingMsg.media_type === "audio"
@@ -335,7 +376,7 @@ export function DirectMessageChat({
       await sendMutation.mutateAsync({
         conversationId: targetConversationId,
         content: forwardedText,
-        mediaUrl: forwardingMsg.media_url,
+        mediaUrl: forwardedMediaUrl,
         mediaType: forwardingMsg.media_type,
       });
       toast.success("Message forwarded");
@@ -364,6 +405,10 @@ export function DirectMessageChat({
 
   const uploadSelectedFile = async (file: File) => {
     if (!user) return;
+    if (mediaRestricted) {
+      toast.error("Attachments are only enabled once a message request is accepted.");
+      return;
+    }
 
     const detectedKind = detectMediaKind(file);
     const check = validateMediaUpload(
@@ -472,8 +517,12 @@ export function DirectMessageChat({
   };
 
   const handleSendVoiceNote = async (file: File) => {
-    if (!user || postingRestricted) {
-      throw new Error("Sign in to send voice messages.");
+    if (!user || mediaRestricted) {
+      throw new Error(
+        isOutgoingPendingRequest
+          ? "Voice messages are available once the recipient accepts your request."
+          : "Sign in to send voice messages.",
+      );
     }
 
     const check = validateMediaUpload(
@@ -530,7 +579,9 @@ export function DirectMessageChat({
     }
   };
 
-  const forwardTargets = allConversations.filter((c) => c.id !== conversation.id);
+  const forwardTargets = allConversations.filter(
+    (c) => c.id !== conversation.id && (c.request_status ?? "accepted") === "accepted",
+  );
 
   return (
     <div
@@ -1187,18 +1238,18 @@ export function DirectMessageChat({
                         title={
                           msg.status === "sending"
                             ? "Sending"
-                            : msg.status === "read"
+                            : msg.status === "read" && myPrivacy.read_receipts_enabled
                               ? "Read"
-                              : msg.status === "delivered"
+                              : msg.status === "delivered" || msg.status === "read"
                                 ? "Delivered"
                                 : "Sent"
                         }
                       >
                         {msg.status === "sending" ? (
                           <Loader2 className="size-3 animate-spin text-muted-foreground" />
-                        ) : msg.status === "read" ? (
+                        ) : msg.status === "read" && myPrivacy.read_receipts_enabled ? (
                           <CheckCheck className="size-3 text-primary font-bold" />
-                        ) : msg.status === "delivered" ? (
+                        ) : msg.status === "delivered" || msg.status === "read" ? (
                           <CheckCheck className="size-3 text-muted-foreground" />
                         ) : (
                           <Check className="size-3 text-muted-foreground" />
@@ -1454,8 +1505,91 @@ export function DirectMessageChat({
         </div>
       )}
 
-      {/* 3. INPUT COMPOSER */}
-      {postingRestricted ? (
+      {/* 3. INPUT COMPOSER OR MESSAGE REQUEST CONTROLS */}
+      {isIncomingPendingRequest ? (
+        <div
+          data-testid="incoming-message-request-banner"
+          className="p-4 border-t border-border/60 bg-secondary/40 space-y-3"
+        >
+          <p className="text-xs text-muted-foreground text-center">
+            <strong>{otherUser?.display_name || otherUser?.username || "This user"}</strong> wants
+            to send you a message. They can&apos;t see read receipts or send attachments unless you
+            accept.
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="hero"
+              className="rounded-full px-4"
+              disabled={acceptRequestMutation.isPending}
+              onClick={async () => {
+                try {
+                  await acceptRequestMutation.mutateAsync(conversation.id);
+                  toast.success("Message request accepted");
+                } catch (err: any) {
+                  toast.error(err?.message || "Couldn't accept message request.");
+                }
+              }}
+            >
+              Accept
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="rounded-full px-4"
+              disabled={declineRequestMutation.isPending}
+              onClick={async () => {
+                try {
+                  await declineRequestMutation.mutateAsync(conversation.id);
+                  toast.success("Message request declined");
+                  onBack?.();
+                } catch (err: any) {
+                  toast.error(err?.message || "Couldn't decline message request.");
+                }
+              }}
+            >
+              Decline
+            </Button>
+            {otherUser && (
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                className="rounded-full px-4"
+                disabled={blockMutation.isPending}
+                onClick={async () => {
+                  try {
+                    await blockMutation.mutateAsync(otherUser.id);
+                    toast.success(`Blocked @${otherUser.username}`);
+                    onBack?.();
+                  } catch (err: any) {
+                    toast.error(err?.message || "Couldn't block user.");
+                  }
+                }}
+              >
+                Block
+              </Button>
+            )}
+          </div>
+        </div>
+      ) : isDeclinedRequest ? (
+        <div
+          data-testid="declined-message-request-banner"
+          className="p-3.5 border-t border-border/60 bg-secondary/40 text-center text-xs text-muted-foreground"
+        >
+          This message request was declined. You cannot send further messages here.
+        </div>
+      ) : outgoingRequestLimitReached ? (
+        <div
+          data-testid="outgoing-request-limit-banner"
+          className="p-3.5 border-t border-border/60 bg-secondary/40 text-center text-xs text-muted-foreground"
+        >
+          Message request sent. You can send additional messages, media, or voice notes once{" "}
+          {otherUser?.display_name || otherUser?.username || "the recipient"} accepts.
+        </div>
+      ) : postingRestricted ? (
         <div className="p-3.5 border-t border-border/60 bg-secondary/40 text-center text-xs text-muted-foreground">
           Only group admins can post announcements in this conversation.
         </div>
@@ -1464,7 +1598,7 @@ export function DirectMessageChat({
           onSubmit={handleSend}
           className="p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t border-border/60 bg-card/90 backdrop-blur-md flex flex-wrap sm:flex-nowrap items-center gap-1.5"
         >
-          {!editingMsg && (
+          {!editingMsg && !isOutgoingPendingRequest && (
             <>
               <ChatAttachmentMenu
                 onFileSelected={uploadSelectedFile}
@@ -1496,9 +1630,11 @@ export function DirectMessageChat({
             placeholder={
               editingMsg
                 ? "Edit your message…"
-                : isGroup
-                  ? `Message ${conversation.title || "group"}…`
-                  : `Message ${otherUser?.display_name || ""}…`
+                : isOutgoingPendingRequest
+                  ? "Send a one-time text message request…"
+                  : isGroup
+                    ? `Message ${conversation.title || "group"}…`
+                    : `Message ${otherUser?.display_name || ""}…`
             }
             className="flex-1 min-w-0 rounded-full bg-secondary/50 border-border/60 px-4 py-2 text-sm focus-visible:ring-primary"
             disabled={sendMutation.isPending || editMessageMutation.isPending}

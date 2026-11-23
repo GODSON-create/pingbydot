@@ -521,7 +521,7 @@ BEGIN
         lifetime_earned = public.dot_wallets.lifetime_earned + v_intent.dot_amount,
         updated_at = now();
 
-  INSERT INTO public.dot_transactions (user_id, amount, tx_type, source, source_ref, description)
+  INSERT INTO public.dot_transactions (user_id, amount, tx_type, source, reference_id, description)
   VALUES (
     v_intent.user_id,
     v_intent.dot_amount,
@@ -577,7 +577,7 @@ BEGIN
         updated_at = now()
     WHERE user_id = v_intent.user_id;
 
-    INSERT INTO public.dot_transactions (user_id, amount, tx_type, source, source_ref, description)
+    INSERT INTO public.dot_transactions (user_id, amount, tx_type, source, reference_id, description)
     VALUES (
       v_intent.user_id,
       -v_intent.dot_amount,

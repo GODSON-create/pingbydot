@@ -524,6 +524,27 @@ $$;
 REVOKE ALL ON FUNCTION public.update_conversation_member_prefs(uuid, boolean, boolean) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.update_conversation_member_prefs(uuid, boolean, boolean) TO authenticated;
 
+-- Reconcile conversation_members.role CHECK constraint (0014 only allowed 'member'|'admin',
+-- whereas group conversations assign 'owner' to the creator).
+DO $$
+DECLARE
+  v_conname text;
+BEGIN
+  FOR v_conname IN
+    SELECT conname
+    FROM pg_constraint
+    WHERE conrelid = 'public.conversation_members'::regclass
+      AND contype = 'c'
+      AND pg_get_constraintdef(oid) ILIKE '%role%'
+  LOOP
+    EXECUTE format('ALTER TABLE public.conversation_members DROP CONSTRAINT IF EXISTS %I', v_conname);
+  END LOOP;
+END $$;
+
+ALTER TABLE public.conversation_members
+  ADD CONSTRAINT conversation_members_role_check
+  CHECK (role IN ('owner', 'admin', 'member'));
+
 CREATE OR REPLACE FUNCTION public.create_group_conversation(
   p_title text,
   p_description text DEFAULT '',
@@ -1018,17 +1039,122 @@ CREATE TABLE IF NOT EXISTS public.notifications (
   actor_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
   kind text NOT NULL CHECK (
     kind IN (
-      'reply', 'mention', 'reaction', 'like', 'follow', 'message',
+      'ping_reply', 'comment_reply',
+      'reply', 'mention', 'reaction', 'like', 'follow', 'message', 'message_request',
       'hub_activity', 'opportunity', 'application', 'event', 'system'
     )
   ),
-  title text NOT NULL CHECK (char_length(trim(title)) BETWEEN 1 AND 180),
+  ping_id uuid REFERENCES public.pings(id) ON DELETE CASCADE,
+  comment_id uuid REFERENCES public.comments(id) ON DELETE CASCADE,
+  title text NOT NULL DEFAULT '' CHECK (char_length(title) <= 180),
   body text NOT NULL DEFAULT '',
   href text NOT NULL DEFAULT '/',
   group_key text,
   read_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- Reconcile existing public.notifications table created by migration 0005
+ALTER TABLE public.notifications
+  ADD COLUMN IF NOT EXISTS ping_id uuid REFERENCES public.pings(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS comment_id uuid REFERENCES public.comments(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS title text NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS body text NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS href text NOT NULL DEFAULT '/',
+  ADD COLUMN IF NOT EXISTS group_key text;
+
+DO $$
+DECLARE
+  v_conname text;
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'notifications' AND column_name = 'ping_id' AND is_nullable = 'NO'
+  ) THEN
+    ALTER TABLE public.notifications ALTER COLUMN ping_id DROP NOT NULL;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'notifications' AND column_name = 'comment_id' AND is_nullable = 'NO'
+  ) THEN
+    ALTER TABLE public.notifications ALTER COLUMN comment_id DROP NOT NULL;
+  END IF;
+
+  FOR v_conname IN
+    SELECT conname
+    FROM pg_constraint
+    WHERE conrelid = 'public.notifications'::regclass
+      AND contype = 'c'
+      AND (pg_get_constraintdef(oid) ILIKE '%kind%' OR pg_get_constraintdef(oid) ILIKE '%title%')
+  LOOP
+    EXECUTE format('ALTER TABLE public.notifications DROP CONSTRAINT IF EXISTS %I', v_conname);
+  END LOOP;
+END $$;
+
+ALTER TABLE public.notifications
+  ADD CONSTRAINT notifications_kind_check CHECK (
+    kind IN (
+      'ping_reply', 'comment_reply',
+      'reply', 'mention', 'reaction', 'like', 'follow', 'message', 'message_request',
+      'hub_activity', 'opportunity', 'application', 'event', 'system'
+    )
+  );
+
+ALTER TABLE public.notifications
+  ADD CONSTRAINT notifications_title_length_check CHECK (char_length(title) <= 180);
+
+-- Keep legacy 0005 comment notification trigger populated with rich title/href metadata
+CREATE OR REPLACE FUNCTION public.notify_comment() RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  ping_author uuid;
+  parent_author uuid;
+BEGIN
+  SELECT user_id INTO ping_author FROM public.pings WHERE id = NEW.ping_id;
+  IF NEW.parent_id IS NOT NULL THEN
+    SELECT user_id INTO parent_author FROM public.comments WHERE id = NEW.parent_id;
+  END IF;
+
+  IF parent_author IS NOT NULL AND parent_author <> NEW.user_id THEN
+    INSERT INTO public.notifications (user_id, actor_id, kind, ping_id, comment_id, title, body, href, group_key)
+    VALUES (
+      parent_author,
+      NEW.user_id,
+      'comment_reply',
+      NEW.ping_id,
+      NEW.id,
+      'New reply to your comment',
+      left(coalesce(NEW.content, ''), 140),
+      '/p/' || NEW.ping_id::text,
+      'comment_reply:' || NEW.ping_id::text
+    );
+  END IF;
+
+  IF ping_author IS NOT NULL AND ping_author <> NEW.user_id AND ping_author IS DISTINCT FROM parent_author THEN
+    INSERT INTO public.notifications (user_id, actor_id, kind, ping_id, comment_id, title, body, href, group_key)
+    VALUES (
+      ping_author,
+      NEW.user_id,
+      'ping_reply',
+      NEW.ping_id,
+      NEW.id,
+      'New reply on your Ping',
+      left(coalesce(NEW.content, ''), 140),
+      '/p/' || NEW.ping_id::text,
+      'ping_reply:' || NEW.ping_id::text
+    );
+  END IF;
+
+  RETURN NULL;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.notify_comment() FROM PUBLIC, anon, authenticated;
+GRANT DELETE ON public.notifications TO authenticated;
 
 CREATE INDEX IF NOT EXISTS notifications_user_created_idx
   ON public.notifications (user_id, created_at DESC);

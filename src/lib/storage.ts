@@ -285,3 +285,60 @@ export async function createPrivateDmSignedUrl(
   });
   return data.signedUrl;
 }
+
+/**
+ * Safely forwards a private DM attachment to a different conversation by
+ * downloading the authorized source object and uploading a fresh target-scoped
+ * copy under `{targetConversationId}/{forwarderUserId}/{unique_filename}`.
+ *
+ * Prevents cross-conversation storage path reuse (enforced by Stage 1 migration
+ * 0037 Storage RLS and `assert_can_send_to_conversation`).
+ */
+export async function forwardPrivateDmAttachment(
+  sourceUrlOrRef: string,
+  targetConversationId: string,
+  forwarderUserId: string,
+  mediaType?: string | null,
+): Promise<{ storagePath: string; signedUrl: string; expiresAtMs: number }> {
+  const sourcePath = extractPrivateDmMediaPath(sourceUrlOrRef);
+  if (!sourcePath) {
+    throw new Error("Only private DM attachments require conversation-scoped re-upload.");
+  }
+
+  const { data: blob, error: downloadError } = await supabase.storage
+    .from(DM_MEDIA_BUCKET)
+    .download(sourcePath);
+
+  if (downloadError || !blob) {
+    throw new Error(
+      formatStorageUploadError(
+        downloadError,
+        "Could not access source attachment for forwarding.",
+        DM_MEDIA_BUCKET,
+      ),
+    );
+  }
+
+  const sourceFileName = sourcePath.split("/").pop() || "forwarded-attachment.bin";
+  const fallbackExt =
+    mediaType === "video"
+      ? "mp4"
+      : mediaType === "audio"
+        ? "webm"
+        : mediaType === "image"
+          ? "jpg"
+          : "bin";
+  const targetPath = buildDmAttachmentPath(
+    targetConversationId,
+    forwarderUserId,
+    sourceFileName,
+    fallbackExt,
+  );
+
+  const uploaded = await uploadPrivateDmMedia(targetPath, blob, sourceFileName);
+  return {
+    storagePath: uploaded.storagePath,
+    signedUrl: uploaded.signedUrl,
+    expiresAtMs: uploaded.expiresAtMs,
+  };
+}

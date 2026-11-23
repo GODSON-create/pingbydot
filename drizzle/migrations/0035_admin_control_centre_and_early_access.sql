@@ -499,6 +499,12 @@ BEGIN
     UPDATE public.pings SET hidden_at = NULL WHERE id = _target;
   ELSIF _action = 'resolve_report' THEN
     UPDATE public.reports SET resolved_at = now() WHERE id = _target;
+  ELSIF _action = 'hide_comment' THEN
+    UPDATE public.comments SET hidden_at = now() WHERE id = _target;
+  ELSIF _action = 'restore_comment' THEN
+    UPDATE public.comments SET hidden_at = NULL WHERE id = _target;
+  ELSIF _action = 'resolve_comment_report' THEN
+    UPDATE public.comment_reports SET resolved_at = now() WHERE id = _target;
   ELSE
     RAISE EXCEPTION 'Invalid moderation action';
   END IF;

@@ -18,6 +18,7 @@ export function formatConversationPreview(preview: string | null | undefined): s
 interface ConversationListProps {
   conversations: Conversation[];
   selectedId?: string | undefined;
+  currentUserId?: string | undefined;
   onSelect: (conv: Conversation) => void;
   onNewChat?: () => void;
   onNewGroup?: () => void;
@@ -26,19 +27,31 @@ interface ConversationListProps {
 export function ConversationList({
   conversations,
   selectedId,
+  currentUserId,
   onSelect,
   onNewChat,
   onNewGroup,
 }: ConversationListProps) {
   const [query, setQuery] = useState("");
-  const [view, setView] = useState<"active" | "archived">("active");
+  const [view, setView] = useState<"active" | "requests" | "archived">("active");
+
+  const isIncomingRequest = (c: Conversation) =>
+    c.type === "direct" &&
+    c.request_status === "pending" &&
+    Boolean(currentUserId) &&
+    c.request_recipient_id === currentUserId;
 
   const archivedCount = conversations.filter((c) => Boolean(c.my_membership?.is_archived)).length;
+  const requestsCount = conversations.filter(
+    (c) => !c.my_membership?.is_archived && isIncomingRequest(c),
+  ).length;
 
   const filtered = conversations.filter((c) => {
     const isArchived = Boolean(c.my_membership?.is_archived);
-    if (view === "active" && isArchived) return false;
+    const incomingReq = isIncomingRequest(c);
     if (view === "archived" && !isArchived) return false;
+    if (view === "requests" && (isArchived || !incomingReq)) return false;
+    if (view === "active" && (isArchived || incomingReq)) return false;
 
     if (!query.trim()) return true;
     const label =
@@ -110,6 +123,20 @@ export function ConversationList({
           >
             Inbox
           </button>
+          {(requestsCount > 0 || view === "requests") && (
+            <button
+              type="button"
+              onClick={() => setView("requests")}
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-semibold transition-colors",
+                view === "requests"
+                  ? "bg-foreground text-background"
+                  : "bg-primary/15 text-primary hover:bg-primary/25",
+              )}
+            >
+              Requests {requestsCount > 0 ? `(${requestsCount})` : ""}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setView("archived")}
@@ -131,7 +158,11 @@ export function ConversationList({
         {filtered.length === 0 ? (
           <div className="p-8 text-center text-muted-foreground">
             <p className="text-xs">
-              {view === "archived" ? "No archived conversations." : "No conversations found."}
+              {view === "archived"
+                ? "No archived conversations."
+                : view === "requests"
+                  ? "No pending message requests."
+                  : "No conversations found."}
             </p>
           </div>
         ) : (

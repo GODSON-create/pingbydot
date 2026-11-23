@@ -534,6 +534,76 @@ async function runSchemaVerification(sql, releaseEntries) {
     );
   }
 
+  // Stage 1 (0037) schema repair & messaging/privacy security checks
+  const [
+    {
+      auth_conv_ins,
+      auth_cm_ins,
+      auth_cm_del,
+      auth_cm_role_upd,
+      auth_pm_del,
+      auth_pm_status_upd,
+      auth_legacy_cm_ins,
+      req_status_col,
+      dm_perm_col,
+      notif_title_col,
+      notif_ping_nullable,
+      cm_owner_role_allowed,
+      anon_accept_req_exec,
+    },
+  ] = await sql`
+    SELECT
+      has_table_privilege('authenticated', 'public.conversations', 'INSERT') AS auth_conv_ins,
+      has_table_privilege('authenticated', 'public.conversation_members', 'INSERT') AS auth_cm_ins,
+      has_table_privilege('authenticated', 'public.conversation_members', 'DELETE') AS auth_cm_del,
+      has_column_privilege('authenticated', 'public.conversation_members', 'role', 'UPDATE') AS auth_cm_role_upd,
+      has_table_privilege('authenticated', 'public.private_messages', 'DELETE') AS auth_pm_del,
+      has_column_privilege('authenticated', 'public.private_messages', 'status', 'UPDATE') AS auth_pm_status_upd,
+      has_table_privilege('authenticated', 'public.conversation_messages', 'INSERT') AS auth_legacy_cm_ins,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'conversations' AND column_name = 'request_status'
+      ) AS req_status_col,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'user_privacy_preferences' AND column_name = 'dm_permission'
+      ) AS dm_perm_col,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'notifications' AND column_name = 'title'
+      ) AS notif_title_col,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'notifications' AND column_name = 'ping_id' AND is_nullable = 'YES'
+      ) AS notif_ping_nullable,
+      EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'public.conversation_members'::regclass
+          AND conname = 'conversation_members_role_check'
+          AND pg_get_constraintdef(oid) ILIKE '%owner%'
+      ) AS cm_owner_role_allowed,
+      has_function_privilege('anon', 'public.accept_message_request(uuid)', 'EXECUTE') AS anon_accept_req_exec
+  `;
+  if (
+    auth_conv_ins ||
+    auth_cm_ins ||
+    auth_cm_del ||
+    auth_cm_role_upd ||
+    auth_pm_del ||
+    auth_pm_status_upd ||
+    auth_legacy_cm_ins ||
+    !req_status_col ||
+    !dm_perm_col ||
+    !notif_title_col ||
+    !notif_ping_nullable ||
+    !cm_owner_role_allowed ||
+    anon_accept_req_exec
+  ) {
+    throw new Error(
+      `Schema Verification FAILED — Stage 1 (0037) messaging/privacy hardening mismatch (conv_ins=${auth_conv_ins}, cm_role_upd=${auth_cm_role_upd}, pm_status_upd=${auth_pm_status_upd}, req_status=${req_status_col}, dm_perm=${dm_perm_col}, owner_role=${cm_owner_role_allowed})`,
+    );
+  }
+
   console.log(
     `[SCHEMA VERIFIED] Ledger ${minTag}–${maxTag}: ${releaseEntries.length}/${releaseEntries.length} recorded (total rows=${ledgerRows.length}); ${REQUIRED_TABLES_0011_0020.length}/${REQUIRED_TABLES_0011_0020.length} tables with RLS; storage 'media' bucket, hardened indexes & privileges intact.`,
   );
@@ -626,10 +696,26 @@ async function runFeatureAuthTests(sql) {
       }
       results.push("Moments & Close Circle privacy: PASS (public anon read preserved, Close Circle member B=1, outsider C=0, enumeration blocked)");
 
-      // 2. TWO-ACCOUNT DIRECT MESSAGE ISOLATION TEST
+      // 2. TWO-ACCOUNT DIRECT MESSAGE ISOLATION & STAGE 1 MESSAGE-REQUEST SECURITY TEST (0037)
       await actAs(userA);
       const [{ conv_id: convId }] = await tx`SELECT public.get_or_create_direct_conversation(${userB}::uuid) AS conv_id`;
+      // Non-mutual starts as pending message request: 1 text-only message allowed, 2nd or media blocked until accepted
       const [{ msg }] = await tx`SELECT public.send_private_message(${convId}::uuid, 'Two-account DM test') AS msg`;
+      await assertExpectThrow(tx, "pending requester sending 2nd message before acceptance", async () => {
+        await tx`SELECT public.send_private_message(${convId}::uuid, 'Second unaccepted message')`;
+      });
+      await assertExpectThrow(tx, "pending requester uploading DM attachment before acceptance", async () => {
+        await tx`
+          INSERT INTO storage.objects (bucket_id, name, owner, metadata)
+          VALUES ('dm-attachments', ${`${convId}/${userA}/pre-accept.webm`}, ${userA}::uuid, '{"mimetype":"audio/webm"}'::jsonb)
+        `;
+      });
+      await assertExpectThrow(tx, "pending requester self-accepting own message request", async () => {
+        await tx`SELECT public.accept_message_request(${convId}::uuid)`;
+      });
+      await assertExpectThrow(tx, "client tampering with private_messages.status directly", async () => {
+        await tx`UPDATE public.private_messages SET status = 'read' WHERE id = ${msg.id}::uuid`;
+      });
       const [{ cnt: aMsgs }] = await tx`SELECT count(*)::int AS cnt FROM public.private_messages WHERE conversation_id = ${convId}::uuid AND id = ${msg.id}::uuid`;
       const [{ cnt: aMems }] = await tx`SELECT count(*)::int AS cnt FROM public.conversation_members WHERE conversation_id = ${convId}::uuid`;
 
@@ -640,6 +726,25 @@ async function runFeatureAuthTests(sql) {
       const bConvUnread = Array.isArray(bInbox)
         ? (bInbox.find((c) => c.id === convId)?.unread_count ?? -1)
         : -1;
+      // Reading a pending request before acceptance must NOT emit read receipts
+      await tx`SELECT public.mark_conversation_read(${convId}::uuid)`;
+      const [msgAfterPendingRead] = await tx`SELECT status FROM public.private_messages WHERE id = ${msg.id}::uuid`;
+      if (msgAfterPendingRead?.status === "read") {
+        throw new Error("Privacy violation: read receipt emitted on unaccepted message request");
+      }
+      // Recipient accepts request -> unlocks bidirectional chat & media/voice notes
+      await tx`SELECT public.accept_message_request(${convId}::uuid)`;
+      // Verify read_receipts_enabled=false suppresses read receipt while still updating last_read_at
+      await tx`
+        INSERT INTO public.user_privacy_preferences (user_id, read_receipts_enabled)
+        VALUES (${userB}::uuid, false)
+        ON CONFLICT (user_id) DO UPDATE SET read_receipts_enabled = false
+      `;
+      await tx`SELECT public.mark_conversation_read(${convId}::uuid)`;
+      const [msgAfterDisabledReceipts] = await tx`SELECT status FROM public.private_messages WHERE id = ${msg.id}::uuid`;
+      if (msgAfterDisabledReceipts?.status === "read") {
+        throw new Error("Privacy violation: read receipt emitted while read_receipts_enabled=false");
+      }
 
       await actAs(userC);
       const [{ cnt: cMsgs }] = await tx`SELECT count(*)::int AS cnt FROM public.private_messages WHERE conversation_id = ${convId}::uuid`;
@@ -658,7 +763,41 @@ async function runFeatureAuthTests(sql) {
       if (aMsgs !== 1 || aMems !== 2 || bMsgs !== 1 || bMems !== 2 || bConvUnread !== 1 || cMsgs !== 0 || cMems !== 0 || cConvCount !== 0) {
         throw new Error(`DM isolation mismatch: A=${aMsgs}/${aMems}, B=${bMsgs}/${bMems} unread=${bConvUnread}, C=${cMsgs}/${cMems} inbox=${cConvCount}`);
       }
-      results.push("Direct Messages two-account isolation & inbox RPC: PASS (A=1/2, B=1/2 unread=1, outsider C=0/0, spoofed probe blocked)");
+      results.push("Direct Messages two-account isolation, message-request lifecycle & read-receipt privacy (0037): PASS (A=1/2, B=1/2 unread=1, outsider C=0/0, 2nd pending msg/upload blocked, read_receipts_enabled enforced)");
+
+      // 2c. STAGE 1 GROUP ADMIN SELF-PROMOTION, ONLY_ADMINS_CAN_POST & PROFILE_VISIBILITY TEST (0037)
+      await actAs(userA);
+      const [{ grp_id: grpId }] = await tx`
+        SELECT public.create_group_conversation('Stage 1 Security Group', 'Admin-only test', ARRAY[${userB}::uuid], true) AS grp_id
+      `;
+      await actAs(userB);
+      await assertExpectThrow(tx, "regular group member self-promoting to admin", async () => {
+        await tx`UPDATE public.conversation_members SET role = 'admin' WHERE conversation_id = ${grpId}::uuid AND user_id = ${userB}::uuid`;
+      });
+      await assertExpectThrow(tx, "regular group member bypassing only_admins_can_post via RPC", async () => {
+        await tx`SELECT public.send_private_message(${grpId}::uuid, 'Unauthorized member message')`;
+      });
+      await assertExpectThrow(tx, "regular group member bypassing only_admins_can_post via direct INSERT", async () => {
+        await tx`INSERT INTO public.private_messages (conversation_id, sender_id, content) VALUES (${grpId}::uuid, ${userB}::uuid, 'Direct insert bypass')`;
+      });
+      // Private profile unsolicited DM & Ping visibility check
+      await tx`UPDATE public.profiles SET profile_visibility = 'private' WHERE id = ${userB}::uuid`;
+      const [privPing] = await tx`
+        INSERT INTO public.pings (user_id, category, content)
+        VALUES (${userB}::uuid, 'progress', 'Private profile Ping')
+        RETURNING id
+      `;
+      await actAs(userC);
+      const [{ cnt: cSeesPrivPing }] = await tx`SELECT count(*)::int AS cnt FROM public.pings WHERE id = ${privPing.id}::uuid`;
+      await assertExpectThrow(tx, "non-mutual starting unsolicited DM to private profile", async () => {
+        await tx`SELECT public.get_or_create_direct_conversation(${userB}::uuid)`;
+      });
+      if (cSeesPrivPing !== 0) {
+        throw new Error(`profile_visibility RLS leak: non-mutual C saw ${cSeesPrivPing} private Pings`);
+      }
+      await actAs(userB);
+      await tx`UPDATE public.profiles SET profile_visibility = 'public' WHERE id = ${userB}::uuid`;
+      results.push("Stage 1 Group & Profile Visibility hardening (0037): PASS (self-promotion blocked, only_admins_can_post enforced on RPC+INSERT, private profile Pings & unsolicited DMs blocked)");
 
       // 2b. PRIVATE DM STORAGE BUCKET RLS & VOICE MESSAGE PREVIEW TEST (0036)
       const voiceObjName = `${convId}/${userA}/voice-note-rls-verify.webm`;

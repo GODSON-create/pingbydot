@@ -169,6 +169,11 @@ async function runApply(cfg) {
     process.exit(1);
   }
   const ddl = fs.readFileSync(sqlFilePath, "utf8");
+  const sql0037Path = path.resolve(
+    process.cwd(),
+    "drizzle/migrations/0037_stage1_messaging_privacy_and_security_hardening.sql",
+  );
+  const ddl0037 = fs.existsSync(sql0037Path) ? fs.readFileSync(sql0037Path, "utf8") : null;
 
   console.log(
     `[APPLY] Connecting to PING Supabase PostgreSQL (port ${port}, project=${EXPECTED_PROJECT_REF})...`,
@@ -177,6 +182,21 @@ async function runApply(cfg) {
   try {
     await sql.begin(async (tx) => {
       await tx.unsafe(ddl);
+      // Guard: if Stage 1 (0037) schema is already present, re-apply 0037 idempotently
+      // so running standalone bucket provisioning never downgrades 0037 messaging/storage RLS.
+      if (ddl0037) {
+        const [{ has_stage1 }] = await tx`
+          SELECT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'conversations'
+              AND column_name = 'request_status'
+          ) AS has_stage1
+        `;
+        if (has_stage1) {
+          await tx.unsafe(ddl0037);
+        }
+      }
     });
     const buckets = await sql`
       SELECT id, public, file_size_limit

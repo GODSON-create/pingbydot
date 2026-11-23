@@ -397,7 +397,7 @@ BEGIN
   WHERE user_id = v_uid
   RETURNING * INTO v_wallet;
 
-  INSERT INTO public.dot_transactions (user_id, amount, tx_type, source, source_ref, description)
+  INSERT INTO public.dot_transactions (user_id, amount, tx_type, source, reference_id, description)
   VALUES (
     v_uid,
     -v_plan.dot_price,
@@ -446,7 +446,7 @@ BEGIN
   RETURNING * INTO v_receipt;
 
   -- 4. Notify user cleanly
-  INSERT INTO public.notifications (user_id, category, title, body, href)
+  INSERT INTO public.notifications (user_id, kind, title, body, href)
   VALUES (
     v_uid,
     'system',
@@ -515,7 +515,7 @@ BEGIN
   )
   RETURNING * INTO v_receipt;
 
-  INSERT INTO public.notifications (user_id, category, title, body, href)
+  INSERT INTO public.notifications (user_id, kind, title, body, href)
   VALUES (
     v_uid,
     'system',
@@ -807,7 +807,7 @@ BEGIN
   WHERE user_id = v_uid
   RETURNING * INTO v_wallet;
 
-  INSERT INTO public.dot_transactions (user_id, amount, tx_type, source, source_ref, description)
+  INSERT INTO public.dot_transactions (user_id, amount, tx_type, source, reference_id, description)
   VALUES (
     v_uid,
     -v_dot_cost,
@@ -976,7 +976,7 @@ BEGIN
         updated_at = now()
     WHERE user_id = v_camp.user_id;
 
-    INSERT INTO public.dot_transactions (user_id, amount, tx_type, source, source_ref, description)
+    INSERT INTO public.dot_transactions (user_id, amount, tx_type, source, reference_id, description)
     VALUES (
       v_camp.user_id, v_refund, 'bonus', 'boost_refund', v_camp.id::text || ':refund',
       'Authorized boost refund (' || v_camp.receipt_number || '): ' || left(trim(p_reason), 120)

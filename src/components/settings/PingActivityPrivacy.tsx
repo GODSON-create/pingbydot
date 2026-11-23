@@ -1,13 +1,42 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Eye, Shield, Activity, Clock } from "lucide-react";
+import { Eye, Shield, Activity, Clock, MessageSquareLock } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { useUserPrivacy } from "@/lib/privacy";
+import { useUserPrivacy, type DmPermission } from "@/lib/privacy";
+import { cn } from "@/lib/utils";
 
 interface PingActivityPrivacyProps {
   userId: string;
 }
+
+const DM_PERMISSION_OPTIONS: Array<{
+  value: DmPermission;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "requests",
+    label: "Message requests (Recommended)",
+    description:
+      "Mutual connections message freely. Others can send a single text-only request for you to accept, decline, or block.",
+  },
+  {
+    value: "mutual_follows",
+    label: "Mutual connections only",
+    description: "Only people you follow back can start a direct conversation with you.",
+  },
+  {
+    value: "everyone",
+    label: "Everyone (public profile)",
+    description: "Anyone on Ping can message you directly unless your profile is set to Private.",
+  },
+  {
+    value: "nobody",
+    label: "No new direct messages",
+    description: "Pause new unsolicited conversations. Mutual connections can still message you.",
+  },
+];
 
 export function PingActivityPrivacy({ userId }: PingActivityPrivacyProps) {
   const { preferences, updatePrivacy, isLoading } = useUserPrivacy(userId);
@@ -27,8 +56,20 @@ export function PingActivityPrivacy({ userId }: PingActivityPrivacyProps) {
             ? `Active reading status turned ${nextVal ? "ON" : "OFF"}`
             : `Last active visibility turned ${nextVal ? "ON" : "OFF"}`,
       );
-    } catch (e) {
+    } catch {
       toast.error("Failed to update privacy settings. Please try again.");
+    } finally {
+      setUpdatingField(null);
+    }
+  };
+
+  const handleDmPermissionChange = async (nextPerm: DmPermission) => {
+    try {
+      setUpdatingField("dm_permission");
+      await updatePrivacy({ dm_permission: nextPerm });
+      toast.success("Direct message permissions updated");
+    } catch {
+      toast.error("Failed to update messaging permission. Please try again.");
     } finally {
       setUpdatingField(null);
     }
@@ -41,14 +82,59 @@ export function PingActivityPrivacy({ userId }: PingActivityPrivacyProps) {
           <Shield className="h-5 w-5" />
         </div>
         <div>
-          <h2 className="font-display text-lg font-bold">Privacy → Ping Activity</h2>
+          <h2 className="font-display text-lg font-bold">Privacy → Ping Activity & Messaging</h2>
           <p className="text-sm text-muted-foreground">
-            Control your read receipts, live presence, and visibility in Hubs.
+            Control message requests, read receipts, live presence, and visibility.
           </p>
         </div>
       </div>
 
       <div className="mt-6 divide-y divide-border/60">
+        {/* Direct Message Request Permissions */}
+        <div className="py-4 space-y-3">
+          <div className="flex items-start gap-3">
+            <MessageSquareLock className="h-5 w-5 mt-0.5 text-muted-foreground shrink-0" />
+            <div>
+              <Label className="text-base font-semibold">Direct Message Permissions</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Enforced at the database layer. Private profiles always restrict unsolicited contact
+                to mutual connections.
+              </p>
+            </div>
+          </div>
+
+          <div
+            role="radiogroup"
+            aria-label="Direct message permissions"
+            className="grid gap-2 sm:grid-cols-2 pl-0 sm:pl-8"
+          >
+            {DM_PERMISSION_OPTIONS.map((opt) => {
+              const selected = preferences.dm_permission === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  disabled={isLoading || updatingField === "dm_permission"}
+                  onClick={() => void handleDmPermissionChange(opt.value)}
+                  className={cn(
+                    "rounded-2xl border p-3 text-left transition-colors",
+                    selected
+                      ? "border-primary bg-primary/10"
+                      : "border-border/70 bg-secondary/30 hover:bg-secondary/60",
+                  )}
+                >
+                  <p className="text-xs font-semibold text-foreground">{opt.label}</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground leading-relaxed">
+                    {opt.description}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Read Receipts */}
         <div className="flex items-start justify-between py-4 gap-4">
           <div className="flex items-start gap-3">
@@ -58,8 +144,9 @@ export function PingActivityPrivacy({ userId }: PingActivityPrivacyProps) {
                 Read Receipts
               </Label>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Shows when you have opened and read Pings in Hubs (solid green dot). When disabled,
-                others cannot see when you read their messages, and you cannot see who read yours.
+                Shows when you have opened and read messages or Hub Pings. When disabled, others
+                cannot see when you read their messages, and you will not see read receipts from
+                others.
               </p>
             </div>
           </div>

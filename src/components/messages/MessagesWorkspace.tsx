@@ -415,6 +415,7 @@ export function MessagesWorkspace({
             <ConversationList
               conversations={conversations}
               selectedId={activeConversationId}
+              currentUserId={user?.id}
               onNewChat={() => setNewChatOpen(true)}
               onNewGroup={() => setNewGroupOpen(true)}
               onSelect={(c) => {

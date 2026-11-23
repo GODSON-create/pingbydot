@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { profileQuery, likeCount, replyCount, type Profile, type Ping } from "@/lib/pings";
+import { PUBLIC_PING_SELECT } from "@/lib/public-queries";
 import { parseStructuredPing } from "@/lib/validation";
 import {
   useGetOrCreateDirectConversation,
@@ -497,9 +498,33 @@ function ProfileContent({
     mode: "followers" | "following";
   }>({ open: false, mode: "followers" });
 
-  const { profile, pings, connections } = data;
+  const { profile, pings: publicPings, connections } = data;
   const isMe = user?.id === profile.id;
   const name = profile.display_name || profile.username || username;
+  const profileVisibility =
+    (profile as Profile & { profile_visibility?: string | null }).profile_visibility ?? "public";
+  const isRestrictedProfile = profileVisibility === "private" || profileVisibility === "followers";
+
+  // When a profile is Private or Followers-only, SSR returns empty pings anonymously;
+  // authenticated viewers query Supabase directly where DB RLS `can_view_profile_content`
+  // authoritatively authorizes owners, followers, and mutual connections.
+  const { data: authorizedPings = [] } = useQuery({
+    queryKey: ["profile-authorized-pings", profile.id, user?.id],
+    enabled: isRestrictedProfile && Boolean(user?.id),
+    queryFn: async (): Promise<Ping[]> => {
+      const { data: rows, error } = await supabase
+        .from("pings")
+        .select(PUBLIC_PING_SELECT)
+        .is("hidden_at", null)
+        .eq("user_id", profile.id)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false });
+      if (error) return [];
+      return (rows ?? []) as unknown as Ping[];
+    },
+  });
+
+  const pings = isRestrictedProfile ? authorizedPings : publicPings;
 
   const { data: follow } = useQuery(followQuery(profile.id, user?.id));
   const { data: joinedHubs = [] } = useQuery(myHubsQuery(profile.id));
@@ -877,6 +902,20 @@ function ProfileContent({
                       <Link to="/create">Create your first Ping</Link>
                     </Button>
                   </>
+                ) : isRestrictedProfile ? (
+                  <div className="space-y-2">
+                    <Lock className="mx-auto size-6 text-muted-foreground/70" />
+                    <p className="font-semibold text-foreground">
+                      {profileVisibility === "private"
+                        ? "This profile is private"
+                        : "Followers-only profile"}
+                    </p>
+                    <p className="text-xs">
+                      {profileVisibility === "private"
+                        ? `Only mutual connections can view ${name}'s Pings or send direct messages.`
+                        : `Follow @${profile.username} to view their Pings.`}
+                    </p>
+                  </div>
                 ) : (
                   <p>{name} hasn't shared a Ping yet.</p>
                 )}

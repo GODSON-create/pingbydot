@@ -37,6 +37,8 @@ export interface ConversationMember {
   profile?: Profile;
 }
 
+export type ConversationRequestStatus = "accepted" | "pending" | "declined";
+
 export interface Conversation {
   id: string;
   type: "direct" | "group";
@@ -44,6 +46,10 @@ export interface Conversation {
   description?: string | null;
   avatar_url?: string | null;
   only_admins_can_post?: boolean;
+  request_status?: ConversationRequestStatus;
+  requested_by?: string | null;
+  request_recipient_id?: string | null;
+  request_responded_at?: string | null;
   created_by: string | null;
   last_message_at: string;
   last_message_preview: string | null;
@@ -205,19 +211,46 @@ export function conversationByIdQuery(conversationId?: string, currentUserId?: s
     queryFn: async (): Promise<Conversation | null> => {
       if (!conversationId || !currentUserId) return null;
 
-      const { data: myMember, error: memError } = await supabase
+      let { data: myMember, error: memError } = await (supabase as any)
         .from("conversation_members")
         .select(
           `
           conversation_id, user_id, role, joined_at, last_read_at, is_muted, is_archived, hidden_at,
           conversation:conversations!conversation_members_conversation_id_fkey(
-            id, type, created_by, last_message_at, last_message_preview, created_at, updated_at
+            id, type, title, description, avatar_url, only_admins_can_post,
+            request_status, requested_by, request_recipient_id, request_responded_at,
+            created_by, last_message_at, last_message_preview, created_at, updated_at
           )
         `,
         )
         .eq("conversation_id", conversationId)
         .eq("user_id", currentUserId)
         .maybeSingle();
+
+      if (
+        memError &&
+        (memError.code === "PGRST204" ||
+          memError.code === "42703" ||
+          String(memError.message ?? "")
+            .toLowerCase()
+            .includes("column"))
+      ) {
+        const legacy = await supabase
+          .from("conversation_members")
+          .select(
+            `
+            conversation_id, user_id, role, joined_at, last_read_at, is_muted, is_archived, hidden_at,
+            conversation:conversations!conversation_members_conversation_id_fkey(
+              id, type, created_by, last_message_at, last_message_preview, created_at, updated_at
+            )
+          `,
+          )
+          .eq("conversation_id", conversationId)
+          .eq("user_id", currentUserId)
+          .maybeSingle();
+        myMember = legacy.data;
+        memError = legacy.error;
+      }
 
       if (memError) throw memError;
       if (!myMember || !myMember.conversation) return null;
@@ -238,6 +271,14 @@ export function conversationByIdQuery(conversationId?: string, currentUserId?: s
       const conv = myMember.conversation as unknown as {
         id: string;
         type: "direct" | "group";
+        title?: string | null;
+        description?: string | null;
+        avatar_url?: string | null;
+        only_admins_can_post?: boolean;
+        request_status?: ConversationRequestStatus;
+        requested_by?: string | null;
+        request_recipient_id?: string | null;
+        request_responded_at?: string | null;
         created_by: string | null;
         last_message_at: string;
         last_message_preview: string | null;
@@ -249,6 +290,14 @@ export function conversationByIdQuery(conversationId?: string, currentUserId?: s
       return {
         id: conv.id,
         type: conv.type,
+        title: conv.title ?? null,
+        description: conv.description ?? null,
+        avatar_url: conv.avatar_url ?? null,
+        only_admins_can_post: Boolean(conv.only_admins_can_post),
+        request_status: conv.request_status ?? "accepted",
+        requested_by: conv.requested_by ?? null,
+        request_recipient_id: conv.request_recipient_id ?? null,
+        request_responded_at: conv.request_responded_at ?? null,
         created_by: conv.created_by,
         last_message_at: conv.last_message_at,
         last_message_preview: conv.last_message_preview,
@@ -1047,6 +1096,42 @@ export function useRemoveGroupMember(conversationId: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["conversation-members", conversationId] });
       qc.invalidateQueries({ queryKey: ["user-conversations"] });
+    },
+  });
+}
+
+export function useAcceptMessageRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (conversationId: string) => {
+      const { data, error } = await (supabase as any).rpc("accept_message_request", {
+        p_conversation_id: conversationId,
+      });
+      if (error) throw error;
+      return data as { conversation_id: string; request_status: "accepted" };
+    },
+    onSuccess: (_data, conversationId) => {
+      qc.invalidateQueries({ queryKey: ["user-conversations"] });
+      qc.invalidateQueries({ queryKey: ["conversation-by-id", conversationId] });
+      qc.invalidateQueries({ queryKey: ["conversation-messages", conversationId] });
+    },
+  });
+}
+
+export function useDeclineMessageRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (conversationId: string) => {
+      const { data, error } = await (supabase as any).rpc("decline_message_request", {
+        p_conversation_id: conversationId,
+      });
+      if (error) throw error;
+      return data as { conversation_id: string; request_status: "declined" };
+    },
+    onSuccess: (_data, conversationId) => {
+      qc.invalidateQueries({ queryKey: ["user-conversations"] });
+      qc.invalidateQueries({ queryKey: ["conversation-by-id", conversationId] });
+      qc.invalidateQueries({ queryKey: ["conversation-messages", conversationId] });
     },
   });
 }
