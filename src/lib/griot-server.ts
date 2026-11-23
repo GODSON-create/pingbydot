@@ -45,13 +45,18 @@ export const griotAssistBodySchema = z
   })
   .strict();
 
+export type GriotRateLimitSource = "database" | "memory_fallback";
+
+export interface GriotRateLimitDecision {
+  allowed: boolean;
+  remaining: number;
+  retryAfterSeconds: number;
+  source?: GriotRateLimitSource;
+}
+
 export interface GriotAuthResult {
   userId: string;
-  checkRateLimit: () => Promise<{
-    allowed: boolean;
-    remaining: number;
-    retryAfterSeconds: number;
-  }>;
+  checkRateLimit: () => Promise<GriotRateLimitDecision>;
 }
 
 export interface GriotAssistHandlerDeps {
@@ -72,7 +77,7 @@ export function checkInMemoryGriotRateLimit(
   nowMs: number = Date.now(),
   maxRequests: number = GRIOT_RATE_LIMIT_MAX,
   windowSeconds: number = GRIOT_RATE_LIMIT_WINDOW_SECONDS,
-): { allowed: boolean; remaining: number; retryAfterSeconds: number } {
+): GriotRateLimitDecision {
   const windowMs = windowSeconds * 1000;
   const cutoff = nowMs - windowMs;
   const existing = (inMemoryRateWindows.get(userId) ?? []).filter((ts) => ts > cutoff);
@@ -90,7 +95,7 @@ export function checkInMemoryGriotRateLimit(
     const oldest = existing[0] ?? nowMs;
     const retryAfterSeconds = Math.max(1, Math.ceil((oldest + windowMs - nowMs) / 1000));
     inMemoryRateWindows.set(userId, existing);
-    return { allowed: false, remaining: 0, retryAfterSeconds };
+    return { allowed: false, remaining: 0, retryAfterSeconds, source: "memory_fallback" };
   }
 
   existing.push(nowMs);
@@ -99,6 +104,7 @@ export function checkInMemoryGriotRateLimit(
     allowed: true,
     remaining: Math.max(0, maxRequests - existing.length),
     retryAfterSeconds: windowSeconds,
+    source: "memory_fallback",
   };
 }
 
@@ -116,6 +122,15 @@ function jsonResponse(
       ...extraHeaders,
     },
   });
+}
+
+function isSafeUpstreamHttpsUrl(rawUrl: string): boolean {
+  try {
+    const parsed = new URL(rawUrl);
+    return parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 function createUserScopedSupabaseClient(token: string) {
@@ -145,11 +160,11 @@ async function defaultAuthenticateRequest(
   nowMs: () => number,
 ): Promise<GriotAuthResult | null> {
   const authHeader = request.headers.get("authorization");
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  if (!authHeader || !/^Bearer\s+/i.test(authHeader)) {
     return null;
   }
 
-  const token = authHeader.slice("Bearer ".length).trim();
+  const token = authHeader.replace(/^Bearer\s+/i, "").trim();
   if (!token || token.split(".").length !== 3) {
     return null;
   }
@@ -157,8 +172,10 @@ async function defaultAuthenticateRequest(
   try {
     const userSupabase = createUserScopedSupabaseClient(token);
     const { data, error } = await userSupabase.auth.getClaims(token);
-    const sub = typeof data?.claims?.sub === "string" ? data.claims.sub.trim() : "";
-    if (error || !sub) {
+    const claims = data?.claims as { sub?: unknown; role?: unknown } | undefined;
+    const sub = typeof claims?.sub === "string" ? claims.sub.trim() : "";
+    const role = typeof claims?.role === "string" ? claims.role.trim().toLowerCase() : "";
+    if (error || !sub || role === "anon") {
       return null;
     }
 
@@ -186,10 +203,10 @@ async function defaultAuthenticateRequest(
             const retryAfterSeconds = Number.isFinite(resetAtMs)
               ? Math.max(1, Math.ceil((resetAtMs - nowMs()) / 1000))
               : GRIOT_RATE_LIMIT_WINDOW_SECONDS;
-            return { allowed, remaining, retryAfterSeconds };
+            return { allowed, remaining, retryAfterSeconds, source: "database" };
           }
         } catch {
-          // Fall back cleanly to in-memory per-user rate limit when migration 0032 RPC is unavailable
+          // Fall back to isolate-local rate limiter ONLY for zero-cost local mode (paid LLM fails closed below)
         }
 
         return checkInMemoryGriotRateLimit(
@@ -223,9 +240,11 @@ export async function handleGriotAssistRequest(
 
   // 2. Enforce per-user rate limiting BEFORE parsing or invoking upstream providers
   const rate = await auth.checkRateLimit();
+  const rateLimitSource: GriotRateLimitSource = rate.source ?? "database";
   const rateHeaders: Record<string, string> = {
     "X-RateLimit-Limit": String(GRIOT_RATE_LIMIT_MAX),
     "X-RateLimit-Remaining": String(Math.max(0, rate.remaining)),
+    "X-RateLimit-Mode": rateLimitSource,
   };
 
   if (!rate.allowed) {
@@ -239,9 +258,9 @@ export async function handleGriotAssistRequest(
     );
   }
 
-  // 3. Validate Content-Type, body size, and strict JSON schema
+  // 3. Require explicit application/json Content-Type, body size cap, and strict JSON schema
   const contentType = request.headers.get("content-type") ?? "";
-  if (contentType && !contentType.toLowerCase().includes("application/json")) {
+  if (!contentType.toLowerCase().includes("application/json")) {
     return jsonResponse({ error: "Content-Type must be application/json." }, 415, rateHeaders);
   }
 
@@ -270,7 +289,10 @@ export async function handleGriotAssistRequest(
     return jsonResponse({ error: "Invalid GRIOT request payload." }, 400, rateHeaders);
   }
 
-  // 4. Optional server-side LLM proxy (credentials never leave the server)
+  // 4. Optional server-side LLM proxy:
+  //    - Credentials never leave the server.
+  //    - Fail-closed for paid upstream LLM calls whenever centralized DB rate limiting
+  //      is unavailable (prevents multi-isolate / edge PoP spend bypass).
   const env =
     deps.getEnv?.() ??
     (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ??
@@ -280,7 +302,7 @@ export async function handleGriotAssistRequest(
   const model = env["GRIOT_AI_MODEL"]?.trim() || "gpt-4o-mini";
   const fetchFn = deps.fetchUpstream ?? fetch;
 
-  if (apiUrl && apiKey) {
+  if (apiUrl && apiKey && rateLimitSource === "database" && isSafeUpstreamHttpsUrl(apiUrl)) {
     try {
       const timeoutSignal =
         typeof AbortSignal !== "undefined" && "timeout" in AbortSignal
@@ -346,6 +368,11 @@ export async function handleGriotAssistRequest(
     tone: parsedBody.tone,
     targetLocale: parsedBody.targetLocale,
   });
+
+  if (apiUrl && apiKey && rateLimitSource !== "database") {
+    localResult.providerNotice =
+      "Deterministic Local Assistant active (centralized DB rate limiter unavailable; external LLM calls paused for spend safety).";
+  }
 
   return jsonResponse({ ...localResult }, 200, rateHeaders);
 }

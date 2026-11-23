@@ -165,12 +165,22 @@ describe("Ping V1 Stage 1 — Database Repair & Security Hardening", () => {
       const sql0031 = readRel(
         "drizzle/migrations/0031_phase4_business_commerce_ads_and_wallet.sql",
       );
+      const sql0032 = readRel(
+        "drizzle/migrations/0032_phase5_griot_developer_offline_and_scale.sql",
+      );
       const sql0033 = readRel(
         "drizzle/migrations/0033_premium_ux_dot_economy_and_interactions.sql",
       );
       const sql0035 = readRel("drizzle/migrations/0035_admin_control_centre_and_early_access.sql");
       const sql0037 = readRel(
         "drizzle/migrations/0037_stage1_messaging_privacy_and_security_hardening.sql",
+      );
+
+      // Repair 0: 0032 signal_opportunities FTS index uses valid columns (title, description, location)
+      expect(sql0032).not.toContain("coalesce(summary, '')");
+      expect(sql0032).not.toContain("coalesce(organization_name, '')");
+      expect(sql0032).toContain(
+        "to_tsvector('english', title || ' ' || coalesce(description, '') || ' ' || coalesce(location, ''))",
       );
 
       // Repair 1: dot_transactions.reference_id (zero source_ref on dot_transactions)
@@ -239,28 +249,44 @@ describe("Ping V1 Stage 1 — Database Repair & Security Hardening", () => {
       expect(sql0037).toContain("CREATE OR REPLACE FUNCTION public.guard_conversation_members()");
       expect(sql0037).toContain("NEW.role IS DISTINCT FROM OLD.role");
 
-      // Private messages tampering & legacy backdoor lockdown
+      // Private messages tampering, direct-INSERT revocation & legacy backdoor lockdown
       expect(sql0037).toContain(
         "REVOKE INSERT, UPDATE, DELETE ON public.conversation_messages FROM PUBLIC, anon, authenticated;",
       );
       expect(sql0037).toContain(
-        "REVOKE UPDATE, DELETE ON public.private_messages FROM PUBLIC, anon, authenticated;",
+        "REVOKE INSERT, UPDATE, DELETE ON public.private_messages FROM PUBLIC, anon, authenticated;",
       );
       expect(sql0037).toContain(
         "GRANT UPDATE (content, deleted_at, edited_at, updated_at) ON public.private_messages TO authenticated;",
       );
-      expect(sql0037).toContain("CREATE OR REPLACE FUNCTION public.guard_private_message_write()");
+      // Triggers inspecting current_user MUST run as SECURITY INVOKER (never SECURITY DEFINER)
+      expect(sql0037).toMatch(
+        /CREATE OR REPLACE FUNCTION public\.guard_conversation_members\(\)[\s\S]*?SECURITY INVOKER/,
+      );
+      expect(sql0037).toMatch(
+        /CREATE OR REPLACE FUNCTION public\.guard_private_message_write\(\)[\s\S]*?SECURITY INVOKER/,
+      );
       expect(sql0037).toContain("OR NEW.status IS DISTINCT FROM OLD.status");
       expect(sql0037).toContain("OR NEW.is_pinned IS DISTINCT FROM OLD.is_pinned");
       expect(sql0037).toContain("Deleted messages cannot be restored or edited");
     });
 
-    it("enforces message-request lifecycle, blocks, only_admins_can_post, profile_visibility, and read_receipts_enabled", () => {
-      // Message requests + private profile unsolicited contact lock
+    it("enforces message-request lifecycle, concurrency uniqueness, blocks, only_admins_can_post, profile_visibility, and read_receipts_enabled", () => {
+      // Message requests + private profile unsolicited contact lock + concurrency B-tree uniqueness
       expect(sql0037).toContain(
         "dm_permission IN ('everyone', 'requests', 'mutual_follows', 'nobody')",
       );
       expect(sql0037).toContain("request_status IN ('accepted', 'pending', 'declined')");
+      expect(sql0037).toContain("CREATE UNIQUE INDEX IF NOT EXISTS conversations_direct_pair_uidx");
+      expect(sql0037).toContain(
+        "CREATE UNIQUE INDEX IF NOT EXISTS private_messages_one_pending_request_uidx",
+      );
+      expect(sql0037).toContain(
+        "pg_advisory_xact_lock(hashtextextended('ping_direct_conv:' || v_pair_key, 0))",
+      );
+      expect(sql0037).toContain(
+        "pg_advisory_xact_lock(hashtextextended('ping_send_conv:' || p_conversation_id::text, 0))",
+      );
       expect(sql0037).toContain(
         "This account is private and only accepts messages from mutual connections",
       );
@@ -271,10 +297,20 @@ describe("Ping V1 Stage 1 — Database Repair & Security Hardening", () => {
       expect(sql0037).toContain("CREATE OR REPLACE FUNCTION public.accept_message_request(");
       expect(sql0037).toContain("CREATE OR REPLACE FUNCTION public.decline_message_request(");
 
-      // only_admins_can_post + blocks + attachment path scoping
+      // only_admins_can_post + SECURITY DEFINER block checks + sender-scoped attachment path & signed-URL rejection
       expect(sql0037).toContain("Only group admins can post in this conversation");
       expect(sql0037).toContain("Cannot send message: communication is blocked");
-      expect(sql0037).toContain("Private attachment path must be scoped to this conversation");
+      expect(sql0037).toContain("CREATE OR REPLACE FUNCTION public.is_blocked_with(");
+      expect(sql0037).toContain(
+        "CREATE OR REPLACE FUNCTION public.is_conversation_blocked_for_me(",
+      );
+      expect(sql0037).toContain("NOT public.is_conversation_blocked_for_me(c.id)");
+      expect(sql0037).toContain(
+        "Private attachment path must be scoped to {conversation_id}/{sender_id}/{file}",
+      );
+      expect(sql0037).toContain(
+        "Signed or private DM storage URLs must not be persisted; store a conversation-scoped path",
+      );
 
       // profile_visibility RLS across pings, profile_connections, comments, moments
       expect(sql0037).toContain("CREATE OR REPLACE FUNCTION public.can_view_profile_content(");
@@ -282,8 +318,9 @@ describe("Ping V1 Stage 1 — Database Repair & Security Hardening", () => {
       expect(sql0037).toContain("public.can_view_profile_content(profile_connections.user_id)");
       expect(sql0037).toContain("public.can_view_profile_content(moments.author_id)");
 
-      // read_receipts_enabled privacy enforcement
+      // Reciprocal read_receipts_enabled privacy enforcement in DB (checks both reader and sender)
       expect(sql0037).toContain("SELECT coalesce(read_receipts_enabled, true)");
+      expect(sql0037).toContain("WHERE upp.user_id = pm.sender_id");
       expect(sql0037).toContain("IF v_send_receipts AND v_req_status = 'accepted' THEN");
 
       // Storage dm-attachments INSERT policy restricts pending/declined/blocked/admin-only uploads
@@ -361,6 +398,47 @@ describe("Ping V1 Stage 1 — Database Repair & Security Hardening", () => {
         authedDeps,
       );
       expect(resWrongCt.status).toBe(415);
+
+      const resMissingCt = await handleGriotAssistRequest(
+        new Request("https://pingbydot.example/api/griot/assist", {
+          method: "POST",
+          body: JSON.stringify({ action: "draft_ping", inputText: "No content-type header" }),
+        }),
+        authedDeps,
+      );
+      expect(resMissingCt.status).toBe(415);
+    });
+
+    it("fails closed on paid upstream LLM calls when only isolate-local memory_fallback rate limiter is active", async () => {
+      const upstreamSpy = vi.fn(
+        async () => new Response(JSON.stringify({ choices: [] }), { status: 200 }),
+      );
+      const res = await handleGriotAssistRequest(
+        makeReq({ action: "draft_ping", inputText: "Testing spend safety." }),
+        {
+          getEnv: () => ({
+            GRIOT_AI_API_URL: "https://api.openai.com/v1/chat/completions",
+            GRIOT_AI_API_KEY: "sk-live-paid-secret",
+            GRIOT_AI_MODEL: "gpt-4o-mini",
+          }),
+          fetchUpstream: upstreamSpy,
+          authenticateRequest: async () => ({
+            userId: "user-fallback-check",
+            checkRateLimit: async () => ({
+              allowed: true,
+              remaining: 19,
+              retryAfterSeconds: 60,
+              source: "memory_fallback" as const,
+            }),
+          }),
+        },
+      );
+      expect(res.status).toBe(200);
+      expect(res.headers.get("X-RateLimit-Mode")).toBe("memory_fallback");
+      expect(upstreamSpy).not.toHaveBeenCalled();
+      const body = (await res.json()) as { providerMode: string; providerNotice: string };
+      expect(body.providerMode).toBe("deterministic_local");
+      expect(body.providerNotice).toContain("spend safety");
     });
 
     it("enforces per-user rate limiting (429 after quota) without blocking other users, and never leaks credentials", async () => {

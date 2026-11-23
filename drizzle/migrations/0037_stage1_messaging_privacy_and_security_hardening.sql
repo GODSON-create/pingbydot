@@ -137,6 +137,13 @@ $$;
 REVOKE ALL ON FUNCTION public.admin_moderate(uuid, uuid, text, text) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.admin_moderate(uuid, uuid, text, text) TO service_role;
 
+-- 1d. Re-assert signal_opportunities FTS index using valid columns (title, description, location)
+CREATE INDEX IF NOT EXISTS signal_opportunities_fts_gin_idx
+  ON public.signal_opportunities USING gin (
+    to_tsvector('english', title || ' ' || coalesce(description, '') || ' ' || coalesce(location, ''))
+  )
+  WHERE status = 'open';
+
 -- ==============================================================================
 -- 2. MESSAGE REQUEST & PRIVACY PREFERENCES SCHEMA EXTENSIONS
 -- ==============================================================================
@@ -161,10 +168,37 @@ ALTER TABLE public.user_privacy_preferences
   CHECK (dm_permission IN ('everyone', 'requests', 'mutual_follows', 'nobody'));
 
 ALTER TABLE public.conversations
+  ADD COLUMN IF NOT EXISTS direct_pair_key text,
   ADD COLUMN IF NOT EXISTS request_status text NOT NULL DEFAULT 'accepted',
   ADD COLUMN IF NOT EXISTS requested_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS request_recipient_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS request_responded_at timestamptz;
+
+-- Backfill canonical direct_pair_key for existing 1-to-1 conversations (dedup-safe: newest row wins)
+WITH direct_pairs AS (
+  SELECT
+    c.id,
+    least(min(cm.user_id::text), max(cm.user_id::text)) || ':' || greatest(min(cm.user_id::text), max(cm.user_id::text)) AS pair_key,
+    row_number() OVER (
+      PARTITION BY least(min(cm.user_id::text), max(cm.user_id::text)), greatest(min(cm.user_id::text), max(cm.user_id::text))
+      ORDER BY c.last_message_at DESC, c.created_at DESC, c.id DESC
+    ) AS rn
+  FROM public.conversations c
+  JOIN public.conversation_members cm ON cm.conversation_id = c.id
+  WHERE c.type = 'direct'
+  GROUP BY c.id, c.last_message_at, c.created_at
+  HAVING count(DISTINCT cm.user_id) = 2
+)
+UPDATE public.conversations c
+SET direct_pair_key = dp.pair_key
+FROM direct_pairs dp
+WHERE c.id = dp.id
+  AND dp.rn = 1
+  AND c.direct_pair_key IS NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS conversations_direct_pair_uidx
+  ON public.conversations (direct_pair_key)
+  WHERE type = 'direct' AND direct_pair_key IS NOT NULL;
 
 DO $$
 BEGIN
@@ -185,6 +219,15 @@ ALTER TABLE public.conversations
 CREATE INDEX IF NOT EXISTS conversations_pending_recipient_idx
   ON public.conversations (request_recipient_id, last_message_at DESC)
   WHERE request_status = 'pending';
+
+-- Hard B-tree uniqueness guarantee for the 1-message pending-request cap
+-- (defense-in-depth beneath pg_advisory_xact_lock + FOR UPDATE row locking; survives soft-delete).
+ALTER TABLE public.private_messages
+  ADD COLUMN IF NOT EXISTS is_pending_request_msg boolean NOT NULL DEFAULT false;
+
+CREATE UNIQUE INDEX IF NOT EXISTS private_messages_one_pending_request_uidx
+  ON public.private_messages (conversation_id)
+  WHERE is_pending_request_msg = true;
 
 -- ==============================================================================
 -- 3. INTERNAL SECURITY HELPERS (MUTUAL FOLLOW, BLOCKS, PROFILE VISIBILITY)
@@ -239,6 +282,59 @@ $$;
 
 REVOKE ALL ON FUNCTION public.has_block_between(uuid, uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.has_block_between(uuid, uuid) TO service_role;
+
+-- Caller-scoped block checks (SECURITY DEFINER so blocked users cannot bypass
+-- user_blocks RLS; reads auth.uid() directly to prevent third-party enumeration).
+CREATE OR REPLACE FUNCTION public.is_blocked_with(
+  _other_user_id uuid
+)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT
+    auth.uid() IS NOT NULL
+    AND _other_user_id IS NOT NULL
+    AND EXISTS (
+      SELECT 1 FROM public.user_blocks
+      WHERE (blocker_id = auth.uid() AND blocked_id = _other_user_id)
+         OR (blocker_id = _other_user_id AND blocked_id = auth.uid())
+    );
+$$;
+
+REVOKE ALL ON FUNCTION public.is_blocked_with(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.is_blocked_with(uuid) TO authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.is_conversation_blocked_for_me(
+  _conversation_id uuid
+)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT
+    auth.uid() IS NOT NULL
+    AND _conversation_id IS NOT NULL
+    AND EXISTS (
+      SELECT 1
+      FROM public.conversations c
+      JOIN public.conversation_members my_cm ON my_cm.conversation_id = c.id AND my_cm.user_id = auth.uid()
+      JOIN public.conversation_members other_cm ON other_cm.conversation_id = c.id AND other_cm.user_id <> auth.uid()
+      JOIN public.user_blocks b ON (
+        (b.blocker_id = other_cm.user_id AND b.blocked_id = auth.uid())
+        OR (b.blocker_id = auth.uid() AND b.blocked_id = other_cm.user_id)
+      )
+      WHERE c.id = _conversation_id
+        AND c.type = 'direct'
+    );
+$$;
+
+REVOKE ALL ON FUNCTION public.is_conversation_blocked_for_me(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.is_conversation_blocked_for_me(uuid) TO authenticated, service_role;
 
 -- Enforces profile_visibility ('public' | 'followers' | 'private') and blocks
 -- using auth.uid() directly so callers cannot spoof another viewer's UUID.
@@ -367,11 +463,7 @@ CREATE POLICY "Restricted moments viewable by authorized users" ON public.moment
     deleted_at IS NULL AND (
       author_id = (select auth.uid())
       OR (
-        NOT EXISTS (
-          SELECT 1 FROM public.user_blocks b
-          WHERE (b.blocker_id = moments.author_id AND b.blocked_id = (select auth.uid()))
-             OR (b.blocker_id = (select auth.uid()) AND b.blocked_id = moments.author_id)
-        )
+        NOT public.is_blocked_with(moments.author_id)
         AND (
           (
             audience = 'followers' AND EXISTS (
@@ -410,7 +502,7 @@ GRANT ALL ON public.conversation_members TO service_role;
 CREATE OR REPLACE FUNCTION public.guard_conversation_members()
 RETURNS trigger
 LANGUAGE plpgsql
-SECURITY DEFINER
+SECURITY INVOKER
 SET search_path = public
 AS $$
 BEGIN
@@ -471,6 +563,9 @@ BEGIN
   IF p_sender_id IS NULL THEN
     RAISE EXCEPTION 'Authentication required' USING ERRCODE = '42501';
   END IF;
+
+  -- Serialize concurrent sends on the same conversation under READ COMMITTED & REPEATABLE READ
+  PERFORM pg_advisory_xact_lock(hashtextextended('ping_send_conv:' || p_conversation_id::text, 0));
 
   -- Lock conversation row to serialize concurrent pending-request message sends
   SELECT * INTO v_conv
@@ -540,17 +635,30 @@ BEGIN
     END IF;
   END IF;
 
-  -- Private attachment path binding: prevent cross-conversation path injection or unsafe forwarding
+  -- Private attachment path & URL binding: block signed DM URLs, cross-conversation paths,
+  -- and sender-folder spoofing ({conversation_id}/{sender_id}/{filename} required for private DM media).
   IF p_media_url IS NOT NULL AND btrim(p_media_url) <> '' THEN
     v_clean_path := btrim(p_media_url);
-    IF v_clean_path !~* '^https?://' THEN
+    IF v_clean_path ~* '^(javascript|data|blob|http):' THEN
+      RAISE EXCEPTION 'Unsupported or insecure attachment URL scheme'
+        USING ERRCODE = '42501';
+    END IF;
+
+    IF v_clean_path ~* '^https://' THEN
+      IF v_clean_path ~* '/dm-attachments/' OR v_clean_path ~* '/storage/v1/object/sign/' THEN
+        RAISE EXCEPTION 'Signed or private DM storage URLs must not be persisted; store a conversation-scoped path'
+          USING ERRCODE = '42501';
+      END IF;
+    ELSE
       IF v_clean_path LIKE 'storage://dm-attachments/%' THEN
         v_clean_path := substr(v_clean_path, char_length('storage://dm-attachments/') + 1);
       END IF;
 
       IF position('..' in v_clean_path) > 0
-         OR left(v_clean_path, char_length(p_conversation_id::text) + 1) <> p_conversation_id::text || '/' THEN
-        RAISE EXCEPTION 'Private attachment path must be scoped to this conversation'
+         OR left(v_clean_path, char_length(p_conversation_id::text || '/' || p_sender_id::text || '/'))
+            <> p_conversation_id::text || '/' || p_sender_id::text || '/'
+         OR char_length(v_clean_path) <= char_length(p_conversation_id::text || '/' || p_sender_id::text || '/') THEN
+        RAISE EXCEPTION 'Private attachment path must be scoped to {conversation_id}/{sender_id}/{file}'
           USING ERRCODE = '42501';
       END IF;
     END IF;
@@ -564,15 +672,16 @@ REVOKE ALL ON FUNCTION public.assert_can_send_to_conversation(uuid, uuid, text, 
 GRANT EXECUTE ON FUNCTION public.assert_can_send_to_conversation(uuid, uuid, text, text) TO service_role;
 
 -- 5e. Lock down public.private_messages privileges, RLS & triggers
-REVOKE UPDATE, DELETE ON public.private_messages FROM PUBLIC, anon, authenticated;
-GRANT SELECT, INSERT ON public.private_messages TO authenticated;
+-- All new messages MUST go through send_private_message RPC (direct client INSERT revoked).
+REVOKE INSERT, UPDATE, DELETE ON public.private_messages FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON public.private_messages TO authenticated;
 GRANT UPDATE (content, deleted_at, edited_at, updated_at) ON public.private_messages TO authenticated;
 GRANT ALL ON public.private_messages TO service_role;
 
 CREATE OR REPLACE FUNCTION public.guard_private_message_write()
 RETURNS trigger
 LANGUAGE plpgsql
-SECURITY DEFINER
+SECURITY INVOKER
 SET search_path = public
 AS $$
 DECLARE
@@ -580,23 +689,8 @@ DECLARE
 BEGIN
   IF TG_OP = 'INSERT' THEN
     IF current_user IN ('anon', 'authenticated') THEN
-      IF NEW.sender_id IS DISTINCT FROM auth.uid() THEN
-        RAISE EXCEPTION 'Cannot spoof message sender' USING ERRCODE = '42501';
-      END IF;
-
-      PERFORM public.assert_can_send_to_conversation(
-        NEW.conversation_id,
-        NEW.sender_id,
-        NEW.media_url,
-        NEW.media_type
-      );
-
-      NEW.status := 'sent';
-      NEW.is_pinned := false;
-      NEW.deleted_at := NULL;
-      NEW.edited_at := NULL;
-      NEW.created_at := now();
-      NEW.updated_at := now();
+      RAISE EXCEPTION 'Direct inserts into private_messages are forbidden; use send_private_message RPC'
+        USING ERRCODE = '42501';
     END IF;
     RETURN NEW;
   END IF;
@@ -616,6 +710,7 @@ BEGIN
          OR NEW.is_pinned IS DISTINCT FROM OLD.is_pinned
          OR NEW.reply_to_id IS DISTINCT FROM OLD.reply_to_id
          OR NEW.forwarded_from_id IS DISTINCT FROM OLD.forwarded_from_id
+         OR NEW.is_pending_request_msg IS DISTINCT FROM OLD.is_pending_request_msg
          OR NEW.created_at <> OLD.created_at THEN
         RAISE EXCEPTION 'Message metadata, attachments, pin state, and delivery status are protected'
           USING ERRCODE = '42501';
@@ -632,12 +727,7 @@ BEGIN
         SELECT * INTO v_conv FROM public.conversations WHERE id = OLD.conversation_id;
         IF v_conv.type = 'direct' AND (
           v_conv.request_status = 'declined'
-          OR EXISTS (
-            SELECT 1 FROM public.conversation_members other_cm
-            WHERE other_cm.conversation_id = OLD.conversation_id
-              AND other_cm.user_id <> OLD.sender_id
-              AND public.has_block_between(OLD.sender_id, other_cm.user_id)
-          )
+          OR public.is_conversation_blocked_for_me(OLD.conversation_id)
         ) THEN
           RAISE EXCEPTION 'Cannot edit messages in a blocked or declined conversation'
             USING ERRCODE = '42501';
@@ -669,6 +759,7 @@ CREATE POLICY "Members insert conversation messages" ON public.private_messages
   FOR INSERT TO authenticated
   WITH CHECK (
     sender_id = (select auth.uid())
+    AND NOT public.is_conversation_blocked_for_me(private_messages.conversation_id)
     AND EXISTS (
       SELECT 1
       FROM public.conversation_members cm
@@ -690,18 +781,6 @@ CREATE POLICY "Members insert conversation messages" ON public.private_messages
             AND private_messages.media_type IS NULL
           )
         )
-    )
-    AND NOT EXISTS (
-      SELECT 1
-      FROM public.conversations c
-      JOIN public.conversation_members other_member ON other_member.conversation_id = c.id
-      JOIN public.user_blocks b ON (
-        (b.blocker_id = other_member.user_id AND b.blocked_id = (select auth.uid()))
-        OR (b.blocker_id = (select auth.uid()) AND b.blocked_id = other_member.user_id)
-      )
-      WHERE c.id = private_messages.conversation_id
-        AND c.type = 'direct'
-        AND other_member.user_id <> (select auth.uid())
     )
   );
 
@@ -729,6 +808,7 @@ DECLARE
   v_target_vis text;
   v_dm_perm text;
   v_is_mutual boolean;
+  v_pair_key text;
   v_conv public.conversations%ROWTYPE;
   v_conv_id uuid;
   v_initial_status text;
@@ -756,16 +836,34 @@ BEGIN
 
   v_is_mutual := public.is_mutual_follow(v_caller, p_target_user_id);
 
-  -- Check existing 1-to-1 conversation
+  -- Canonical symmetric pair key + transaction-scoped advisory lock prevent
+  -- duplicate direct conversations under concurrent requests from either peer.
+  v_pair_key := least(v_caller::text, p_target_user_id::text) || ':' || greatest(v_caller::text, p_target_user_id::text);
+  PERFORM pg_advisory_xact_lock(hashtextextended('ping_direct_conv:' || v_pair_key, 0));
+
+  -- Check existing 1-to-1 conversation (canonical key first, member-join fallback)
   SELECT c.* INTO v_conv
-  FROM public.conversation_members cm1
-  JOIN public.conversation_members cm2 ON cm1.conversation_id = cm2.conversation_id
-  JOIN public.conversations c ON c.id = cm1.conversation_id
+  FROM public.conversations c
   WHERE c.type = 'direct'
-    AND cm1.user_id = v_caller
-    AND cm2.user_id = p_target_user_id
+    AND c.direct_pair_key = v_pair_key
   LIMIT 1
-  FOR UPDATE OF c;
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    SELECT c.* INTO v_conv
+    FROM public.conversation_members cm1
+    JOIN public.conversation_members cm2 ON cm1.conversation_id = cm2.conversation_id
+    JOIN public.conversations c ON c.id = cm1.conversation_id
+    WHERE c.type = 'direct'
+      AND cm1.user_id = v_caller
+      AND cm2.user_id = p_target_user_id
+    LIMIT 1
+    FOR UPDATE OF c;
+
+    IF FOUND AND v_conv.direct_pair_key IS NULL THEN
+      UPDATE public.conversations SET direct_pair_key = v_pair_key WHERE id = v_conv.id;
+    END IF;
+  END IF;
 
   IF FOUND THEN
     IF v_conv.request_status = 'accepted' THEN
@@ -836,6 +934,7 @@ BEGIN
 
   INSERT INTO public.conversations (
     type,
+    direct_pair_key,
     created_by,
     request_status,
     requested_by,
@@ -845,6 +944,7 @@ BEGIN
   )
   VALUES (
     'direct',
+    v_pair_key,
     v_caller,
     v_initial_status,
     CASE WHEN v_initial_status = 'pending' THEN v_caller ELSE NULL END,
@@ -1080,14 +1180,16 @@ BEGIN
     content,
     media_url,
     media_type,
-    status
+    status,
+    is_pending_request_msg
   ) VALUES (
     p_conversation_id,
     v_caller,
     v_trimmed_content,
     v_clean_media,
     p_media_type,
-    'sent'
+    'sent',
+    (v_conv.type = 'direct' AND v_conv.request_status = 'pending')
   )
   RETURNING * INTO v_message;
 
@@ -1179,13 +1281,22 @@ BEGIN
   FROM public.conversations
   WHERE id = p_conversation_id;
 
-  -- Never emit read receipts when disabled or before a message request is accepted
+  -- Never emit read receipts when disabled by reader OR sender (reciprocal privacy)
+  -- or before a message request is accepted.
   IF v_send_receipts AND v_req_status = 'accepted' THEN
-    UPDATE public.private_messages
+    UPDATE public.private_messages pm
     SET status = 'read', updated_at = now()
-    WHERE conversation_id = p_conversation_id
-      AND sender_id <> v_caller
-      AND status IN ('sent', 'delivered');
+    WHERE pm.conversation_id = p_conversation_id
+      AND pm.sender_id <> v_caller
+      AND pm.status IN ('sent', 'delivered')
+      AND coalesce(
+        (
+          SELECT upp.read_receipts_enabled
+          FROM public.user_privacy_preferences upp
+          WHERE upp.user_id = pm.sender_id
+        ),
+        true
+      ) = true;
   END IF;
 END;
 $$;
@@ -1714,19 +1825,7 @@ CREATE POLICY "DM uploaders manage own files" ON storage.objects
           OR NOT coalesce(c.only_admins_can_post, false)
           OR cm.role IN ('owner', 'admin')
         )
-        AND NOT (
-          c.type = 'direct'
-          AND EXISTS (
-            SELECT 1
-            FROM public.conversation_members other_cm
-            JOIN public.user_blocks b ON (
-              (b.blocker_id = other_cm.user_id AND b.blocked_id = (select auth.uid()))
-              OR (b.blocker_id = (select auth.uid()) AND b.blocked_id = other_cm.user_id)
-            )
-            WHERE other_cm.conversation_id = c.id
-              AND other_cm.user_id <> (select auth.uid())
-          )
-        )
+        AND NOT public.is_conversation_blocked_for_me(c.id)
     )
   );
 
@@ -1744,6 +1843,7 @@ CREATE POLICY "DM uploaders update own files" ON storage.objects
         AND cm.user_id = (select auth.uid())
         AND cm.hidden_at IS NULL
         AND coalesce(c.request_status, 'accepted') = 'accepted'
+        AND NOT public.is_conversation_blocked_for_me(c.id)
     )
   )
   WITH CHECK (
@@ -1757,5 +1857,6 @@ CREATE POLICY "DM uploaders update own files" ON storage.objects
         AND cm.user_id = (select auth.uid())
         AND cm.hidden_at IS NULL
         AND coalesce(c.request_status, 'accepted') = 'accepted'
+        AND NOT public.is_conversation_blocked_for_me(c.id)
     )
   );

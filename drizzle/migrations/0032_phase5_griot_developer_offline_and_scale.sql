@@ -554,6 +554,6 @@ CREATE INDEX IF NOT EXISTS business_profiles_fts_gin_idx
 
 CREATE INDEX IF NOT EXISTS signal_opportunities_fts_gin_idx
   ON public.signal_opportunities USING gin (
-    to_tsvector('english', title || ' ' || coalesce(summary, '') || ' ' || coalesce(organization_name, ''))
+    to_tsvector('english', title || ' ' || coalesce(description, '') || ' ' || coalesce(location, ''))
   )
   WHERE status = 'open';

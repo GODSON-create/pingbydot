@@ -117,6 +117,7 @@ const readMig = (name) => fs.readFileSync(path.join(MIGRATIONS_DIR, name), "utf8
 
 const sql0029 = readMig("0029_phase2_social_messaging_hubs_signals_notifications.sql");
 const sql0031 = readMig("0031_phase4_business_commerce_ads_and_wallet.sql");
+const sql0032 = readMig("0032_phase5_griot_developer_offline_and_scale.sql");
 const sql0033 = readMig("0033_premium_ux_dot_economy_and_interactions.sql");
 const sql0035 = readMig("0035_admin_control_centre_and_early_access.sql");
 const sql0037 = readMig("0037_stage1_messaging_privacy_and_security_hardening.sql");
@@ -130,6 +131,9 @@ if (!sql0029.includes("ALTER COLUMN ping_id DROP NOT NULL") || !sql0029.includes
 if (!sql0031.includes("reference_id") || sql0031.includes("source_ref")) {
   fail("0031 still references source_ref instead of reference_id");
 }
+if (sql0032.includes("coalesce(summary, '')") || sql0032.includes("coalesce(organization_name, '')")) {
+  fail("0032 signal_opportunities_fts_gin_idx still references non-existent summary/organization_name columns");
+}
 if (!sql0033.includes("reference_id") || sql0033.includes("source_ref")) {
   fail("0033 still references source_ref instead of reference_id");
 }
@@ -141,7 +145,7 @@ for (const action of ["hide_comment", "restore_comment", "resolve_comment_report
     fail(`0037 admin_moderate safety net missing action '${action}'`);
   }
 }
-pass("All 4 pending migration repairs verified in 0029, 0031, 0033, 0035, and 0037");
+pass("All 5 pending migration repairs verified in 0029, 0031, 0032, 0033, 0035, and 0037");
 
 const required0037Markers = [
   "REVOKE INSERT, UPDATE, DELETE ON public.conversations FROM PUBLIC, anon, authenticated;",
@@ -149,7 +153,13 @@ const required0037Markers = [
   "GRANT UPDATE (is_muted, is_archived, hidden_at, last_read_at) ON public.conversation_members TO authenticated;",
   "CREATE OR REPLACE FUNCTION public.guard_conversation_members()",
   "REVOKE INSERT, UPDATE, DELETE ON public.conversation_messages FROM PUBLIC, anon, authenticated;",
-  "REVOKE UPDATE, DELETE ON public.private_messages FROM PUBLIC, anon, authenticated;",
+  "REVOKE INSERT, UPDATE, DELETE ON public.private_messages FROM PUBLIC, anon, authenticated;",
+  "CREATE UNIQUE INDEX IF NOT EXISTS conversations_direct_pair_uidx",
+  "CREATE UNIQUE INDEX IF NOT EXISTS private_messages_one_pending_request_uidx",
+  "pg_advisory_xact_lock(hashtextextended('ping_direct_conv:' || v_pair_key, 0))",
+  "pg_advisory_xact_lock(hashtextextended('ping_send_conv:' || p_conversation_id::text, 0))",
+  "CREATE OR REPLACE FUNCTION public.is_blocked_with(",
+  "CREATE OR REPLACE FUNCTION public.is_conversation_blocked_for_me(",
   "CREATE OR REPLACE FUNCTION public.assert_can_send_to_conversation(",
   "CREATE OR REPLACE FUNCTION public.guard_private_message_write()",
   "CREATE OR REPLACE FUNCTION public.accept_message_request(",
@@ -157,7 +167,9 @@ const required0037Markers = [
   "CREATE OR REPLACE FUNCTION public.update_group_member_role(",
   "CREATE OR REPLACE FUNCTION public.can_view_profile_content(",
   "SELECT coalesce(read_receipts_enabled, true)",
+  "WHERE upp.user_id = pm.sender_id",
   "coalesce(c.request_status, 'accepted') = 'accepted'",
+  "NOT public.is_conversation_blocked_for_me(c.id)",
 ];
 
 for (const marker of required0037Markers) {

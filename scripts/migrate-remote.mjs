@@ -541,9 +541,12 @@ async function runSchemaVerification(sql, releaseEntries) {
       auth_cm_ins,
       auth_cm_del,
       auth_cm_role_upd,
+      auth_pm_ins,
       auth_pm_del,
       auth_pm_status_upd,
       auth_legacy_cm_ins,
+      direct_pair_uidx,
+      pending_msg_uidx,
       req_status_col,
       dm_perm_col,
       notif_title_col,
@@ -557,9 +560,18 @@ async function runSchemaVerification(sql, releaseEntries) {
       has_table_privilege('authenticated', 'public.conversation_members', 'INSERT') AS auth_cm_ins,
       has_table_privilege('authenticated', 'public.conversation_members', 'DELETE') AS auth_cm_del,
       has_column_privilege('authenticated', 'public.conversation_members', 'role', 'UPDATE') AS auth_cm_role_upd,
+      has_table_privilege('authenticated', 'public.private_messages', 'INSERT') AS auth_pm_ins,
       has_table_privilege('authenticated', 'public.private_messages', 'DELETE') AS auth_pm_del,
       has_column_privilege('authenticated', 'public.private_messages', 'status', 'UPDATE') AS auth_pm_status_upd,
       has_table_privilege('authenticated', 'public.conversation_messages', 'INSERT') AS auth_legacy_cm_ins,
+      EXISTS (
+        SELECT 1 FROM pg_indexes
+        WHERE schemaname = 'public' AND tablename = 'conversations' AND indexname = 'conversations_direct_pair_uidx'
+      ) AS direct_pair_uidx,
+      EXISTS (
+        SELECT 1 FROM pg_indexes
+        WHERE schemaname = 'public' AND tablename = 'private_messages' AND indexname = 'private_messages_one_pending_request_uidx'
+      ) AS pending_msg_uidx,
       EXISTS (
         SELECT 1 FROM information_schema.columns
         WHERE table_schema = 'public' AND table_name = 'conversations' AND column_name = 'request_status'
@@ -589,9 +601,12 @@ async function runSchemaVerification(sql, releaseEntries) {
     auth_cm_ins ||
     auth_cm_del ||
     auth_cm_role_upd ||
+    auth_pm_ins ||
     auth_pm_del ||
     auth_pm_status_upd ||
     auth_legacy_cm_ins ||
+    !direct_pair_uidx ||
+    !pending_msg_uidx ||
     !req_status_col ||
     !dm_perm_col ||
     !notif_title_col ||
