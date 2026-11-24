@@ -28,11 +28,12 @@ import {
   pickMediaFromGallery,
 } from "@/lib/media-picker";
 import {
-  createPrivateDmSignedUrl,
+  createAuthorizedMediaReadUrl,
   DEFAULT_DM_SIGNED_URL_TTL_SEC,
-  isPrivateDmMediaRef,
+  isPrivateMediaRef,
 } from "@/lib/storage";
 import {
+  buildMediaRecorderOptions,
   buildVoiceNoteFile,
   formatMicrophoneError,
   formatVoiceDuration,
@@ -293,9 +294,7 @@ export function VoiceNoteButton({
       const negotiated = selectSupportedAudioMimeType();
       negotiatedRef.current = negotiated;
 
-      const recorder = negotiated
-        ? new MediaRecorder(stream, { mimeType: negotiated.recorderMimeType })
-        : new MediaRecorder(stream);
+      const recorder = new MediaRecorder(stream, buildMediaRecorderOptions(negotiated));
 
       chunksRef.current = [];
       canceledRef.current = false;
@@ -648,7 +647,7 @@ export function ResolvedChatMedia({
   isOwnMessage?: boolean;
 }) {
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(() =>
-    isPrivateDmMediaRef(mediaUrl) ? null : mediaUrl,
+    isPrivateMediaRef(mediaUrl) ? null : mediaUrl,
   );
   const [failed, setFailed] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -661,13 +660,13 @@ export function ResolvedChatMedia({
     setRefreshing(false);
     retryCountRef.current = 0;
 
-    if (!isPrivateDmMediaRef(mediaUrl)) {
+    if (!isPrivateMediaRef(mediaUrl)) {
       setResolvedUrl(mediaUrl);
       return;
     }
 
     const fetchSigned = async (forceRefresh: boolean) => {
-      const url = await createPrivateDmSignedUrl(mediaUrl, { forceRefresh });
+      const url = await createAuthorizedMediaReadUrl(mediaUrl, { forceRefresh });
       if (!active) return;
       if (!url) {
         setFailed(true);
@@ -692,10 +691,10 @@ export function ResolvedChatMedia({
   }, [mediaUrl]);
 
   const handleMediaLoadError = async () => {
-    if (isPrivateDmMediaRef(mediaUrl) && retryCountRef.current < 1) {
+    if (isPrivateMediaRef(mediaUrl) && retryCountRef.current < 1) {
       retryCountRef.current += 1;
       setRefreshing(true);
-      const freshUrl = await createPrivateDmSignedUrl(mediaUrl, { forceRefresh: true });
+      const freshUrl = await createAuthorizedMediaReadUrl(mediaUrl, { forceRefresh: true });
       setRefreshing(false);
       if (freshUrl) {
         setFailed(false);
@@ -708,12 +707,12 @@ export function ResolvedChatMedia({
 
   const handleManualRefresh = async () => {
     setFailed(false);
-    if (!isPrivateDmMediaRef(mediaUrl)) {
+    if (!isPrivateMediaRef(mediaUrl)) {
       setResolvedUrl(mediaUrl);
       return;
     }
     setRefreshing(true);
-    const freshUrl = await createPrivateDmSignedUrl(mediaUrl, { forceRefresh: true });
+    const freshUrl = await createAuthorizedMediaReadUrl(mediaUrl, { forceRefresh: true });
     setRefreshing(false);
     if (freshUrl) {
       setResolvedUrl(freshUrl);
@@ -726,7 +725,7 @@ export function ResolvedChatMedia({
     return (
       <div className="flex items-center justify-between gap-2 rounded-xl bg-background/40 px-3 py-2 text-xs text-muted-foreground">
         <span>Attachment unavailable</span>
-        {isPrivateDmMediaRef(mediaUrl) && (
+        {isPrivateMediaRef(mediaUrl) && (
           <button
             type="button"
             onClick={() => void handleManualRefresh()}

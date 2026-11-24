@@ -1078,6 +1078,68 @@ async function runFeatureAuthTests(sql) {
       );
       results.push("Verification Authorization: PASS (optional flow pending by default, self-approval and role escalation blocked)");
 
+      // 7. Stage 2 Private Hub Attachments, Restricted Moments & Chat Retention Authorization (0038 & 0039)
+      await actAs(userA);
+      const [{ hub_json: privHubJson }] = await tx`
+        SELECT public.create_hub('Verify Private Hub', 'verify-private-hub-0038', 'Tag', 'Desc', '', 'community', 'private', '[]'::jsonb) AS hub_json
+      `;
+      const privHubId = privHubJson.id;
+      const hubObjName = `${privHubId}/${userA}/private-doc.pdf`;
+      await tx`
+        INSERT INTO storage.objects (bucket_id, name, owner, metadata)
+        VALUES ('hub-attachments', ${hubObjName}, ${userA}::uuid, '{"mimetype":"application/pdf"}'::jsonb)
+      `;
+      await actAs(userC);
+      const [{ cnt: cReadPrivHub }] = await tx`
+        SELECT count(*)::int AS cnt FROM storage.objects
+        WHERE bucket_id = 'hub-attachments' AND name = ${hubObjName}
+      `;
+      await assertExpectThrow(tx, "non-member uploading to private hub-attachments", async () => {
+        await tx`
+          INSERT INTO storage.objects (bucket_id, name, owner, metadata)
+          VALUES ('hub-attachments', ${`${privHubId}/${userC}/rogue.pdf`}, ${userC}::uuid, '{"mimetype":"application/pdf"}'::jsonb)
+        `;
+      });
+
+      // Restricted close_circle Moment storage isolation (userB is in userA's Close Circle, userC is not)
+      await actAs(userA);
+      const ccObjName = `${userA}/close_circle/self/secret-moment.webp`;
+      await tx`
+        INSERT INTO storage.objects (bucket_id, name, owner, metadata)
+        VALUES ('private-moments', ${ccObjName}, ${userA}::uuid, '{"mimetype":"image/webp"}'::jsonb)
+      `;
+      await tx`
+        INSERT INTO public.moments (author_id, media_url, media_type, caption, audience)
+        VALUES (${userA}::uuid, ${`storage://private-moments/${ccObjName}`}, 'image', 'Private CC Moment', 'close_circle')
+      `;
+      await actAs(userB);
+      const [{ cnt: bReadCcObj }] = await tx`
+        SELECT count(*)::int AS cnt FROM storage.objects
+        WHERE bucket_id = 'private-moments' AND name = ${ccObjName}
+      `;
+      await actAs(userC);
+      const [{ cnt: cReadCcObj }] = await tx`
+        SELECT count(*)::int AS cnt FROM storage.objects
+        WHERE bucket_id = 'private-moments' AND name = ${ccObjName}
+      `;
+
+      // Chat Retention entitlement ceiling enforcement (unverified user cannot bypass 7d cap)
+      await actAs(userA);
+      await assertExpectThrow(tx, "unverified user setting 30d default chat retention directly", async () => {
+        await tx`SELECT public.set_my_default_chat_retention('30d')`;
+      });
+      await tx`SELECT public.set_my_default_chat_retention('24h_after_view')`;
+      await assertExpectThrow(tx, "unverified user setting 30d conversation retention", async () => {
+        await tx`SELECT public.set_conversation_retention_policy(${convId}::uuid, '30d')`;
+      });
+
+      if (cReadPrivHub !== 0 || bReadCcObj !== 1 || cReadCcObj !== 0) {
+        throw new Error(
+          `Stage 2 Storage RLS mismatch: cReadPrivHub=${cReadPrivHub}, bReadCcObj=${bReadCcObj}, cReadCcObj=${cReadCcObj}`,
+        );
+      }
+      results.push("Stage 2 Storage RLS & Chat Retention (0038/0039): PASS (hub-attachments & private-moments isolated, unverified retention cap enforced)");
+
       throw new VerificationRollbackSignal(results);
     });
   } catch (err) {

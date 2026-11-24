@@ -257,11 +257,20 @@ export function PingComposer({
       }
 
       setUploadProgress(45);
-      const { uploadUserMedia } = await import("@/lib/storage");
-      const ext =
-        file.name.split(".").pop()?.toLowerCase() || (mediaKind === "video" ? "mp4" : "png");
-      const path = `${user.id}/pings/${Date.now()}.${ext}`;
-      const publicUrl = await uploadUserMedia(path, file, { cacheControl: "3600", upsert: false });
+      const { buildPublicMediaPath, uploadUserMedia } = await import("@/lib/storage");
+      const path = buildPublicMediaPath(
+        user.id,
+        "pings",
+        file.name,
+        mediaKind === "video" ? "mp4" : "jpg",
+      );
+      const publicUrl = await uploadUserMedia(path, file, {
+        cacheControl: "31536000",
+        upsert: false,
+        ownerId: user.id,
+        onProgress: (pct) =>
+          setUploadProgress(Math.max(45, Math.min(80, Math.round(45 + pct * 0.35)))),
+      });
 
       setUploadProgress(80);
       if (posterBlob) {
@@ -270,9 +279,9 @@ export function PingComposer({
             type: "image/jpeg",
           });
           const uploadedPoster = await uploadUserMedia(
-            `${user.id}/pings/posters/${Date.now()}.jpg`,
+            buildPublicMediaPath(user.id, "pings/posters", posterFile.name, "jpg"),
             posterFile,
-            { cacheControl: "3600", upsert: false },
+            { cacheControl: "31536000", upsert: false, optimizeImage: false, ownerId: user.id },
           );
           setPosterUrl(uploadedPoster);
         } catch {

@@ -1,9 +1,17 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Eye, Shield, Activity, Clock, MessageSquareLock } from "lucide-react";
+import { Eye, Shield, Activity, Clock, MessageSquareLock, Timer } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useUserPrivacy, type DmPermission } from "@/lib/privacy";
+import {
+  CHAT_RETENTION_POLICIES,
+  formatStorageBytes,
+  isPolicyAllowedByMax,
+  useMyChatRetentionEntitlement,
+  useSetDefaultChatRetention,
+  type ChatRetentionPolicy,
+} from "@/lib/chat-retention";
 import { cn } from "@/lib/utils";
 
 interface PingActivityPrivacyProps {
@@ -40,6 +48,8 @@ const DM_PERMISSION_OPTIONS: Array<{
 
 export function PingActivityPrivacy({ userId }: PingActivityPrivacyProps) {
   const { preferences, updatePrivacy, isLoading } = useUserPrivacy(userId);
+  const { data: retentionEntitlement } = useMyChatRetentionEntitlement(userId);
+  const setDefaultRetention = useSetDefaultChatRetention(userId);
   const [updatingField, setUpdatingField] = useState<string | null>(null);
 
   const handleToggle = async (
@@ -70,6 +80,18 @@ export function PingActivityPrivacy({ userId }: PingActivityPrivacyProps) {
       toast.success("Direct message permissions updated");
     } catch {
       toast.error("Failed to update messaging permission. Please try again.");
+    } finally {
+      setUpdatingField(null);
+    }
+  };
+
+  const handleDefaultRetentionChange = async (policy: ChatRetentionPolicy) => {
+    try {
+      setUpdatingField("chat_retention");
+      await setDefaultRetention.mutateAsync(policy);
+      toast.success("Default chat retention updated");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not update default chat retention.");
     } finally {
       setUpdatingField(null);
     }
@@ -203,6 +225,73 @@ export function PingActivityPrivacy({ userId }: PingActivityPrivacyProps) {
             className="data-[state=checked]:bg-primary"
           />
         </div>
+
+        {/* Default Private Chat Retention (Feature-Flagged) */}
+        {retentionEntitlement?.feature_enabled && (
+          <div className="py-4 space-y-3" data-testid="default-chat-retention-section">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <Timer className="h-5 w-5 mt-0.5 text-primary shrink-0" />
+                <div>
+                  <Label className="text-base font-semibold">Default Private Chat Retention</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Applies to new private messages and attachments (public Pings, profiles,
+                    Moments, and Hubs are never affected). Saved-in-chat items survive automatic
+                    expiry within your storage quota.
+                  </p>
+                </div>
+              </div>
+              <span className="text-[11px] font-mono text-muted-foreground shrink-0">
+                Saved: {formatStorageBytes(retentionEntitlement.saved_storage_used_bytes)} /{" "}
+                {formatStorageBytes(retentionEntitlement.saved_storage_quota_bytes)}
+              </span>
+            </div>
+
+            <div
+              role="radiogroup"
+              aria-label="Default private chat retention"
+              className="grid gap-2 sm:grid-cols-2 pl-0 sm:pl-8"
+            >
+              {CHAT_RETENTION_POLICIES.map((opt) => {
+                const allowed = isPolicyAllowedByMax(
+                  opt.value,
+                  retentionEntitlement.max_retention_policy,
+                );
+                const selected = retentionEntitlement.default_chat_retention_policy === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    disabled={!allowed || updatingField === "chat_retention"}
+                    onClick={() => void handleDefaultRetentionChange(opt.value)}
+                    className={cn(
+                      "rounded-2xl border p-3 text-left transition-colors",
+                      selected
+                        ? "border-primary bg-primary/10"
+                        : allowed
+                          ? "border-border/70 bg-secondary/30 hover:bg-secondary/60"
+                          : "border-border/40 bg-muted/30 opacity-60 cursor-not-allowed",
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-foreground">{opt.label}</p>
+                      {!allowed && (
+                        <span className="text-[10px] font-medium text-muted-foreground">
+                          {opt.requiredTierLabel}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground leading-relaxed">
+                      {opt.description}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="mt-4 rounded-xl bg-muted/40 p-3.5 text-xs text-muted-foreground flex items-center gap-2">

@@ -179,6 +179,55 @@ for (const marker of required0037Markers) {
 }
 pass(`Stage 1 (0037) security markers verified (${required0037Markers.length}/${required0037Markers.length})`);
 
+// 4. Stage 2 storage hardening (0038) & scalable Chat Retention (0039) checks
+const sql0038 = readMig("0038_stage2_storage_buckets_rls_and_media_assets.sql");
+const sql0039 = readMig("0039_stage2_scalable_chat_retention_system.sql");
+
+const required0038Markers = [
+  "'hub-attachments'",
+  "'private-moments'",
+  'DROP POLICY IF EXISTS "Media is public" ON storage.objects;',
+  'CREATE POLICY "Hub attachments readable by authorized viewers" ON storage.objects',
+  'CREATE POLICY "Active hub members upload own hub attachments" ON storage.objects',
+  'CREATE POLICY "Hub uploaders or staff delete hub attachments" ON storage.objects',
+  "CREATE OR REPLACE FUNCTION public.can_access_private_moment_object(",
+  'CREATE POLICY "Authorized audience reads private moments" ON storage.objects',
+  "CREATE TABLE IF NOT EXISTS public.media_deletion_queue",
+  "CREATE OR REPLACE FUNCTION public.enqueue_media_object_deletion(",
+  "CREATE OR REPLACE FUNCTION public.enqueue_orphaned_staging_media(",
+];
+
+for (const marker of required0038Markers) {
+  if (!sql0038.includes(marker)) {
+    fail(`0038 missing required storage hardening marker: ${marker}`);
+  }
+}
+
+const required0039Markers = [
+  "CREATE TABLE IF NOT EXISTS public.app_feature_flags",
+  "CREATE TABLE IF NOT EXISTS public.chat_retention_entitlement_rules",
+  "CREATE OR REPLACE FUNCTION public.resolve_user_chat_retention_entitlement(",
+  "CREATE OR REPLACE FUNCTION public.resolve_conversation_max_retention_policy(",
+  "CREATE OR REPLACE FUNCTION public.guard_user_privacy_retention()",
+  "CREATE INDEX IF NOT EXISTS private_messages_expiry_due_idx",
+  "CREATE OR REPLACE FUNCTION public.set_conversation_retention_policy(",
+  "CREATE OR REPLACE FUNCTION public.toggle_save_private_message(",
+  "CREATE TABLE IF NOT EXISTS public.chat_retention_deletion_audit",
+  "CREATE OR REPLACE FUNCTION public.process_expired_private_messages_batch(",
+  "CREATE OR REPLACE FUNCTION public.claim_media_deletion_jobs(",
+  "CREATE OR REPLACE FUNCTION public.complete_media_deletion_job(",
+  "CREATE OR REPLACE FUNCTION public.get_chat_retention_metrics()",
+];
+
+for (const marker of required0039Markers) {
+  if (!sql0039.includes(marker)) {
+    fail(`0039 missing required chat retention marker: ${marker}`);
+  }
+}
+pass(
+  `Stage 2 (0038 & 0039) storage & chat retention markers verified (${required0038Markers.length + required0039Markers.length}/${required0038Markers.length + required0039Markers.length})`,
+);
+
 for (const line of checks) {
   console.log(`  PASS: ${line}`);
 }

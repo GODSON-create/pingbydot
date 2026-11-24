@@ -79,10 +79,14 @@ export function IdentityStep({
     }
     try {
       setUploadingAvatar(true);
-      const { uploadUserMedia } = await import("@/lib/storage");
-      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-      const path = `${userId}/avatar/${Date.now()}.${ext}`;
-      const publicUrl = await uploadUserMedia(path, file, { cacheControl: "3600", upsert: false });
+      const { buildPublicMediaPath, uploadUserMedia } = await import("@/lib/storage");
+      const path = buildPublicMediaPath(userId, "avatars", file.name, "jpg");
+      const publicUrl = await uploadUserMedia(path, file, {
+        cacheControl: "31536000",
+        upsert: false,
+        ownerId: userId,
+        optimizeImage: { maxDimension: 512, quality: 0.84 },
+      });
       onChangeAvatarUrl(publicUrl);
       toast.success("Profile photo uploaded");
     } catch (err) {

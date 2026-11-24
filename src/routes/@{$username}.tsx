@@ -89,6 +89,7 @@ import {
   useRemoveCloseCircleMember,
 } from "@/lib/moments";
 import { MomentViewerModal } from "@/components/moments/MomentViewerModal";
+import { ResolvedMomentThumb } from "@/components/media/ResolvedPrivateMedia";
 import { dotSummaryQuery, publicAccountTierQuery } from "@/lib/economy";
 import { formatProfessionalBadgeLabel, publicVerificationQuery } from "@/lib/verification";
 import { VerificationBadge } from "@/components/verification/VerificationBadge";
@@ -950,20 +951,12 @@ function ProfileContent({
                     onClick={() => setMomentModalOpen(true)}
                     className="group relative aspect-[9/14] overflow-hidden rounded-3xl bg-black text-left shadow-sm"
                   >
-                    {m.media_type === "video" ? (
-                      <video
-                        src={m.media_url}
-                        muted
-                        playsInline
-                        className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                      />
-                    ) : (
-                      <img
-                        src={m.media_url}
-                        alt={m.caption || "Moment"}
-                        className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                      />
-                    )}
+                    <ResolvedMomentThumb
+                      mediaUrl={m.media_url}
+                      mediaType={m.media_type}
+                      alt={m.caption || "Moment"}
+                      className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                    />
                     <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-3 text-white">
                       {m.caption && <p className="line-clamp-2 text-xs font-medium">{m.caption}</p>}
                       <p className="mt-1 text-[10px] text-white/70">

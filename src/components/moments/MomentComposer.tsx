@@ -269,15 +269,29 @@ export function MomentComposer({ open, onOpenChange, onPublished }: MomentCompos
         let uploadedUrl = d.mediaUrl;
 
         if (d.mediaFile) {
-          const { uploadUserMedia } = await import("@/lib/storage");
-          const ext =
-            d.mediaFile.name.split(".").pop()?.toLowerCase() ||
-            (d.mediaType === "video" ? "mp4" : "jpg");
-          const path = `${user.id}/moments/${Date.now()}_${i}.${ext}`;
-          uploadedUrl = await uploadUserMedia(path, d.mediaFile, {
-            cacheControl: "3600",
-            upsert: false,
-          });
+          const { buildPublicMediaPath, uploadPrivateMomentMedia, uploadUserMedia } =
+            await import("@/lib/storage");
+          if (d.audience === "public") {
+            const path = buildPublicMediaPath(
+              user.id,
+              "moments",
+              d.mediaFile.name,
+              d.mediaType === "video" ? "mp4" : "jpg",
+            );
+            uploadedUrl = await uploadUserMedia(path, d.mediaFile, {
+              cacheControl: "31536000",
+              upsert: false,
+              ownerId: user.id,
+            });
+          } else {
+            const uploaded = await uploadPrivateMomentMedia(
+              user.id,
+              d.audience,
+              d.hubId,
+              d.mediaFile,
+            );
+            uploadedUrl = uploaded.storageRef;
+          }
         }
 
         if (uploadedUrl.startsWith("blob:")) {

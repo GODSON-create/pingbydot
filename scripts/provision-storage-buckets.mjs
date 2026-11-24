@@ -138,24 +138,29 @@ async function runCheckOnly(cfg) {
 
   const mediaProbe = await probeBucketHttp(cfg.supabaseUrl, cfg.anonKey, "media");
   const dmProbe = await probeBucketHttp(cfg.supabaseUrl, cfg.anonKey, "dm-attachments");
+  const hubProbe = await probeBucketHttp(cfg.supabaseUrl, cfg.anonKey, "hub-attachments");
+  const momentProbe = await probeBucketHttp(cfg.supabaseUrl, cfg.anonKey, "private-moments");
 
-  for (const probe of [mediaProbe, dmProbe]) {
+  console.log(
+    `  Public bucket 'media': ${mediaProbe.exists ? "PUBLIC OK" : "NOT PUBLIC / MISSING"} (HTTP ${mediaProbe.status} — ${mediaProbe.detail})`,
+  );
+  console.log("  Private buckets (HTTP public endpoint returns 400 when private=true as expected):");
+  for (const probe of [dmProbe, hubProbe, momentProbe]) {
     console.log(
-      `  Bucket '${probe.bucketId}': ${probe.exists ? "PRESENT" : "MISSING"} (HTTP ${probe.status} — ${probe.detail})`,
+      `    - '${probe.bucketId}': public-endpoint-blocked=${!probe.exists} (HTTP ${probe.status} — verify bucket row & RLS in Lovable SQL editor)`,
     );
   }
 
-  if (!mediaProbe.exists || !dmProbe.exists) {
+  if (!mediaProbe.exists) {
     console.error(
-      "\nACTION REQUIRED: One or more required Storage buckets are missing on Supabase project " +
+      "\nACTION REQUIRED: Public bucket 'media' is either missing or configured with public=false on " +
         `'${EXPECTED_PROJECT_REF}'.\n` +
-        "After owner approval, apply migrations via `npm run db:migrate` (recommended) or " +
-        "`node scripts/provision-storage-buckets.mjs --apply` with LOVABLE_DB_MIGRATION_URL set.",
+        "Apply migrations 0036–0039 inside Lovable Cloud SQL/migrations (or run --apply on a direct PostgreSQL cluster with LOVABLE_DB_MIGRATION_URL).",
     );
     process.exit(1);
   }
 
-  console.log("\nOK: Both 'media' and 'dm-attachments' buckets are provisioned.");
+  console.log("\nOK: Public bucket 'media' is publicly reachable and private endpoints are blocked.");
 }
 
 async function runApply(cfg) {

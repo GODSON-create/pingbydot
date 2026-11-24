@@ -22,6 +22,13 @@ export interface PrivateMessage {
   forwarded_from_id?: string | null;
   is_pinned?: boolean;
   edited_at?: string | null;
+  retention_policy?: string | null;
+  expires_at?: string | null;
+  first_viewed_at?: string | null;
+  expired_at?: string | null;
+  is_saved_in_chat?: boolean;
+  media_size_bytes?: number;
+  is_system?: boolean;
   sender?: Profile;
 }
 
@@ -50,6 +57,8 @@ export interface Conversation {
   requested_by?: string | null;
   request_recipient_id?: string | null;
   request_responded_at?: string | null;
+  retention_policy?: "24h_after_view" | "7d" | "30d" | "1y" | "until_deleted";
+  retention_updated_at?: string | null;
   created_by: string | null;
   last_message_at: string;
   last_message_preview: string | null;
@@ -331,6 +340,7 @@ export function conversationMessagesQuery(
           `
           id, conversation_id, sender_id, content, media_url, media_type, status, deleted_at, created_at, updated_at,
           reply_to_id, forwarded_from_id, is_pinned, edited_at,
+          retention_policy, expires_at, first_viewed_at, expired_at, is_saved_in_chat, media_size_bytes, is_system,
           sender:profiles!private_messages_sender_id_fkey(id, username, display_name, avatar_url, bio, created_at)
         `,
         )
@@ -948,7 +958,7 @@ export function savedMessagesQuery(userId?: string) {
   };
 }
 
-export function useToggleSaveMessage(userId?: string) {
+export function useToggleSaveMessage(userId?: string, conversationId?: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({
@@ -959,6 +969,26 @@ export function useToggleSaveMessage(userId?: string) {
       currentlySaved: boolean;
     }) => {
       if (!userId) throw new Error("Sign in to save messages.");
+      const nextSaved = !currentlySaved;
+
+      // Primary authoritative RPC (enforces membership, quota, expiry survival/restoration)
+      const { data: rpcData, error: rpcErr } = await (supabase as any).rpc(
+        "toggle_save_private_message",
+        {
+          p_message_id: messageId,
+          p_save: nextSaved,
+        },
+      );
+
+      if (!rpcErr) {
+        return Boolean((rpcData as { saved?: boolean } | null)?.saved ?? nextSaved);
+      }
+
+      if (!isMissingRpcError(rpcErr)) {
+        throw rpcErr;
+      }
+
+      // Legacy fallback before migration 0039 is deployed remotely
       if (currentlySaved) {
         const { error } = await (supabase as any)
           .from("saved_messages")
@@ -991,6 +1021,10 @@ export function useToggleSaveMessage(userId?: string) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["saved-messages", userId] });
+      qc.invalidateQueries({ queryKey: ["chat-retention-entitlement", userId] });
+      if (conversationId) {
+        qc.invalidateQueries({ queryKey: ["conversation-messages", conversationId] });
+      }
     },
   });
 }

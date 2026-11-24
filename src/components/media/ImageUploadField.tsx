@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { takePhoto } from "@/lib/native";
 import { validateMediaUpload } from "@/lib/shield";
-import { uploadUserMedia } from "@/lib/storage";
+import { buildPublicMediaPath, uploadUserMedia } from "@/lib/storage";
 
 interface ImageUploadFieldProps {
   value: string;
@@ -60,11 +60,12 @@ export function ImageUploadField({
     setUploading(true);
     setUploadError(null);
     try {
-      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-      const path = `${userId}/${folder}/${Date.now()}.${ext}`;
+      const path = buildPublicMediaPath(userId, folder, file.name, "jpg");
       const url = await uploadUserMedia(path, file, {
-        cacheControl: "3600",
+        cacheControl: "31536000",
         upsert: false,
+        ownerId: userId,
+        optimizeImage: { maxDimension: folder === "avatars" ? 512 : 1600, quality: 0.84 },
       });
       onChange(url);
       toast.success("Image uploaded");

@@ -311,25 +311,15 @@ export function HubChat({ hubId, isMember, isPrivate, isStaff = false }: HubChat
       setIsUploading(true);
       setUploadError(null);
       setFailedFile(null);
-      const { uploadUserMedia } = await import("@/lib/storage");
-      const fallbackExt =
-        detected === "video"
-          ? "mp4"
-          : detected === "audio"
-            ? "webm"
-            : detected === "document"
-              ? "bin"
-              : "jpg";
-      const ext = file.name.split(".").pop()?.toLowerCase() || fallbackExt;
-      const path = `${user.id}/hubs/${hubId}/${Date.now()}.${ext}`;
-      const publicUrl = await uploadUserMedia(path, file);
-      setMediaUrl(publicUrl);
+      const { uploadPrivateHubMedia } = await import("@/lib/storage");
+      const { storageRef } = await uploadPrivateHubMedia(hubId, user.id, file);
+      setMediaUrl(storageRef);
       setMediaKind(detected);
       setMediaName(file.name);
       toast.success("Attachment ready");
     } catch (err: any) {
-      const { formatStorageUploadError } = await import("@/lib/storage");
-      const msg = formatStorageUploadError(err, "Upload failed");
+      const { formatStorageUploadError, HUB_MEDIA_BUCKET } = await import("@/lib/storage");
+      const msg = formatStorageUploadError(err, "Upload failed", HUB_MEDIA_BUCKET);
       setUploadError(msg);
       setFailedFile(file);
       toast.error(msg);

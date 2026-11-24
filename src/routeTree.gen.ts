@@ -55,7 +55,10 @@ import { Route as SpotlightSlugRouteImport } from './routes/spotlight.$slug'
 import { Route as TagSlugRouteImport } from './routes/tag.$slug'
 import { Route as AuthenticatedEditIdRouteImport } from './routes/_authenticated/edit.$id'
 import { Route as AuthenticatedSpotlightEditorialRouteImport } from './routes/_authenticated/spotlight.editorial'
+import { Route as ApiCronChatRetentionRouteImport } from './routes/api/cron/chat-retention'
 import { Route as ApiGriotAssistRouteImport } from './routes/api/griot/assist'
+import { Route as ApiMediaPresignUploadRouteImport } from './routes/api/media/presign-upload'
+import { Route as ApiMediaSignReadRouteImport } from './routes/api/media/sign-read'
 import { Route as ApiV1HealthRouteImport } from './routes/api/v1/health'
 import { Route as ApiV1OpenapiDotjsonRouteImport } from './routes/api/v1/openapi[.]json'
 import { Route as ApiV1PingsRouteImport } from './routes/api/v1/pings'
@@ -294,9 +297,24 @@ const AuthenticatedSpotlightEditorialRoute =
     path: '/spotlight/editorial',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const ApiCronChatRetentionRoute = ApiCronChatRetentionRouteImport.update({
+  id: '/api/cron/chat-retention',
+  path: '/api/cron/chat-retention',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiGriotAssistRoute = ApiGriotAssistRouteImport.update({
   id: '/api/griot/assist',
   path: '/api/griot/assist',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMediaPresignUploadRoute = ApiMediaPresignUploadRouteImport.update({
+  id: '/api/media/presign-upload',
+  path: '/api/media/presign-upload',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMediaSignReadRoute = ApiMediaSignReadRouteImport.update({
+  id: '/api/media/sign-read',
+  path: '/api/media/sign-read',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiV1HealthRoute = ApiV1HealthRouteImport.update({
@@ -376,7 +394,10 @@ export interface FileRoutesByFullPath {
   '/tag/$slug': typeof TagSlugRoute
   '/edit/$id': typeof AuthenticatedEditIdRoute
   '/spotlight/editorial': typeof AuthenticatedSpotlightEditorialRoute
+  '/api/cron/chat-retention': typeof ApiCronChatRetentionRoute
   '/api/griot/assist': typeof ApiGriotAssistRoute
+  '/api/media/presign-upload': typeof ApiMediaPresignUploadRoute
+  '/api/media/sign-read': typeof ApiMediaSignReadRoute
   '/api/v1/health': typeof ApiV1HealthRoute
   '/api/v1/openapi.json': typeof ApiV1OpenapiDotjsonRoute
   '/api/v1/pings': typeof ApiV1PingsRoute
@@ -430,7 +451,10 @@ export interface FileRoutesByTo {
   '/tag/$slug': typeof TagSlugRoute
   '/edit/$id': typeof AuthenticatedEditIdRoute
   '/spotlight/editorial': typeof AuthenticatedSpotlightEditorialRoute
+  '/api/cron/chat-retention': typeof ApiCronChatRetentionRoute
   '/api/griot/assist': typeof ApiGriotAssistRoute
+  '/api/media/presign-upload': typeof ApiMediaPresignUploadRoute
+  '/api/media/sign-read': typeof ApiMediaSignReadRoute
   '/api/v1/health': typeof ApiV1HealthRoute
   '/api/v1/openapi.json': typeof ApiV1OpenapiDotjsonRoute
   '/api/v1/pings': typeof ApiV1PingsRoute
@@ -486,7 +510,10 @@ export interface FileRoutesById {
   '/tag/$slug': typeof TagSlugRoute
   '/_authenticated/edit/$id': typeof AuthenticatedEditIdRoute
   '/_authenticated/spotlight/editorial': typeof AuthenticatedSpotlightEditorialRoute
+  '/api/cron/chat-retention': typeof ApiCronChatRetentionRoute
   '/api/griot/assist': typeof ApiGriotAssistRoute
+  '/api/media/presign-upload': typeof ApiMediaPresignUploadRoute
+  '/api/media/sign-read': typeof ApiMediaSignReadRoute
   '/api/v1/health': typeof ApiV1HealthRoute
   '/api/v1/openapi.json': typeof ApiV1OpenapiDotjsonRoute
   '/api/v1/pings': typeof ApiV1PingsRoute
@@ -542,7 +569,10 @@ export interface FileRouteTypes {
     | '/tag/$slug'
     | '/edit/$id'
     | '/spotlight/editorial'
+    | '/api/cron/chat-retention'
     | '/api/griot/assist'
+    | '/api/media/presign-upload'
+    | '/api/media/sign-read'
     | '/api/v1/health'
     | '/api/v1/openapi.json'
     | '/api/v1/pings'
@@ -596,7 +626,10 @@ export interface FileRouteTypes {
     | '/tag/$slug'
     | '/edit/$id'
     | '/spotlight/editorial'
+    | '/api/cron/chat-retention'
     | '/api/griot/assist'
+    | '/api/media/presign-upload'
+    | '/api/media/sign-read'
     | '/api/v1/health'
     | '/api/v1/openapi.json'
     | '/api/v1/pings'
@@ -651,7 +684,10 @@ export interface FileRouteTypes {
     | '/tag/$slug'
     | '/_authenticated/edit/$id'
     | '/_authenticated/spotlight/editorial'
+    | '/api/cron/chat-retention'
     | '/api/griot/assist'
+    | '/api/media/presign-upload'
+    | '/api/media/sign-read'
     | '/api/v1/health'
     | '/api/v1/openapi.json'
     | '/api/v1/pings'
@@ -688,7 +724,10 @@ export interface RootRouteChildren {
   OauthAuthorizeRoute: typeof OauthAuthorizeRoute
   PIdRoute: typeof PIdRoute
   TagSlugRoute: typeof TagSlugRoute
+  ApiCronChatRetentionRoute: typeof ApiCronChatRetentionRoute
   ApiGriotAssistRoute: typeof ApiGriotAssistRoute
+  ApiMediaPresignUploadRoute: typeof ApiMediaPresignUploadRoute
+  ApiMediaSignReadRoute: typeof ApiMediaSignReadRoute
   ApiV1HealthRoute: typeof ApiV1HealthRoute
   ApiV1OpenapiDotjsonRoute: typeof ApiV1OpenapiDotjsonRoute
   ApiV1PingsRoute: typeof ApiV1PingsRoute
@@ -1021,11 +1060,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSpotlightEditorialRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/cron/chat-retention': {
+      id: '/api/cron/chat-retention'
+      path: '/api/cron/chat-retention'
+      fullPath: '/api/cron/chat-retention'
+      preLoaderRoute: typeof ApiCronChatRetentionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/griot/assist': {
       id: '/api/griot/assist'
       path: '/api/griot/assist'
       fullPath: '/api/griot/assist'
       preLoaderRoute: typeof ApiGriotAssistRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/media/presign-upload': {
+      id: '/api/media/presign-upload'
+      path: '/api/media/presign-upload'
+      fullPath: '/api/media/presign-upload'
+      preLoaderRoute: typeof ApiMediaPresignUploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/media/sign-read': {
+      id: '/api/media/sign-read'
+      path: '/api/media/sign-read'
+      fullPath: '/api/media/sign-read'
+      preLoaderRoute: typeof ApiMediaSignReadRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/v1/health': {
@@ -1175,7 +1235,10 @@ const rootRouteChildren: RootRouteChildren = {
   OauthAuthorizeRoute: OauthAuthorizeRoute,
   PIdRoute: PIdRoute,
   TagSlugRoute: TagSlugRoute,
+  ApiCronChatRetentionRoute: ApiCronChatRetentionRoute,
   ApiGriotAssistRoute: ApiGriotAssistRoute,
+  ApiMediaPresignUploadRoute: ApiMediaPresignUploadRoute,
+  ApiMediaSignReadRoute: ApiMediaSignReadRoute,
   ApiV1HealthRoute: ApiV1HealthRoute,
   ApiV1OpenapiDotjsonRoute: ApiV1OpenapiDotjsonRoute,
   ApiV1PingsRoute: ApiV1PingsRoute,

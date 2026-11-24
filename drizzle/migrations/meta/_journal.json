@@ -267,6 +267,20 @@
       "when": 1797000000000,
       "tag": "0037_stage1_messaging_privacy_and_security_hardening",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1797100000000,
+      "tag": "0038_stage2_storage_buckets_rls_and_media_assets",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1797200000000,
+      "tag": "0039_stage2_scalable_chat_retention_system",
+      "breakpoints": true
     }
   ]
 }

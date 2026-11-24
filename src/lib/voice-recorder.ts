@@ -7,6 +7,17 @@
  */
 
 export const VOICE_NOTE_MAX_DURATION_SEC = 180;
+/** Speech-grade Opus target bitrate (32 kbps ≈ 4 KB/s — crisp voice at ~75% lower bandwidth). */
+export const VOICE_NOTE_TARGET_BITRATE_BPS = 32_000;
+
+export function buildMediaRecorderOptions(
+  negotiated: NegotiatedVoiceFormat | null,
+): MediaRecorderOptions {
+  return {
+    ...(negotiated ? { mimeType: negotiated.recorderMimeType } : {}),
+    audioBitsPerSecond: VOICE_NOTE_TARGET_BITRATE_BPS,
+  };
+}
 
 export const PREFERRED_VOICE_MIME_TYPES = [
   "audio/webm;codecs=opus",

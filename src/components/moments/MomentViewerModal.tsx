@@ -57,6 +57,7 @@ import {
 import { useAuth } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
 import { RePingModal } from "./RePingModal";
+import { useResolvedMediaUrl } from "@/components/media/ResolvedPrivateMedia";
 import { Link } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 
@@ -111,6 +112,11 @@ export function MomentViewerModal({
 
   const currentSequence = sequences[seqIdx];
   const currentMoment: Moment | undefined = currentSequence?.moments[momentIdx];
+  const {
+    resolvedUrl: resolvedMomentUrl,
+    failed: momentMediaFailed,
+    handleMediaError: handleMomentMediaError,
+  } = useResolvedMediaUrl(currentMoment?.media_url);
   const isOwner = Boolean(user?.id && currentMoment && user.id === currentMoment.author_id);
   const activeBoost = currentMoment ? activeBoostsMap?.[`moment:${currentMoment.id}`] : undefined;
 
@@ -598,14 +604,25 @@ export function MomentViewerModal({
               onClick={() => handleZoneTap("next")}
             />
 
-            {currentMoment.media_type === "video" ? (
+            {momentMediaFailed ? (
+              <div className="flex flex-col items-center justify-center gap-2 text-center text-white/80 px-6">
+                <Lock className="size-7 text-white/60" />
+                <p className="text-sm font-semibold">Moment media unavailable</p>
+                <p className="text-xs text-white/60">
+                  This Moment may have expired or is restricted to an authorized audience.
+                </p>
+              </div>
+            ) : !resolvedMomentUrl ? (
+              <div className="text-xs text-white/70">Loading Moment…</div>
+            ) : currentMoment.media_type === "video" ? (
               <video
                 ref={videoRef}
-                src={currentMoment.media_url}
+                src={resolvedMomentUrl}
                 autoPlay
                 playsInline
                 muted={isMuted}
                 loop={false}
+                onError={() => void handleMomentMediaError()}
                 onLoadedMetadata={(e) => {
                   const d = e.currentTarget.duration;
                   if (Number.isFinite(d) && d > 0) setVideoDurationSec(d);
@@ -615,8 +632,9 @@ export function MomentViewerModal({
               />
             ) : (
               <img
-                src={currentMoment.media_url}
+                src={resolvedMomentUrl}
                 alt="Moment content"
+                onError={() => void handleMomentMediaError()}
                 className="h-full w-full object-contain"
               />
             )}

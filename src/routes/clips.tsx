@@ -554,12 +554,16 @@ function PingClipsPage() {
         toast.error(meta.error || "Video failed validation.");
         return;
       }
-      const { uploadUserMedia } = await import("@/lib/storage");
-      const ext = file.name.split(".").pop()?.toLowerCase() || "mp4";
-      const uploaded = await uploadUserMedia(`${user.id}/clips/${Date.now()}.${ext}`, file, {
-        cacheControl: "3600",
-        upsert: false,
-      });
+      const { buildPublicMediaPath, uploadUserMedia } = await import("@/lib/storage");
+      const uploaded = await uploadUserMedia(
+        buildPublicMediaPath(user.id, "clips", file.name, "mp4"),
+        file,
+        {
+          cacheControl: "31536000",
+          upsert: false,
+          ownerId: user.id,
+        },
+      );
       setVideoUrl(uploaded);
       setDurationSec(probe.durationSec ? Math.round(probe.durationSec) : null);
       if (probe.posterBlob) {
@@ -567,10 +571,16 @@ function PingClipsPage() {
           const pFile = new File([probe.posterBlob], `clip-poster-${Date.now()}.jpg`, {
             type: "image/jpeg",
           });
-          const pUrl = await uploadUserMedia(`${user.id}/clips/posters/${Date.now()}.jpg`, pFile, {
-            cacheControl: "3600",
-            upsert: false,
-          });
+          const pUrl = await uploadUserMedia(
+            buildPublicMediaPath(user.id, "clips/posters", pFile.name, "jpg"),
+            pFile,
+            {
+              cacheControl: "31536000",
+              upsert: false,
+              optimizeImage: false,
+              ownerId: user.id,
+            },
+          );
           setPosterUrl(pUrl);
         } catch {
           // non-blocking poster upload failure

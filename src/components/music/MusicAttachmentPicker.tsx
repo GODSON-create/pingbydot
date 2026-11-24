@@ -122,10 +122,13 @@ export function MusicAttachmentPicker({
 
     try {
       setIsUploading(true);
-      const { uploadUserMedia } = await import("@/lib/storage");
-      const ext = file.name.split(".").pop()?.toLowerCase() || "mp3";
-      const path = `${user.id}/audio/${Date.now()}.${ext}`;
-      const publicUrl = await uploadUserMedia(path, file, { cacheControl: "3600", upsert: false });
+      const { buildPublicMediaPath, uploadUserMedia } = await import("@/lib/storage");
+      const path = buildPublicMediaPath(user.id, "audio", file.name, "mp3");
+      const publicUrl = await uploadUserMedia(path, file, {
+        cacheControl: "31536000",
+        upsert: false,
+        ownerId: user.id,
+      });
 
       const created = await registerTrack.mutateAsync({
         title: origTitle.trim(),
