@@ -71,9 +71,10 @@ describe("PING Human Coordination Redesign, Economy, and Navigation Architecture
     expect(parsed.desiredOutcome).toBe("Ship v1 prototype in Q2");
   });
 
-  it("enforces 5 primary navigation items (Home, Explore, Create, Inbox, Profile) with unified Inbox routing", () => {
+  it("enforces 5 primary navigation items (Explore, Clips, Create, Inbox, Profile) with unified Inbox routing", () => {
     expect(isInboxPath("/")).toBe(false);
     expect(isInboxPath("/explore")).toBe(false);
+    expect(isInboxPath("/clips")).toBe(false);
     expect(isInboxPath("/inbox")).toBe(true);
     expect(isInboxPath("/messages")).toBe(true);
     expect(isInboxPath("/hubs")).toBe(true);
@@ -84,14 +85,15 @@ describe("PING Human Coordination Redesign, Economy, and Navigation Architecture
     const navSrc = readRel("src/components/layout/BottomNav.tsx");
     expect(navSrc).toContain('data-nav-mode="primary"');
     expect(navSrc).not.toContain('data-nav-mode="community"');
-    expect(navSrc).toContain("<span>Home</span>");
+    expect(navSrc).not.toContain("<span>Home</span>");
     expect(navSrc).toContain("<span>Explore</span>");
+    expect(navSrc).toContain("<span>Clips</span>");
     expect(navSrc).toContain(">Create</span>");
     expect(navSrc).toContain("<span>Inbox</span>");
     expect(navSrc).toContain("<span>Profile</span>");
   });
 
-  it("wires the unified Create Stack modal with Ping, Moment, Signal, Hub, and Go Live", () => {
+  it("wires the unified Create Stack modal with Ping, Moment, Clip, Signal, Hub, and Go Live", () => {
     const createStackSrc = readRel("src/components/layout/CreateStackModal.tsx");
     expect(createStackSrc).toContain("Create a Ping");
     expect(createStackSrc).toContain(
@@ -99,20 +101,33 @@ describe("PING Human Coordination Redesign, Economy, and Navigation Architecture
     );
     expect(createStackSrc).toContain("Create a Moment");
     expect(createStackSrc).toContain("Share what's happening around you.");
+    expect(createStackSrc).toContain("Publish a Clip");
+    expect(createStackSrc).toContain("ClipComposerDialog");
     expect(createStackSrc).toContain("Create a Signal");
     expect(createStackSrc).toContain("Create a Hub");
     expect(createStackSrc).toContain("Go Live");
     expect(createStackSrc).toContain("Bring people together in real time.");
   });
 
-  it("Configures Explore search placeholder, 6 discovery filters, and personalized sections", () => {
+  it("Configures Explore search placeholder, discovery filters, Institutional Signals, and personalized sections", () => {
     const exploreSrc = readRel("src/routes/explore.tsx");
-    expect(exploreSrc).toContain("Find people, intentions, opportunities and more...");
-    for (const label of ["All", "PINGs", "People", "Moments", "Communities", "Opportunities"]) {
-      expect(exploreSrc).toContain(`label: "${label}"`);
+    const exploreViewSrc = readRel("src/components/explore/ExploreDiscoveryView.tsx");
+    expect(exploreSrc).toContain("ExploreDiscoveryView");
+    expect(exploreViewSrc).toContain("Find people, intentions, opportunities and more...");
+    for (const label of [
+      "All",
+      "PINGs",
+      "People",
+      "Moments",
+      "Communities",
+      "Signals",
+      "Opportunities",
+    ]) {
+      expect(exploreViewSrc).toContain(`label: "${label}"`);
     }
-    expect(exploreSrc).toContain("People you should know");
-    expect(exploreSrc).toContain("Recommended communities");
+    expect(exploreViewSrc).toContain("People you should know");
+    expect(exploreViewSrc).toContain("Institutional Signals");
+    expect(exploreViewSrc).toContain("Recommended communities");
   });
 
   it("keeps Chats, group-only Hubs, and institutional Signals clearly separated while preserving forum tables/components", () => {

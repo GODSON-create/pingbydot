@@ -1,6 +1,6 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Compass, Home, Inbox, Plus, User } from "lucide-react";
+import { Clapperboard, Compass, Inbox, Plus, User } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useFocusedWorkspace } from "@/lib/draft-store";
 import { userConversationsQuery } from "@/lib/messages";
@@ -12,6 +12,21 @@ import { cn } from "@/lib/utils";
 const item =
   "flex min-h-14 min-w-12 flex-1 flex-col items-center justify-center gap-0.5 rounded-2xl text-[10px] font-semibold text-muted-foreground transition-colors active:scale-95 motion-reduce:active:scale-100";
 const activeClass = "text-primary bg-primary/15 font-bold";
+
+/**
+ * Returns true when the current route resolves to the Explore discovery home
+ * (both `/` and `/explore`).
+ */
+export function isExplorePath(pathname: string): boolean {
+  return pathname === "/" || pathname === "/explore" || pathname.startsWith("/explore/");
+}
+
+/**
+ * Returns true when the current route belongs to the dedicated Clips short-video product.
+ */
+export function isClipsPath(pathname: string): boolean {
+  return pathname === "/clips" || pathname.startsWith("/clips/");
+}
 
 /**
  * Returns true when the current route belongs to the Inbox communication
@@ -47,8 +62,8 @@ export function shouldHideBottomNav(pathname: string): boolean {
 
 /**
  * Mobile persistent bottom navigation with exactly five primary destinations:
- * 1. Home
- * 2. Explore
+ * 1. Explore
+ * 2. Clips
  * 3. Create (+)
  * 4. Inbox
  * 5. Profile
@@ -68,7 +83,8 @@ export function BottomNav() {
 
   if (keyboardOpen || focusedWorkspace || shouldHideBottomNav(pathname)) return null;
 
-  const isExploreActive = pathname === "/explore" || pathname.startsWith("/explore/");
+  const isExploreActive = isExplorePath(pathname);
+  const isClipsActive = isClipsPath(pathname);
   const isInboxActive = isInboxPath(pathname);
   const isProfileActive =
     (Boolean(user && profile) && pathname === `/@${profile!.username}`) ||
@@ -82,17 +98,6 @@ export function BottomNav() {
     >
       <div className="glass mx-auto flex max-w-md items-center gap-1 rounded-3xl p-1.5 shadow-lift">
         <Link
-          to="/"
-          onClick={closeOverlays}
-          aria-current={pathname === "/" ? "page" : undefined}
-          className={cn(item, pathname === "/" && activeClass)}
-          activeOptions={{ exact: true, includeHash: false }}
-        >
-          <Home className="size-5" />
-          <span>Home</span>
-        </Link>
-
-        <Link
           to="/explore"
           onClick={closeOverlays}
           aria-current={isExploreActive ? "page" : undefined}
@@ -102,10 +107,20 @@ export function BottomNav() {
           <span>Explore</span>
         </Link>
 
+        <Link
+          to="/clips"
+          onClick={closeOverlays}
+          aria-current={isClipsActive ? "page" : undefined}
+          className={cn(item, isClipsActive && activeClass)}
+        >
+          <Clapperboard className="size-5" />
+          <span>Clips</span>
+        </Link>
+
         <button
           type="button"
           onClick={() => openOverlay("create")}
-          aria-label="Create a Ping, Moment, Signal, Hub, or Live session"
+          aria-label="Create a Ping, Moment, Clip, Signal, Hub, or Live session"
           className="flex min-h-14 min-w-12 flex-1 flex-col items-center justify-center gap-0.5"
         >
           <span className="-mt-3 flex size-12 items-center justify-center rounded-full bg-lime text-lime-foreground shadow-lift ring-4 ring-background transition-transform active:scale-95 motion-reduce:active:scale-100">

@@ -146,7 +146,7 @@ describe("Ping Feature Restoration — Moments, Hubs & Signals (Real PostgreSQL 
     const journal = JSON.parse(fs.readFileSync(JOURNAL_PATH, "utf8")) as {
       entries: Array<{ idx: number; tag: string }>;
     };
-    expect(journal.entries.length).toBe(43);
+    expect(journal.entries.length).toBeGreaterThanOrEqual(43);
     expect(journal.entries[42]?.tag).toBe("0042_stage2_moments_hubs_signals_restoration");
 
     for (const entry of journal.entries) {

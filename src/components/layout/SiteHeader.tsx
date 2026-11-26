@@ -17,7 +17,6 @@ import {
   BarChart3,
   Coins,
   Crown,
-  Clapperboard,
   Flame,
   GraduationCap,
   Megaphone,
@@ -52,7 +51,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { FounderAvatar } from "@/components/ping/Avatar";
 import { BrandLogo } from "@/components/BrandLogo";
-import { isInboxPath } from "./BottomNav";
+import { isClipsPath, isExplorePath, isInboxPath } from "./BottomNav";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -180,6 +179,8 @@ export function SiteHeader() {
   const { openOverlay, closeOverlays, isOpen, onOpenChangeFor } = useNavOverlay();
   const focusedWorkspace = useFocusedWorkspace();
   const signOut = useSignOut();
+  const inExplore = isExplorePath(pathname);
+  const inClips = isClipsPath(pathname);
   const inInbox = isInboxPath(pathname);
   const isProfileActive =
     (Boolean(user && profile) && pathname === `/@${profile!.username}`) ||
@@ -235,19 +236,18 @@ export function SiteHeader() {
 
           <nav className="hidden items-center gap-1 md:flex" aria-label="Main">
             <Link
-              to="/"
-              activeOptions={{ exact: true }}
-              className={navLink}
-              activeProps={{ className: "text-foreground bg-secondary" }}
-            >
-              Home
-            </Link>
-            <Link
               to="/explore"
-              className={navLink}
-              activeProps={{ className: "text-foreground bg-secondary" }}
+              aria-current={inExplore ? "page" : undefined}
+              className={cn(navLink, inExplore && "text-foreground bg-secondary")}
             >
               Explore
+            </Link>
+            <Link
+              to="/clips"
+              aria-current={inClips ? "page" : undefined}
+              className={cn(navLink, inClips && "text-foreground bg-secondary")}
+            >
+              Clips
             </Link>
             <Link
               to="/inbox"
@@ -398,11 +398,6 @@ export function SiteHeader() {
                       <DropdownMenuItem asChild className="rounded-xl">
                         <Link to="/spotlight" onClick={closeOverlays}>
                           <Flame className="text-amber-500" /> Ping Spotlight
-                        </Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem asChild className="rounded-xl">
-                        <Link to="/clips" onClick={closeOverlays}>
-                          <Clapperboard className="text-primary" /> Ping Clips
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild className="rounded-xl">

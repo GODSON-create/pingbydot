@@ -14,8 +14,11 @@ describe("Visual System & Responsive Experience Audit (375px, 768px, 1024px, 144
     expect(css).toContain("--muted-foreground: #9da49a;");
   });
 
-  it("B. verifies Champagne Gold verified badge application across Hubs and Signals", () => {
-    const indexTsx = fs.readFileSync(path.resolve(__dirname, "../routes/index.tsx"), "utf8");
+  it("B. verifies Champagne Gold verified badge application across Explore, Hubs and Signals", () => {
+    const exploreViewTsx = fs.readFileSync(
+      path.resolve(__dirname, "../components/explore/ExploreDiscoveryView.tsx"),
+      "utf8",
+    );
     const hubsTsx = fs.readFileSync(path.resolve(__dirname, "../routes/hubs.tsx"), "utf8");
     const signalsTsx = fs.readFileSync(path.resolve(__dirname, "../routes/signals.tsx"), "utf8");
     const signalsSlugTsx = fs.readFileSync(
@@ -27,8 +30,8 @@ describe("Visual System & Responsive Experience Audit (375px, 768px, 1024px, 144
       "utf8",
     );
 
-    // Index verified badges
-    expect(indexTsx).toContain("bg-gold/15 text-gold border border-gold/30");
+    // Explore discovery home verified badges (Signals & Hubs)
+    expect(exploreViewTsx).toContain("bg-gold/15 text-gold border border-gold/30");
     // Hubs directory verified badge
     expect(hubsTsx).toContain("bg-gold/15 text-gold border border-gold/30");
     // Signals institutional directory verified badge
@@ -39,13 +42,16 @@ describe("Visual System & Responsive Experience Audit (375px, 768px, 1024px, 144
     expect(hubsSlugTsx).toContain("bg-gold/15 text-gold border border-gold/30");
   });
 
-  it("E. verifies Desktop 3-column architecture (Left Sidebar, Centre Feed, Right Discovery)", () => {
+  it("E. verifies Desktop 3-column architecture (Left Sidebar, Centre Discovery, Right Rail)", () => {
     const rootTsx = fs.readFileSync(path.resolve(__dirname, "../routes/__root.tsx"), "utf8");
     const sidebarTsx = fs.readFileSync(
       path.resolve(__dirname, "../components/layout/DesktopSidebar.tsx"),
       "utf8",
     );
-    const indexTsx = fs.readFileSync(path.resolve(__dirname, "../routes/index.tsx"), "utf8");
+    const exploreViewTsx = fs.readFileSync(
+      path.resolve(__dirname, "../components/explore/ExploreDiscoveryView.tsx"),
+      "utf8",
+    );
 
     // Root includes DesktopSidebar
     expect(rootTsx).toContain("<DesktopSidebar />");
@@ -55,8 +61,8 @@ describe("Visual System & Responsive Experience Audit (375px, 768px, 1024px, 144
     expect(sidebarTsx).toContain("hidden lg:flex");
     expect(sidebarTsx).toContain("w-20 xl:w-64");
 
-    // Home index defines Centre Feed and Right Discovery column
-    expect(indexTsx).toContain("lg:grid-cols-[1fr_320px] xl:grid-cols-[1fr_360px]");
+    // Explore discovery home defines Centre Feed and Right Discovery column
+    expect(exploreViewTsx).toContain("lg:grid-cols-[1fr_320px] xl:grid-cols-[1fr_360px]");
   });
 
   it("F. verifies Mobile interaction model (compact top bar, bottom nav with safe-area spacing, touch targets)", () => {

@@ -47,7 +47,7 @@ export function useKeyboardShortcuts() {
         return;
       }
 
-      // 'g' key sequence handler (e.g. g + h for home, g + m for messages)
+      // 'g' key sequence handler (e.g. g + e for Explore, g + v for Clips, g + i for Inbox)
       if (e.key === "g" || e.key === "G") {
         pendingG = true;
         if (gTimeout) clearTimeout(gTimeout);
@@ -61,9 +61,12 @@ export function useKeyboardShortcuts() {
         pendingG = false;
         if (gTimeout) clearTimeout(gTimeout);
 
-        if (e.key === "h" || e.key === "H") {
+        if (e.key === "e" || e.key === "E" || e.key === "h" || e.key === "H") {
           e.preventDefault();
-          navigate({ to: "/" });
+          navigate({ to: "/explore" });
+        } else if (e.key === "v" || e.key === "V") {
+          e.preventDefault();
+          navigate({ to: "/clips" });
         } else if (e.key === "i" || e.key === "I" || e.key === "m" || e.key === "M") {
           e.preventDefault();
           navigate({ to: "/inbox", search: {} });

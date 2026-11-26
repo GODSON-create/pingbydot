@@ -1,13 +1,14 @@
 /**
  * PING CLIPS — Dedicated Short-Form Vertical Video Publishing, Discovery & Moments-to-Clips
  *
- * Implements Part C of the Ping Product Addendum:
- * - Preserves clear Ping vocabulary: Pings (posts), Moments (temporary stories),
+ * - Preserves clear Ping vocabulary: Pings (posts), Moments (temporary updates),
  *   Clips (persistent short-form discovery videos), Spotlights (editorial founder stories).
  * - Explicit Moments-to-Clips conversion (never auto-converts; preserves creator attribution,
  *   original Moment relationship, editable caption, visibility choice & media permissions).
  * - Reuses Ping's existing Supabase `media` storage pipeline, DOT Tags, Follow/Connect graph,
  *   and Spotlight video-feature links.
+ * - Never fakes likes, saves, comments, view counts, or publish success when backend tables
+ *   are not yet provisioned.
  */
 
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -17,6 +18,13 @@ import type { Moment } from "@/lib/moments";
 
 export type ClipVisibility = "public" | "followers" | "hub";
 export type ClipProcessingStatus = "uploading" | "processing" | "ready" | "failed";
+export type ClipFeedSort = "recent" | "popular";
+
+/** Matches DB CHECK constraint `duration_sec BETWEEN 1 AND 180` in migration 0034. */
+export const MAX_CLIP_DURATION_SEC = 180;
+export const MAX_CLIP_SIZE_BYTES = 50 * 1024 * 1024;
+export const CLIPS_SCHEMA_MIGRATION_HINT =
+  "Clips database tables are not yet applied on this environment (migration 0034_ping_learn_spotlight_and_clips.sql required).";
 
 export interface PingClip {
   id: string;
@@ -59,10 +67,16 @@ export interface ClipReply {
   } | null;
 }
 
+export interface ViewerClipInteractions {
+  likedIds: Set<string>;
+  savedIds: Set<string>;
+  followedCreatorIds: Set<string>;
+}
+
 /**
  * Validates whether an existing Moment can be explicitly republished as a persistent Clip.
  * Enforces creator ownership, video media type, and media privacy boundaries (Close Circle
- * Moments cannot silently leak publicly).
+ * and private-bucket Moments cannot silently leak publicly).
  */
 export function validateMomentToClipConversion(input: {
   moment: Pick<Moment, "id" | "author_id" | "media_type" | "audience" | "media_url">;
@@ -107,7 +121,7 @@ export function validateMomentToClipConversion(input: {
   return { eligible: true };
 }
 
-function isMissingClipsSchema(err: unknown): boolean {
+export function isMissingClipsSchema(err: unknown): boolean {
   const msg = String((err as { message?: string })?.message ?? "").toLowerCase();
   const code = String((err as { code?: string })?.code ?? "");
   return (
@@ -120,30 +134,13 @@ function isMissingClipsSchema(err: unknown): boolean {
   );
 }
 
-const LOCAL_CLIPS_KEY = "ping:clips:local-v1";
-
-function readLocalClips(): PingClip[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(LOCAL_CLIPS_KEY);
-    return raw ? (JSON.parse(raw) as PingClip[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeLocalClips(clips: PingClip[]) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(LOCAL_CLIPS_KEY, JSON.stringify(clips.slice(0, 50)));
-  } catch {
-    // ignore storage quota errors
-  }
-}
-
-export function clipsFeedQuery(tagSlug?: string) {
+/**
+ * Extensible feed query supporting topic filtering (`tagSlug`) and ranking modes (`sortMode`)
+ * so recommendations, categories, and creator discovery can expand without replacing the feed architecture.
+ */
+export function clipsFeedQuery(tagSlug?: string, sortMode: ClipFeedSort = "recent") {
   return queryOptions({
-    queryKey: ["ping-clips-feed", tagSlug ?? "all"],
+    queryKey: ["ping-clips-feed", tagSlug ?? "all", sortMode],
     staleTime: 20_000,
     queryFn: async (): Promise<{ migrated: boolean; clips: PingClip[] }> => {
       let q = (supabase as any)
@@ -151,9 +148,15 @@ export function clipsFeedQuery(tagSlug?: string) {
         .select(
           "*, creator:profiles!ping_clips_creator_id_fkey(id,username,display_name,avatar_url)",
         )
-        .is("hidden_at", null)
-        .order("created_at", { ascending: false })
-        .limit(40);
+        .is("hidden_at", null);
+
+      if (sortMode === "popular") {
+        q = q.order("views_count", { ascending: false }).order("created_at", { ascending: false });
+      } else {
+        q = q.order("created_at", { ascending: false });
+      }
+
+      q = q.limit(40);
 
       if (tagSlug && tagSlug !== "all") {
         q = q.contains("dot_tags", [tagSlug.toLowerCase()]);
@@ -162,12 +165,110 @@ export function clipsFeedQuery(tagSlug?: string) {
       const { data, error } = await q;
       if (error) {
         if (!isMissingClipsSchema(error)) throw error;
-        const local = readLocalClips().filter(
-          (c) => !tagSlug || tagSlug === "all" || c.dot_tags.includes(tagSlug.toLowerCase()),
-        );
-        return { migrated: false, clips: local };
+        return { migrated: false, clips: [] };
       }
       return { migrated: true, clips: (data ?? []) as PingClip[] };
+    },
+  });
+}
+
+/**
+ * Fetches persistent Clips belonging to a specific creator for Profile display.
+ * RLS enforces public, followers-only, and creator-owned visibility rules server-side.
+ */
+export function userClipsQuery(creatorId?: string, viewerId?: string | null) {
+  return queryOptions({
+    queryKey: ["user-clips", creatorId ?? "", viewerId ?? "anon"],
+    enabled: Boolean(creatorId),
+    staleTime: 20_000,
+    queryFn: async (): Promise<{ migrated: boolean; clips: PingClip[] }> => {
+      if (!creatorId) return { migrated: true, clips: [] };
+      const { data, error } = await (supabase as any)
+        .from("ping_clips")
+        .select(
+          "*, creator:profiles!ping_clips_creator_id_fkey(id,username,display_name,avatar_url)",
+        )
+        .eq("creator_id", creatorId)
+        .is("hidden_at", null)
+        .order("created_at", { ascending: false })
+        .limit(40);
+
+      if (error) {
+        if (!isMissingClipsSchema(error)) throw error;
+        return { migrated: false, clips: [] };
+      }
+      return { migrated: true, clips: (data ?? []) as PingClip[] };
+    },
+  });
+}
+
+/**
+ * Hydrates real viewer interaction state (likes, saves, creator follows) for a set of Clips.
+ */
+export function viewerClipInteractionsQuery(
+  clipIds: string[],
+  creatorIds: string[],
+  userId?: string | null,
+) {
+  const sortedClipKey = [...new Set(clipIds)].sort().join(",");
+  const sortedCreatorKey = [...new Set(creatorIds)].sort().join(",");
+
+  return queryOptions({
+    queryKey: ["clip-viewer-interactions", userId ?? "anon", sortedClipKey, sortedCreatorKey],
+    enabled: Boolean(userId && (clipIds.length > 0 || creatorIds.length > 0)),
+    staleTime: 15_000,
+    queryFn: async (): Promise<ViewerClipInteractions> => {
+      const empty: ViewerClipInteractions = {
+        likedIds: new Set(),
+        savedIds: new Set(),
+        followedCreatorIds: new Set(),
+      };
+      if (!userId) return empty;
+
+      const uniqueClips = [...new Set(clipIds)];
+      const uniqueCreators = [...new Set(creatorIds)].filter((id) => id !== userId);
+
+      const [likesRes, savesRes, followsRes] = await Promise.all([
+        uniqueClips.length > 0
+          ? (supabase as any)
+              .from("clip_likes")
+              .select("clip_id")
+              .eq("user_id", userId)
+              .in("clip_id", uniqueClips)
+          : Promise.resolve({ data: [], error: null }),
+        uniqueClips.length > 0
+          ? (supabase as any)
+              .from("clip_saves")
+              .select("clip_id")
+              .eq("user_id", userId)
+              .in("clip_id", uniqueClips)
+          : Promise.resolve({ data: [], error: null }),
+        uniqueCreators.length > 0
+          ? supabase
+              .from("follows")
+              .select("following_id")
+              .eq("follower_id", userId)
+              .in("following_id", uniqueCreators)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+
+      return {
+        likedIds: new Set(
+          !likesRes?.error && Array.isArray(likesRes?.data)
+            ? likesRes.data.map((r: { clip_id: string }) => r.clip_id)
+            : [],
+        ),
+        savedIds: new Set(
+          !savesRes?.error && Array.isArray(savesRes?.data)
+            ? savesRes.data.map((r: { clip_id: string }) => r.clip_id)
+            : [],
+        ),
+        followedCreatorIds: new Set(
+          !followsRes?.error && Array.isArray(followsRes?.data)
+            ? followsRes.data.map((r: { following_id: string }) => r.following_id)
+            : [],
+        ),
+      };
     },
   });
 }
@@ -194,7 +295,7 @@ export function clipRepliesQuery(clipId?: string) {
   });
 }
 
-export function usePublishClip(userId?: string, creatorProfile?: PingClip["creator"]) {
+export function usePublishClip(userId?: string, _creatorProfile?: PingClip["creator"]) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: {
@@ -206,14 +307,33 @@ export function usePublishClip(userId?: string, creatorProfile?: PingClip["creat
       visibility: ClipVisibility;
     }) => {
       if (!userId) throw new Error("Sign in to publish a Ping Clip.");
+      const cleanedUrl = input.videoUrl.trim();
+      if (!/^https?:\/\//i.test(cleanedUrl)) {
+        throw new Error("A valid uploaded HTTPS video URL is required to publish a Clip.");
+      }
+      if (
+        typeof input.durationSec === "number" &&
+        Number.isFinite(input.durationSec) &&
+        input.durationSec > MAX_CLIP_DURATION_SEC
+      ) {
+        throw new Error(
+          `Clips must be ${MAX_CLIP_DURATION_SEC} seconds (3 minutes) or shorter.`,
+        );
+      }
+
+      const safeDuration =
+        typeof input.durationSec === "number" && Number.isFinite(input.durationSec)
+          ? Math.min(MAX_CLIP_DURATION_SEC, Math.max(1, Math.round(input.durationSec)))
+          : null;
+
       const dotTags = extractDotTags(input.caption);
       const payload = {
         creator_id: userId,
-        video_url: input.videoUrl.trim(),
+        video_url: cleanedUrl,
         poster_url: input.posterUrl ?? null,
         caption: input.caption.trim(),
         captions_text: input.captionsText?.trim() || null,
-        duration_sec: input.durationSec ?? null,
+        duration_sec: safeDuration,
         visibility: input.visibility,
         dot_tags: dotTags,
         processing_status: "ready" as const,
@@ -225,33 +345,21 @@ export function usePublishClip(userId?: string, creatorProfile?: PingClip["creat
         .single();
 
       if (error) {
-        if (!isMissingClipsSchema(error)) throw error;
-        const localClip: PingClip = {
-          id: `local-clip-${Date.now()}`,
-          ...payload,
-          source_moment_id: null,
-          linked_ping_id: null,
-          views_count: 0,
-          likes_count: 0,
-          replies_count: 0,
-          shares_count: 0,
-          saves_count: 0,
-          hidden_at: null,
-          created_at: new Date().toISOString(),
-          creator: creatorProfile ?? null,
-        };
-        writeLocalClips([localClip, ...readLocalClips()]);
-        return localClip;
+        if (isMissingClipsSchema(error)) {
+          throw new Error(CLIPS_SCHEMA_MIGRATION_HINT);
+        }
+        throw error;
       }
       return data as PingClip;
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["ping-clips-feed"] });
+      void qc.invalidateQueries({ queryKey: ["user-clips"] });
     },
   });
 }
 
-export function usePublishMomentAsClip(userId?: string, creatorProfile?: PingClip["creator"]) {
+export function usePublishMomentAsClip(userId?: string, _creatorProfile?: PingClip["creator"]) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: { moment: Moment; caption: string; visibility: ClipVisibility }) => {
@@ -273,41 +381,72 @@ export function usePublishMomentAsClip(userId?: string, creatorProfile?: PingCli
       });
 
       if (error) {
-        if (!isMissingClipsSchema(error)) throw error;
-        const localClip: PingClip = {
-          id: `local-clip-from-moment-${Date.now()}`,
-          creator_id: input.moment.author_id,
-          video_url: input.moment.media_url,
-          poster_url: null,
-          caption: input.caption.trim() || input.moment.caption || "",
-          captions_text: input.moment.overlay_text || null,
-          duration_sec: input.moment.duration || 15,
-          visibility: input.visibility,
-          dot_tags: dotTags,
-          source_moment_id: input.moment.id,
-          linked_ping_id: null,
-          processing_status: "ready",
-          views_count: 0,
-          likes_count: 0,
-          replies_count: 0,
-          shares_count: 0,
-          saves_count: 0,
-          hidden_at: null,
-          created_at: new Date().toISOString(),
-          creator: creatorProfile ?? {
-            id: input.moment.author_id,
-            username: input.moment.author?.username ?? "creator",
-            display_name: input.moment.author?.display_name ?? "Creator",
-            avatar_url: input.moment.author?.avatar_url ?? null,
-          },
-        };
-        writeLocalClips([localClip, ...readLocalClips()]);
-        return localClip;
+        if (isMissingClipsSchema(error)) {
+          throw new Error(CLIPS_SCHEMA_MIGRATION_HINT);
+        }
+        throw error;
       }
       return data as PingClip;
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["ping-clips-feed"] });
+      void qc.invalidateQueries({ queryKey: ["user-clips"] });
+    },
+  });
+}
+
+export function useUpdateClipVisibility(userId?: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      clipId,
+      visibility,
+    }: {
+      clipId: string;
+      visibility: ClipVisibility;
+    }) => {
+      if (!userId) throw new Error("Sign in to update Clip visibility.");
+      const { data, error } = await (supabase as any)
+        .from("ping_clips")
+        .update({ visibility })
+        .eq("id", clipId)
+        .eq("creator_id", userId)
+        .select("*")
+        .single();
+
+      if (error) {
+        if (isMissingClipsSchema(error)) throw new Error(CLIPS_SCHEMA_MIGRATION_HINT);
+        throw error;
+      }
+      return data as PingClip;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["ping-clips-feed"] });
+      void qc.invalidateQueries({ queryKey: ["user-clips"] });
+    },
+  });
+}
+
+export function useDeleteClip(userId?: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (clipId: string) => {
+      if (!userId) throw new Error("Sign in to delete a Clip.");
+      const { error } = await (supabase as any)
+        .from("ping_clips")
+        .delete()
+        .eq("id", clipId)
+        .eq("creator_id", userId);
+
+      if (error) {
+        if (isMissingClipsSchema(error)) throw new Error(CLIPS_SCHEMA_MIGRATION_HINT);
+        throw error;
+      }
+      return clipId;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["ping-clips-feed"] });
+      void qc.invalidateQueries({ queryKey: ["user-clips"] });
     },
   });
 }
@@ -323,16 +462,23 @@ export function useToggleClipLike(userId?: string) {
           .delete()
           .eq("clip_id", clipId)
           .eq("user_id", userId);
-        if (error && !isMissingClipsSchema(error)) throw error;
+        if (error) {
+          if (isMissingClipsSchema(error)) throw new Error(CLIPS_SCHEMA_MIGRATION_HINT);
+          throw error;
+        }
       } else {
         const { error } = await (supabase as any)
           .from("clip_likes")
           .insert({ clip_id: clipId, user_id: userId });
-        if (error && error.code !== "23505" && !isMissingClipsSchema(error)) throw error;
+        if (error && error.code !== "23505") {
+          if (isMissingClipsSchema(error)) throw new Error(CLIPS_SCHEMA_MIGRATION_HINT);
+          throw error;
+        }
       }
       return !liked;
     },
     onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["clip-viewer-interactions"] });
       void qc.invalidateQueries({ queryKey: ["ping-clips-feed"] });
     },
   });
@@ -349,16 +495,23 @@ export function useToggleClipSave(userId?: string) {
           .delete()
           .eq("clip_id", clipId)
           .eq("user_id", userId);
-        if (error && !isMissingClipsSchema(error)) throw error;
+        if (error) {
+          if (isMissingClipsSchema(error)) throw new Error(CLIPS_SCHEMA_MIGRATION_HINT);
+          throw error;
+        }
       } else {
         const { error } = await (supabase as any)
           .from("clip_saves")
           .insert({ clip_id: clipId, user_id: userId });
-        if (error && error.code !== "23505" && !isMissingClipsSchema(error)) throw error;
+        if (error && error.code !== "23505") {
+          if (isMissingClipsSchema(error)) throw new Error(CLIPS_SCHEMA_MIGRATION_HINT);
+          throw error;
+        }
       }
       return !saved;
     },
     onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["clip-viewer-interactions"] });
       void qc.invalidateQueries({ queryKey: ["ping-clips-feed"] });
     },
   });
@@ -368,16 +521,44 @@ export function usePostClipReply(userId?: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ clipId, content }: { clipId: string; content: string }) => {
-      if (!userId) throw new Error("Sign in to reply to Clips.");
+      if (!userId) throw new Error("Sign in to comment on Clips.");
+      const cleaned = content.trim();
+      if (!cleaned) throw new Error("Write a comment before sending.");
       const { error } = await (supabase as any).from("clip_replies").insert({
         clip_id: clipId,
         user_id: userId,
-        content: content.trim(),
+        content: cleaned,
       });
-      if (error && !isMissingClipsSchema(error)) throw error;
+      if (error) {
+        if (isMissingClipsSchema(error)) throw new Error(CLIPS_SCHEMA_MIGRATION_HINT);
+        throw error;
+      }
     },
     onSuccess: (_d, vars) => {
       void qc.invalidateQueries({ queryKey: ["clip-replies", vars.clipId] });
+      void qc.invalidateQueries({ queryKey: ["ping-clips-feed"] });
+    },
+  });
+}
+
+export function useDeleteClipReply(userId?: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ replyId, clipId }: { replyId: string; clipId: string }) => {
+      if (!userId) throw new Error("Sign in to delete your comment.");
+      const { error } = await (supabase as any)
+        .from("clip_replies")
+        .delete()
+        .eq("id", replyId)
+        .eq("user_id", userId);
+      if (error) {
+        if (isMissingClipsSchema(error)) throw new Error(CLIPS_SCHEMA_MIGRATION_HINT);
+        throw error;
+      }
+      return clipId;
+    },
+    onSuccess: (clipId) => {
+      void qc.invalidateQueries({ queryKey: ["clip-replies", clipId] });
       void qc.invalidateQueries({ queryKey: ["ping-clips-feed"] });
     },
   });
@@ -393,14 +574,28 @@ export function useReportClip(userId?: string) {
         reason: input.reason.trim(),
         details: (input.details ?? "").trim(),
       });
-      if (error && !isMissingClipsSchema(error)) throw error;
+      if (error) {
+        if (isMissingClipsSchema(error)) throw new Error(CLIPS_SCHEMA_MIGRATION_HINT);
+        throw error;
+      }
     },
   });
 }
 
-export async function recordObservedClipView(clipId: string): Promise<void> {
-  await (supabase as any).rpc("record_clip_view", { p_clip_id: clipId }).then(
-    () => {},
-    () => {},
-  );
+export async function recordObservedClipView(clipId: string): Promise<boolean> {
+  try {
+    const { error } = await (supabase as any).rpc("record_clip_view", { p_clip_id: clipId });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+export async function recordObservedClipShare(clipId: string): Promise<boolean> {
+  try {
+    const { error } = await (supabase as any).rpc("record_clip_share", { p_clip_id: clipId });
+    return !error;
+  } catch {
+    return false;
+  }
 }

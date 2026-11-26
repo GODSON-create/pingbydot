@@ -302,6 +302,13 @@
       "when": 1797500000000,
       "tag": "0042_stage2_moments_hubs_signals_restoration",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1797600000000,
+      "tag": "0043_clips_interaction_counters_and_indexes",
+      "breakpoints": true
     }
   ]
 }

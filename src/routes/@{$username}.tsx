@@ -36,6 +36,11 @@ import {
   Globe,
   VolumeX,
   Bookmark,
+  Clapperboard,
+  Eye,
+  Play,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { profileQuery, likeCount, replyCount, type Profile, type Ping } from "@/lib/pings";
@@ -89,7 +94,14 @@ import {
   useRemoveCloseCircleMember,
 } from "@/lib/moments";
 import { MomentViewerModal } from "@/components/moments/MomentViewerModal";
+import { ClipComposerDialog } from "@/components/clips/ClipComposerDialog";
 import { ResolvedMomentThumb } from "@/components/media/ResolvedPrivateMedia";
+import {
+  userClipsQuery,
+  useDeleteClip,
+  useUpdateClipVisibility,
+  type ClipVisibility,
+} from "@/lib/clips";
 import { dotSummaryQuery, publicAccountTierQuery } from "@/lib/economy";
 import { formatProfessionalBadgeLabel, publicVerificationQuery } from "@/lib/verification";
 import { VerificationBadge } from "@/components/verification/VerificationBadge";
@@ -491,6 +503,7 @@ function ProfileContent({
 
   const { isOpen, openOverlay, onOpenChangeFor, closeOverlays } = useNavOverlay();
   const [momentModalOpen, setMomentModalOpen] = useState(false);
+  const [clipComposerOpen, setClipComposerOpen] = useState(false);
   const [closeCircleOpen, setCloseCircleOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [shareProfileOpen, setShareProfileOpen] = useState(false);
@@ -530,6 +543,11 @@ function ProfileContent({
   const { data: follow } = useQuery(followQuery(profile.id, user?.id));
   const { data: joinedHubs = [] } = useQuery(myHubsQuery(profile.id));
   const { data: activeMoments = [] } = useQuery(userActiveMomentsQuery(profile.id, user?.id));
+  const { data: creatorClipsState } = useQuery(userClipsQuery(profile.id, user?.id));
+  const creatorClips = creatorClipsState?.clips ?? [];
+  const clipsMigrated = creatorClipsState?.migrated !== false;
+  const deleteProfileClip = useDeleteClip(user?.id);
+  const updateProfileClipVisibility = useUpdateClipVisibility(user?.id);
   const { data: accountTier = "free" } = useQuery(publicAccountTierQuery(profile.id));
   const { data: verificationBadges } = useQuery(publicVerificationQuery(profile.id));
   // Retrieve DOT balance from the authenticated user's real wallet/account query
@@ -877,17 +895,20 @@ function ProfileContent({
         </div>
       </section>
 
-      {/* Profile Content Tabs: PINGs | Moments | Activity */}
+      {/* Profile Content Tabs: PINGs | Clips | Moments | Activity */}
       <section className="mx-auto max-w-4xl px-4 sm:px-5 mt-4">
         <Tabs defaultValue="pings">
           <TabsList className="h-11 rounded-full p-1 bg-secondary/80 overflow-x-auto max-w-full">
-            <TabsTrigger value="pings" className="rounded-full px-6 text-sm font-semibold">
+            <TabsTrigger value="pings" className="rounded-full px-5 text-sm font-semibold">
               PINGs ({pings.length})
             </TabsTrigger>
-            <TabsTrigger value="moments" className="rounded-full px-6 text-sm font-semibold">
+            <TabsTrigger value="clips" className="rounded-full px-5 text-sm font-semibold">
+              Clips ({creatorClips.length})
+            </TabsTrigger>
+            <TabsTrigger value="moments" className="rounded-full px-5 text-sm font-semibold">
               Moments ({activeMoments.length})
             </TabsTrigger>
-            <TabsTrigger value="activity" className="rounded-full px-6 text-sm font-semibold">
+            <TabsTrigger value="activity" className="rounded-full px-5 text-sm font-semibold">
               Activity
             </TabsTrigger>
           </TabsList>
@@ -930,8 +951,182 @@ function ProfileContent({
             )}
           </TabsContent>
 
-          {/* TAB 2: MOMENTS (Highlights & Active Moments) */}
+          {/* TAB 2: CLIPS (Persistent Short-Form Videos) */}
+          <TabsContent value="clips" className="mt-6 space-y-5" data-profile-clips-tab="true">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="font-display text-base font-bold flex items-center gap-2">
+                  <Clapperboard className="size-4 text-primary" /> Persistent Clips
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Short-form discovery videos that stay available until the creator deletes them or
+                  changes visibility.
+                </p>
+              </div>
+              {isMe && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="hero"
+                  onClick={() => setClipComposerOpen(true)}
+                  className="rounded-full gap-1.5"
+                >
+                  <Plus className="size-3.5" /> Publish Clip
+                </Button>
+              )}
+            </div>
+
+            {!clipsMigrated ? (
+              <div className="surface-card rounded-3xl p-8 text-center text-muted-foreground">
+                <Clapperboard className="mx-auto size-8 text-muted-foreground/50" />
+                <p className="mt-2 font-medium text-foreground">Clips storage schema pending</p>
+                <p className="mt-1 text-xs">
+                  Clips become available once database migration{" "}
+                  <code className="font-mono">0034_ping_learn_spotlight_and_clips.sql</code> is
+                  applied.
+                </p>
+              </div>
+            ) : creatorClips.length === 0 ? (
+              <div className="surface-card rounded-3xl p-10 text-center text-muted-foreground">
+                <Clapperboard className="mx-auto size-9 text-muted-foreground/40" />
+                <p className="mt-3 font-medium">
+                  {isMe ? "You haven't published a Clip yet." : `${name} hasn't published a Clip yet.`}
+                </p>
+                <p className="mt-1 text-xs">
+                  Persistent short-form videos published to Clips appear here, separate from
+                  temporary Moments.
+                </p>
+                {isMe && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="hero"
+                    onClick={() => setClipComposerOpen(true)}
+                    className="mt-4 rounded-full gap-1.5"
+                  >
+                    <Plus className="size-3.5" /> Publish your first Clip
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3">
+                {creatorClips.map((clip) => (
+                  <div
+                    key={clip.id}
+                    className="group relative flex flex-col overflow-hidden rounded-3xl border border-border/70 bg-card shadow-sm"
+                  >
+                    <Link
+                      to="/clips"
+                      search={{ clip: clip.id }}
+                      className="relative aspect-[9/15] w-full overflow-hidden bg-black block"
+                    >
+                      <ResolvedMomentThumb
+                        mediaUrl={clip.poster_url || clip.video_url}
+                        mediaType={clip.poster_url ? "image" : "video"}
+                        alt={clip.caption || "Ping Clip"}
+                        className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                      />
+                      <div className="absolute top-2.5 left-2.5 flex items-center gap-1">
+                        <span className="inline-flex size-7 items-center justify-center rounded-full bg-black/65 text-white backdrop-blur-sm">
+                          <Play className="size-3.5 fill-current translate-x-0.5" />
+                        </span>
+                        {clip.visibility === "followers" && (
+                          <span className="rounded-full bg-black/65 px-2 py-0.5 text-[10px] font-semibold text-amber-300 backdrop-blur-sm">
+                            Followers
+                          </span>
+                        )}
+                      </div>
+                      <div className="absolute top-2.5 right-2.5 flex items-center gap-1 rounded-full bg-black/65 px-2 py-0.5 text-[10px] font-semibold text-white tabular-nums backdrop-blur-sm">
+                        <Eye className="size-3" /> {clip.views_count}
+                      </div>
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent p-3 text-white">
+                        {clip.caption && (
+                          <p className="line-clamp-2 text-xs font-medium">{clip.caption}</p>
+                        )}
+                        <p className="mt-1 text-[10px] text-white/75">
+                          {clip.duration_sec ? `${clip.duration_sec}s · ` : ""}
+                          {formatDistanceToNowStrict(new Date(clip.created_at))} ago
+                        </p>
+                      </div>
+                    </Link>
+
+                    {isMe && (
+                      <div className="flex items-center justify-between gap-1 border-t border-border/60 bg-card px-2.5 py-2 text-[11px]">
+                        <button
+                          type="button"
+                          disabled={updateProfileClipVisibility.isPending}
+                          onClick={() => {
+                            const nextVis: ClipVisibility =
+                              clip.visibility === "public" ? "followers" : "public";
+                            updateProfileClipVisibility.mutate(
+                              { clipId: clip.id, visibility: nextVis },
+                              {
+                                onSuccess: () =>
+                                  toast.success(
+                                    nextVis === "public"
+                                      ? "Clip set to Public"
+                                      : "Clip set to Followers Only",
+                                  ),
+                                onError: (err) =>
+                                  toast.error(
+                                    err instanceof Error
+                                      ? err.message
+                                      : "Could not update Clip visibility.",
+                                  ),
+                              },
+                            );
+                          }}
+                          className="inline-flex items-center gap-1 rounded-full px-2 py-1 font-semibold text-muted-foreground hover:bg-secondary hover:text-foreground"
+                        >
+                          {clip.visibility === "public" ? (
+                            <>
+                              <Globe className="size-3 text-primary" /> Public
+                            </>
+                          ) : (
+                            <>
+                              <Users className="size-3 text-amber-500" /> Followers
+                            </>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={deleteProfileClip.isPending}
+                          onClick={() => {
+                            deleteProfileClip.mutate(clip.id, {
+                              onSuccess: () => toast.success("Clip deleted"),
+                              onError: (err) =>
+                                toast.error(
+                                  err instanceof Error ? err.message : "Could not delete Clip.",
+                                ),
+                            });
+                          }}
+                          aria-label="Delete Clip"
+                          className="inline-flex items-center gap-1 rounded-full px-2 py-1 font-semibold text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                        >
+                          <Trash2 className="size-3" /> Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* TAB 3: MOMENTS (Temporary Updates & Highlights) */}
           <TabsContent value="moments" className="mt-6 space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="font-display text-base font-bold flex items-center gap-2">
+                  <Sparkles className="size-4 text-primary" /> Temporary Moments &amp; Highlights
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Temporary photo and video updates from {isMe ? "you" : name}, separate from
+                  persistent Clips.
+                </p>
+              </div>
+            </div>
+
             <div className="surface-card rounded-3xl p-5 sm:p-6">
               <ProfileHighlights profile={profile} isMe={isMe} />
             </div>
@@ -1291,6 +1486,11 @@ function ProfileContent({
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Clip Composer Modal (Owner Profile Clips Tab) */}
+      {isMe && (
+        <ClipComposerDialog open={clipComposerOpen} onOpenChange={setClipComposerOpen} />
+      )}
 
       {/* Active Moments Modal */}
       {hasActiveMoments && (

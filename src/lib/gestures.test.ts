@@ -3,10 +3,12 @@ import { classifySwipe, neighbourPath, shouldRefresh, isExemptTarget } from "./g
 
 describe("Gesture boundaries", () => {
   const swipe = { startX: 200, dx: -100, dy: 5, dt: 300, width: 390, pathname: "/" };
-  it("switches only Home and Explore in the main context", () => {
+  it("switches only Explore (/ or /explore) and Clips (/clips) in the main context", () => {
     expect(classifySwipe(swipe)).toBe("next");
-    expect(neighbourPath("/", "next")).toBe("/explore");
-    expect(neighbourPath("/explore", "next")).toBeNull();
+    expect(neighbourPath("/", "next")).toBe("/clips");
+    expect(neighbourPath("/explore", "next")).toBe("/clips");
+    expect(neighbourPath("/clips", "prev")).toBe("/explore");
+    expect(neighbourPath("/clips", "next")).toBeNull();
     expect(classifySwipe({ ...swipe, pathname: "/settings" })).toBeNull();
   });
   it("leaves system edges and vertical or slow motion alone", () => {

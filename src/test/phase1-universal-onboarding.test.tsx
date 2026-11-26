@@ -482,7 +482,10 @@ describe("Phase 1 Workstream 2: Universal User Onboarding", () => {
       path.resolve(root, "src/routes/_authenticated/settings.tsx"),
       "utf8",
     );
-    const indexSrc = fs.readFileSync(path.resolve(root, "src/routes/index.tsx"), "utf8");
+    const exploreViewSrc = fs.readFileSync(
+      path.resolve(root, "src/components/explore/ExploreDiscoveryView.tsx"),
+      "utf8",
+    );
 
     expect(onboardingSrc).toContain("pb-28");
     expect(onboardingSrc).toContain("grid-cols-4");
@@ -491,7 +494,7 @@ describe("Phase 1 Workstream 2: Universal User Onboarding", () => {
     expect(stepsSrc).toContain("min-h-12");
     expect(settingsSrc).toContain("ONBOARDING_COUNTRIES");
     expect(settingsSrc).toContain("ONBOARDING_INTERESTS");
-    expect(indexSrc).toContain("Recommended:");
-    expect(indexSrc).toContain("Create Ping");
+    expect(exploreViewSrc).toContain("Recommended:");
+    expect(exploreViewSrc).toContain("Create Ping");
   });
 });

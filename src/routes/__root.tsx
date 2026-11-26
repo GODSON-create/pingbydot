@@ -25,7 +25,7 @@ import { ThemeProvider } from "@/lib/theme";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { DesktopSidebar } from "@/components/layout/DesktopSidebar";
 import { SiteFooter } from "@/components/layout/SiteFooter";
-import { BottomNav, shouldHideBottomNav } from "@/components/layout/BottomNav";
+import { BottomNav, isClipsPath, shouldHideBottomNav } from "@/components/layout/BottomNav";
 import { CreateStackModal } from "@/components/layout/CreateStackModal";
 import { BootSplashScreen } from "@/components/layout/BootSplashScreen";
 import { GestureLayer } from "@/components/layout/GestureLayer";
@@ -235,7 +235,10 @@ function RootShellContent() {
     !searchStr.includes("section=hubs") &&
     !searchStr.includes("section=signals");
   const hideFooter =
-    pathname.startsWith("/messages") || inInboxChats || shouldHideBottomNav(pathname);
+    pathname.startsWith("/messages") ||
+    inInboxChats ||
+    isClipsPath(pathname) ||
+    shouldHideBottomNav(pathname);
 
   return (
     <>
@@ -289,15 +292,15 @@ function RootShellContent() {
               </kbd>
             </div>
             <div className="flex items-center justify-between py-1 border-b border-border/40">
-              <span className="text-muted-foreground">Explore directory</span>
+              <span className="text-muted-foreground">Explore discovery home</span>
               <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
-                /
+                / or G E
               </kbd>
             </div>
             <div className="flex items-center justify-between py-1 border-b border-border/40">
-              <span className="text-muted-foreground">Go to Home</span>
+              <span className="text-muted-foreground">Go to Clips</span>
               <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
-                G H
+                G V
               </kbd>
             </div>
             <div className="flex items-center justify-between py-1 border-b border-border/40">

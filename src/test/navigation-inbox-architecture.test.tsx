@@ -175,7 +175,13 @@ vi.mock("@/integrations/supabase/client", () => ({
   },
 }));
 
-import { BottomNav, isInboxPath, shouldHideBottomNav } from "@/components/layout/BottomNav";
+import {
+  BottomNav,
+  isClipsPath,
+  isExplorePath,
+  isInboxPath,
+  shouldHideBottomNav,
+} from "@/components/layout/BottomNav";
 import { DesktopSidebar } from "@/components/layout/DesktopSidebar";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { InboxSectionTabs } from "@/components/inbox/InboxSectionTabs";
@@ -210,7 +216,7 @@ describe("Ping Final Navigation & Communication Architecture Regression Suite", 
   });
 
   describe("1. Final Bottom Navigation & Desktop/Tablet Navigation", () => {
-    it("renders EXACTLY 5 primary bottom navigation destinations in order: Home, Explore, Create, Inbox, Profile", () => {
+    it("renders EXACTLY 5 primary bottom navigation destinations in order: Explore, Clips, Create, Inbox, Profile", () => {
       renderWithQuery(<BottomNav />);
 
       const nav = screen.getByRole("navigation", { name: "Primary" });
@@ -223,11 +229,17 @@ describe("Ping Final Navigation & Communication Architecture Regression Suite", 
         const spans = Array.from(el.querySelectorAll("span"));
         return spans.at(-1)?.textContent?.trim() ?? el.textContent?.trim();
       });
-      expect(labels).toEqual(["Home", "Explore", "Create", "Inbox", "Profile"]);
+      expect(labels).toEqual(["Explore", "Clips", "Create", "Inbox", "Profile"]);
 
+      expect(within(nav).queryByText("Home")).toBeNull();
       expect(within(nav).queryByText("Communities")).toBeNull();
       expect(within(nav).queryByText("Hubs")).toBeNull();
       expect(within(nav).queryByText("Back")).toBeNull();
+
+      // Explore is active when landing on /
+      expect(items[0]).toHaveAttribute("href", "/explore");
+      expect(items[0]).toHaveAttribute("aria-current", "page");
+      expect(items[1]).toHaveAttribute("href", "/clips");
 
       // Create opens unified Create overlay and preserves prominent lime action styling
       const createBtn = items[2] as HTMLButtonElement;
@@ -239,7 +251,7 @@ describe("Ping Final Navigation & Communication Architecture Regression Suite", 
       expect(items[4]).toHaveAttribute("href", "/@ada");
     });
 
-    it("keeps the 5-destination BottomNav across /inbox, /hubs, /signals, and /messages with Inbox active (no contextual community bar)", () => {
+    it("keeps the 5-destination BottomNav across /inbox, /hubs, /signals, /messages, and /clips with accurate active state", () => {
       for (const route of ["/inbox", "/messages", "/hubs", "/hubs/founders", "/signals", "/signals/mit"]) {
         mockPathname = route;
         const { unmount } = renderWithQuery(<BottomNav />);
@@ -252,6 +264,15 @@ describe("Ping Final Navigation & Communication Architecture Regression Suite", 
         expect(inboxLink).toHaveAttribute("href", "/inbox");
         unmount();
       }
+
+      mockPathname = "/clips";
+      const { unmount } = renderWithQuery(<BottomNav />);
+      const nav = screen.getByRole("navigation", { name: "Primary" });
+      expect(within(nav).getByRole("link", { name: "Clips" })).toHaveAttribute(
+        "aria-current",
+        "page",
+      );
+      unmount();
     });
 
     it("preserves auth state on Profile destination (links to /login when signed out) and hides on auth/onboarding screens", () => {
@@ -268,9 +289,10 @@ describe("Ping Final Navigation & Communication Architecture Regression Suite", 
       expect(shouldHideBottomNav("/signup")).toBe(true);
       expect(shouldHideBottomNav("/onboarding")).toBe(true);
       expect(shouldHideBottomNav("/inbox")).toBe(false);
+      expect(shouldHideBottomNav("/clips")).toBe(false);
     });
 
-    it("renders consistent 5-destination navigation on DesktopSidebar and SiteHeader without Communities or contextual community bars", () => {
+    it("renders consistent 5-destination navigation on DesktopSidebar and SiteHeader without Home, Communities, or contextual community bars", () => {
       mockPathname = "/signals/stanford";
       renderWithQuery(
         <>
@@ -282,8 +304,8 @@ describe("Ping Final Navigation & Communication Architecture Regression Suite", 
       const desktopNav = screen.getByRole("navigation", { name: "Desktop Main Navigation" });
       const desktopLinks = within(desktopNav).getAllByRole("link");
       expect(desktopLinks.map((a) => a.getAttribute("title"))).toEqual([
-        "Home",
         "Explore",
+        "Clips",
         "Inbox",
         "Profile",
       ]);
@@ -293,8 +315,8 @@ describe("Ping Final Navigation & Communication Architecture Regression Suite", 
       const tabletNav = screen.getByRole("navigation", { name: "Main" });
       const tabletLinks = within(tabletNav).getAllByRole("link");
       expect(tabletLinks.map((a) => a.textContent?.replace(/\d+/g, "").trim())).toEqual([
-        "Home",
         "Explore",
+        "Clips",
         "Inbox",
         "Profile",
       ]);
@@ -304,9 +326,17 @@ describe("Ping Final Navigation & Communication Architecture Regression Suite", 
       );
     });
 
-    it("classifies all communication routes under isInboxPath", () => {
+    it("classifies Explore, Clips, and communication routes cleanly", () => {
+      expect(isExplorePath("/")).toBe(true);
+      expect(isExplorePath("/explore")).toBe(true);
+      expect(isExplorePath("/clips")).toBe(false);
+
+      expect(isClipsPath("/clips")).toBe(true);
+      expect(isClipsPath("/explore")).toBe(false);
+
       expect(isInboxPath("/")).toBe(false);
       expect(isInboxPath("/explore")).toBe(false);
+      expect(isInboxPath("/clips")).toBe(false);
       expect(isInboxPath("/@ada")).toBe(false);
       expect(isInboxPath("/inbox")).toBe(true);
       expect(isInboxPath("/messages")).toBe(true);
@@ -427,20 +457,23 @@ describe("Ping Final Navigation & Communication Architecture Regression Suite", 
     });
   });
 
-  describe("4. Moments Preservation Across Home, Explore, and Profile", () => {
-    it("preserves Moments access on Home, Explore, and Profile using authorized media resolution", () => {
+  describe("4. Moments Preservation Across Explore (/) and Profile", () => {
+    it("preserves Moments access on Explore (/ and /explore) and Profile using authorized media resolution", () => {
       const homeSrc = readRel("src/routes/index.tsx");
       const exploreSrc = readRel("src/routes/explore.tsx");
+      const exploreViewSrc = readRel("src/components/explore/ExploreDiscoveryView.tsx");
       const profileSrc = readRel("src/routes/@{$username}.tsx");
       const momentsLib = readRel("src/lib/moments.ts");
 
-      expect(homeSrc).toContain("<MomentsTray />");
-      expect(homeSrc).not.toContain("Signal · 1-on-1 Chats");
-      expect(exploreSrc).toContain("<MomentsTray />");
-      expect(exploreSrc).toContain("<DiscoverableMomentsFeed />");
+      expect(homeSrc).toContain("ExploreDiscoveryView");
+      expect(exploreSrc).toContain("ExploreDiscoveryView");
+      expect(exploreViewSrc).toContain("<MomentsTray />");
+      expect(exploreViewSrc).toContain("<DiscoverableMomentsFeed />");
+      expect(exploreViewSrc).toContain("Institutional Signals");
       expect(profileSrc).toContain("<ProfileHighlights");
       expect(profileSrc).toContain("ResolvedMomentThumb");
       expect(profileSrc).toContain("MomentViewerModal");
+      expect(profileSrc).toContain('data-profile-clips-tab="true"');
 
       // Private Moment permission guard remains enforced in discoverable query
       expect(momentsLib).toContain('.eq("audience", "public")');
