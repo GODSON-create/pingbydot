@@ -14,7 +14,7 @@ describe("Database RLS and Storage Security Audit", () => {
 
     for (const file of sqlFiles) {
       const content = fs.readFileSync(file, "utf8");
-      const lines = content.split("\n");
+      const lines = content.split(/\r?\n/);
       lines.forEach((line, idx) => {
         // Strip SQL comments
         const uncommented = line.replace(/--.*$/, "").trim();
@@ -32,7 +32,7 @@ describe("Database RLS and Storage Security Audit", () => {
 
     for (const file of sqlFiles) {
       const content = fs.readFileSync(file, "utf8");
-      const lines = content.split("\n");
+      const lines = content.split(/\r?\n/);
       lines.forEach((line, idx) => {
         const uncommented = line.replace(/--.*$/, "").trim();
         // Check for policy on storage.objects with bucket_id = 'media' that doesn't check auth / folder

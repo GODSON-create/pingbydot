@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import {
   Bell,
@@ -6,8 +6,9 @@ import {
   LogOut,
   Settings,
   User,
-  Building2,
+  Users,
   Radio,
+  Inbox,
   MessageSquare,
   Sun,
   Moon,
@@ -45,7 +46,9 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { isInboxPath } from "./BottomNav";
 import { CreateStackModal } from "./CreateStackModal";
+import { cn } from "@/lib/utils";
 
 export function Wordmark() {
   return (
@@ -149,6 +152,7 @@ const navLink =
 export function SiteHeader() {
   const { user, profile, ready } = useAuth();
   const { theme, resolvedTheme, setTheme } = useTheme();
+  const { pathname } = useLocation();
   const signOut = useSignOut();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -172,6 +176,9 @@ export function SiteHeader() {
     setTheme(nextTheme);
   };
   const ThemeIcon = theme === "system" ? Laptop : resolvedTheme === "dark" ? Moon : Sun;
+  const inInbox = isInboxPath(pathname);
+  const isProfileActive =
+    (user && profile && pathname === `/@${profile.username}`) || (!user && pathname === "/login");
 
   return (
     <>
@@ -196,24 +203,34 @@ export function SiteHeader() {
               Explore
             </Link>
             <Link
-              to="/hubs"
-              className={navLink}
-              activeProps={{ className: "text-foreground bg-secondary" }}
+              to="/inbox"
+              className={cn(
+                navLink,
+                "relative inline-flex items-center gap-1.5",
+                inInbox && "text-foreground bg-secondary",
+              )}
             >
-              Community
+              Inbox
+              {unreadMessages > 0 && (
+                <span className="inline-flex min-w-4 h-4 px-1 items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold tabular-nums">
+                  {unreadMessages > 99 ? "99+" : unreadMessages}
+                </span>
+              )}
             </Link>
-            {user && (
+            {user && profile ? (
               <Link
-                to="/messages"
-                className={`${navLink} relative inline-flex items-center gap-1.5`}
-                activeProps={{ className: "text-foreground bg-secondary" }}
+                to="/@{$username}"
+                params={{ username: profile.username }}
+                className={cn(navLink, isProfileActive && "text-foreground bg-secondary")}
               >
-                Messages
-                {unreadMessages > 0 && (
-                  <span className="inline-flex min-w-4 h-4 px-1 items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold tabular-nums">
-                    {unreadMessages > 99 ? "99+" : unreadMessages}
-                  </span>
-                )}
+                Profile
+              </Link>
+            ) : (
+              <Link
+                to="/login"
+                className={cn(navLink, isProfileActive && "text-foreground bg-secondary")}
+              >
+                Profile
               </Link>
             )}
           </nav>
@@ -232,21 +249,6 @@ export function SiteHeader() {
                 <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-lime ring-2 ring-card" />
               )}
             </button>
-
-            {/* Private Direct Messages Entry Point */}
-            {ready && user && (
-              <Link
-                to="/messages"
-                className="relative flex size-9 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground transition-all md:hidden"
-                aria-label="Direct Messages"
-                title="Direct Messages"
-              >
-                <MessageSquare className="size-4" />
-                {unreadMessages > 0 && (
-                  <span className="absolute top-1 right-1 size-2 rounded-full bg-primary ring-2 ring-card" />
-                )}
-              </Link>
-            )}
 
             {/* Quick Theme Toggle */}
             <button
@@ -313,18 +315,18 @@ export function SiteHeader() {
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem asChild className="rounded-xl">
-                        <Link to="/hubs">
-                          <Building2 /> Community Hubs
+                        <Link to="/inbox">
+                          <MessageSquare /> Inbox — Chats
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild className="rounded-xl">
-                        <Link to="/signals">
-                          <Radio /> Signals
+                        <Link to="/inbox" search={{ section: "hubs" }}>
+                          <Users /> Inbox — Hubs
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild className="rounded-xl">
-                        <Link to="/messages">
-                          <MessageSquare /> Direct Messages
+                        <Link to="/inbox" search={{ section: "signals" }}>
+                          <Radio /> Inbox — Signals
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild className="rounded-xl">
@@ -378,7 +380,7 @@ export function SiteHeader() {
               <div className="rounded-2xl border border-border/70 p-6 text-center">
                 <p className="text-sm font-medium">Sign in to view your notifications</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Track responses to your intentions, new followers, and Hub updates.
+                  Track responses to your intentions, new followers, and Signal broadcasts.
                 </p>
                 <Button
                   asChild
@@ -395,7 +397,7 @@ export function SiteHeader() {
                 <Bell className="mx-auto size-8 text-muted-foreground/40" />
                 <p className="mt-3 text-sm font-semibold">You're all caught up</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  New replies, connections, and community broadcasts will appear here.
+                  New replies, connections, and institutional broadcasts will appear here.
                 </p>
               </div>
             ) : (

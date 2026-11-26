@@ -857,9 +857,10 @@ function SignalDetailPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
+    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12 pb-24">
       <Link
-        to="/signals"
+        to="/inbox"
+        search={{ section: "signals" }}
         className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
       >
         <ArrowLeft className="size-3.5" />
@@ -867,165 +868,180 @@ function SignalDetailPage() {
       </Link>
 
       {/* Signal Channel Identity Header */}
-      <header className="surface-card mt-4 rounded-3xl p-6 sm:p-8 border border-border/60">
-        <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex items-start gap-4">
-            {signal.avatar_url ? (
-              <img
-                src={signal.avatar_url}
-                alt={signal.name}
-                className="size-16 rounded-2xl object-cover border border-border/50 shrink-0"
-              />
-            ) : (
-              <div className="flex size-16 items-center justify-center rounded-2xl bg-primary/10 text-primary shrink-0">
-                <Radio className="size-8" />
-              </div>
-            )}
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="font-display text-2xl font-extrabold sm:text-3xl text-foreground">
-                  {signal.name}
-                </h1>
-                {signal.verified ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-gold/15 text-gold border border-gold/30 px-2.5 py-0.5 text-xs font-bold">
-                    <CheckCircle className="size-3.5" />
-                    Verified Institution
-                  </span>
-                ) : signal.verification_status === "pending" ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-bold text-amber-700 dark:text-amber-400">
-                    <Clock className="size-3.5" />
-                    Verification Pending Review
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                    <Shield className="size-3.5" />
-                    Unverified
-                  </span>
-                )}
-              </div>
-
-              {signal.tagline && (
-                <p className="mt-1.5 text-sm font-semibold text-foreground/90">{signal.tagline}</p>
-              )}
-
-              {signal.description && (
-                <p className="mt-2 text-sm text-muted-foreground max-w-2xl leading-relaxed">
-                  {signal.description}
-                </p>
-              )}
-
-              <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
-                <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-3 py-1 font-semibold capitalize text-secondary-foreground">
-                  {signal.institution_type}
-                </span>
-                <span className="font-medium text-muted-foreground">
-                  <strong>{signal.follower_count.toLocaleString()}</strong> subscribers
-                </span>
-                {signal.website_url && (
-                  <a
-                    href={signal.website_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
-                  >
-                    <Globe className="size-3.5" />
-                    Website
-                  </a>
-                )}
-                {!signal.verified && signal.verification_status !== "pending" && isSignalAdmin && (
-                  <button
-                    type="button"
-                    onClick={() => setVerifyDialogOpen(true)}
-                    className="inline-flex items-center gap-1 text-primary hover:underline font-semibold"
-                  >
-                    <ShieldCheck className="size-3.5" />
-                    Request Verification
-                  </button>
-                )}
-              </div>
-            </div>
+      <header className="surface-card mt-4 overflow-hidden rounded-3xl border border-border/60">
+        {signal.cover_url && (
+          <div className="h-36 sm:h-48 w-full overflow-hidden border-b border-border/50 bg-secondary/40">
+            <img
+              src={signal.cover_url}
+              alt={`${signal.name} cover`}
+              className="h-full w-full object-cover"
+            />
           </div>
-
-          {/* Action buttons */}
-          <div className="flex items-center gap-2 shrink-0">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleShare}
-              className="rounded-xl gap-1.5"
-              title="Share Signal"
-            >
-              <Share2 className="size-4" />
-              Share
-            </Button>
-
-            <Button
-              variant={isFollowing ? "outline" : "hero"}
-              size="sm"
-              onClick={handleFollowToggle}
-              disabled={followMutation.isPending}
-              className="rounded-xl gap-1.5"
-            >
-              {isFollowing ? (
-                <>
-                  <BellOff className="size-4" />
-                  Subscribed
-                </>
+        )}
+        <div className="p-6 sm:p-8">
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex items-start gap-4">
+              {signal.avatar_url ? (
+                <img
+                  src={signal.avatar_url}
+                  alt={signal.name}
+                  className="size-16 rounded-2xl object-cover border border-border/50 shrink-0"
+                />
               ) : (
-                <>
-                  <Bell className="size-4" />
-                  Subscribe
-                </>
+                <div className="flex size-16 items-center justify-center rounded-2xl bg-primary/10 text-primary shrink-0">
+                  <Radio className="size-8" />
+                </div>
               )}
-            </Button>
-          </div>
-        </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h1 className="font-display text-2xl font-extrabold sm:text-3xl text-foreground">
+                    {signal.name}
+                  </h1>
+                  {signal.verified ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-gold/15 text-gold border border-gold/30 px-2.5 py-0.5 text-xs font-bold">
+                      <CheckCircle className="size-3.5" />
+                      Verified Institution
+                    </span>
+                  ) : signal.verification_status === "pending" ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-bold text-amber-700 dark:text-amber-400">
+                      <Clock className="size-3.5" />
+                      Verification Pending Review
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                      <Shield className="size-3.5" />
+                      Unverified
+                    </span>
+                  )}
+                </div>
 
-        {/* Publisher controls banner */}
-        {isPublisher && (
-          <div className="mt-6 pt-6 border-t border-border/60 flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-2 text-xs font-semibold text-primary">
-              <Sparkles className="size-4" />
-              <span>
-                You have {publisherData?.role === "admin" ? "Admin" : "Publisher"} privileges on
-                this Signal channel
-              </span>
+                {signal.tagline && (
+                  <p className="mt-1.5 text-sm font-semibold text-foreground/90">
+                    {signal.tagline}
+                  </p>
+                )}
+
+                {signal.description && (
+                  <p className="mt-2 text-sm text-muted-foreground max-w-2xl leading-relaxed">
+                    {signal.description}
+                  </p>
+                )}
+
+                <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-3 py-1 font-semibold capitalize text-secondary-foreground">
+                    {signal.institution_type}
+                  </span>
+                  <span className="font-medium text-muted-foreground">
+                    <strong>{signal.follower_count.toLocaleString()}</strong> subscribers
+                  </span>
+                  {signal.website_url && (
+                    <a
+                      href={signal.website_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
+                    >
+                      <Globe className="size-3.5" />
+                      Website
+                    </a>
+                  )}
+                  {!signal.verified &&
+                    signal.verification_status !== "pending" &&
+                    isSignalAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => setVerifyDialogOpen(true)}
+                        className="inline-flex items-center gap-1 text-primary hover:underline font-semibold"
+                      >
+                        <ShieldCheck className="size-3.5" />
+                        Request Verification
+                      </button>
+                    )}
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              {isSignalAdmin && (
-                <>
-                  <Button
-                    onClick={() => setEditDialogOpen(true)}
-                    variant="outline"
-                    size="sm"
-                    className="rounded-xl gap-1.5"
-                  >
-                    <Settings className="size-4" />
-                    Edit Channel
-                  </Button>
-                  <Button
-                    onClick={() => setPublishersDialogOpen(true)}
-                    variant="outline"
-                    size="sm"
-                    className="rounded-xl gap-1.5"
-                  >
-                    <Users className="size-4" />
-                    Publishers
-                  </Button>
-                </>
-              )}
+
+            {/* Action buttons */}
+            <div className="flex items-center gap-2 shrink-0">
               <Button
-                onClick={() => setBroadcastDialogOpen(true)}
-                variant="hero"
+                variant="outline"
                 size="sm"
+                onClick={handleShare}
+                className="rounded-xl gap-1.5"
+                title="Share Signal"
+              >
+                <Share2 className="size-4" />
+                Share
+              </Button>
+
+              <Button
+                variant={isFollowing ? "outline" : "hero"}
+                size="sm"
+                onClick={handleFollowToggle}
+                disabled={followMutation.isPending}
                 className="rounded-xl gap-1.5"
               >
-                <Plus className="size-4" />
-                New Broadcast
+                {isFollowing ? (
+                  <>
+                    <BellOff className="size-4" />
+                    Subscribed
+                  </>
+                ) : (
+                  <>
+                    <Bell className="size-4" />
+                    Subscribe
+                  </>
+                )}
               </Button>
             </div>
           </div>
-        )}
+
+          {/* Publisher controls banner */}
+          {isPublisher && (
+            <div className="mt-6 pt-6 border-t border-border/60 flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-2 text-xs font-semibold text-primary">
+                <Sparkles className="size-4" />
+                <span>
+                  You have {publisherData?.role === "admin" ? "Admin" : "Publisher"} privileges on
+                  this Signal channel
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {isSignalAdmin && (
+                  <>
+                    <Button
+                      onClick={() => setEditDialogOpen(true)}
+                      variant="outline"
+                      size="sm"
+                      className="rounded-xl gap-1.5"
+                    >
+                      <Settings className="size-4" />
+                      Edit Channel
+                    </Button>
+                    <Button
+                      onClick={() => setPublishersDialogOpen(true)}
+                      variant="outline"
+                      size="sm"
+                      className="rounded-xl gap-1.5"
+                    >
+                      <Users className="size-4" />
+                      Publishers
+                    </Button>
+                  </>
+                )}
+                <Button
+                  onClick={() => setBroadcastDialogOpen(true)}
+                  variant="hero"
+                  size="sm"
+                  className="rounded-xl gap-1.5"
+                >
+                  <Plus className="size-4" />
+                  New Broadcast
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
       </header>
 
       {/* Broadcast Feed */}

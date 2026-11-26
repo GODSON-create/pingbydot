@@ -83,11 +83,22 @@ export const MEDIA_RULES = {
     allowedMimeTypes: ["video/mp4", "video/webm", "video/quicktime"],
     maxSizeBytes: 50 * 1024 * 1024, // 50MB
   },
+  audio: {
+    allowedMimeTypes: [
+      "audio/webm",
+      "audio/mp4",
+      "audio/mpeg",
+      "audio/ogg",
+      "audio/wav",
+      "audio/x-m4a",
+    ],
+    maxSizeBytes: 25 * 1024 * 1024, // 25MB
+  },
 };
 
 export function validateMediaUpload(
   file: { type: string; size: number; name: string },
-  kind: "image" | "video" = "image",
+  kind: "image" | "video" | "audio" = "image",
 ): { valid: boolean; error?: string } {
   const rules = MEDIA_RULES[kind];
 

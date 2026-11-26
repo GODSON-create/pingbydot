@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useUserPrivacy } from "@/lib/privacy";
+import { resolveStorageMediaUrls } from "@/lib/storage-url";
 import type { Profile } from "@/lib/pings";
 
 export type MessageMediaType = "image" | "video" | "audio" | "document";
@@ -180,8 +181,12 @@ export function conversationMessagesQuery(conversationId?: string, currentUserId
         return [];
       }
 
-      return (data || []).map((msg) => ({
+      const rows = data || [];
+      const resolvedUrls = await resolveStorageMediaUrls(rows.map((msg) => msg.media_url));
+
+      return rows.map((msg) => ({
         ...msg,
+        media_url: msg.media_url ? (resolvedUrls.get(msg.media_url) ?? msg.media_url) : null,
         media_type: msg.media_type as MessageMediaType | null,
         status: msg.status as MessageStatus,
         sender: msg.sender as unknown as Profile,

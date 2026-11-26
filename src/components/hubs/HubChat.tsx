@@ -16,6 +16,7 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { resolveStorageMediaUrls } from "@/lib/storage-url";
 import { useHubPresence } from "@/lib/presence";
 import { useMarkMessagesRead } from "@/lib/read-receipts";
 import { ReadReceiptDot } from "@/components/ping/ReadReceiptDot";
@@ -92,7 +93,12 @@ export function HubChat({ hubId, isMember, isPrivate, isStaff = false }: HubChat
         return [];
       }
 
-      return (data || []) as unknown as HubMessage[];
+      const rows = (data || []) as unknown as HubMessage[];
+      const resolvedUrls = await resolveStorageMediaUrls(rows.map((m) => m.media_url));
+      return rows.map((m) => ({
+        ...m,
+        media_url: m.media_url ? (resolvedUrls.get(m.media_url) ?? m.media_url) : null,
+      }));
     },
   });
 

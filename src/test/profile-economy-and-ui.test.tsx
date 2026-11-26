@@ -4,7 +4,7 @@ import path from "node:path";
 import { UPGRADE_TIERS, canClaimDailyCheckin } from "@/lib/economy";
 import { buildDailySeries } from "@/lib/analytics";
 import { INTENT_FORMATS, parseStructuredPing, serializeStructuredPing } from "@/lib/validation";
-import { isCommunityPath } from "@/components/layout/BottomNav";
+import { isInboxPath } from "@/components/layout/BottomNav";
 
 const ROOT = path.resolve(__dirname, "../..");
 const readRel = (rel: string) => fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -71,26 +71,26 @@ describe("PING Human Coordination Redesign, Economy, and Navigation Architecture
     expect(parsed.desiredOutcome).toBe("Ship v1 prototype in Q2");
   });
 
-  it("enforces 5 primary navigation items and 4 contextual Community navigation items", () => {
-    expect(isCommunityPath("/")).toBe(false);
-    expect(isCommunityPath("/explore")).toBe(false);
-    expect(isCommunityPath("/messages")).toBe(false);
-    expect(isCommunityPath("/hubs")).toBe(true);
-    expect(isCommunityPath("/hubs/stanford-ai")).toBe(true);
-    expect(isCommunityPath("/signals")).toBe(true);
+  it("enforces exactly 5 primary navigation destinations with Inbox replacing Communities", () => {
+    expect(isInboxPath("/")).toBe(false);
+    expect(isInboxPath("/explore")).toBe(false);
+    expect(isInboxPath("/inbox")).toBe(true);
+    expect(isInboxPath("/messages")).toBe(true);
+    expect(isInboxPath("/hubs")).toBe(true);
+    expect(isInboxPath("/hubs/stanford-ai")).toBe(true);
+    expect(isInboxPath("/signals")).toBe(true);
+    expect(isInboxPath("/signals/mit-ai")).toBe(true);
 
     const navSrc = readRel("src/components/layout/BottomNav.tsx");
     expect(navSrc).toContain('data-nav-mode="primary"');
-    expect(navSrc).toContain('data-nav-mode="community"');
+    expect(navSrc).not.toContain('data-nav-mode="community"');
     expect(navSrc).toContain("<span>Home</span>");
     expect(navSrc).toContain("<span>Explore</span>");
     expect(navSrc).toContain(">Create</span>");
-    expect(navSrc).toContain("<span>Community</span>");
+    expect(navSrc).toContain("<span>Inbox</span>");
     expect(navSrc).toContain("<span>Profile</span>");
-    expect(navSrc).toContain("<span>Back</span>");
-    expect(navSrc).toContain("<span>Hub</span>");
-    expect(navSrc).toContain("<span>Signal</span>");
-    expect(navSrc).toContain("<span>Moment</span>");
+    expect(navSrc).not.toContain("<span>Community</span>");
+    expect(navSrc).not.toContain("<span>Communities</span>");
   });
 
   it("wires the 3-card Create Stack modal with exact required copy", () => {
@@ -115,15 +115,19 @@ describe("PING Human Coordination Redesign, Economy, and Navigation Architecture
     expect(exploreSrc).toContain("Recommended communities");
   });
 
-  it("incorporates Forums and Institutional Broadcasts into Hub while keeping Signal distinct", () => {
+  it("separates Hubs group communication from Signals institutional broadcasting while preserving historical forum files", () => {
     const forumsSrc = readRel("src/components/hubs/HubForumsAndBroadcasts.tsx");
-    expect(forumsSrc).toContain("Official Hub Broadcasts");
-    expect(forumsSrc).toContain("Publish Institutional Broadcast");
-    expect(forumsSrc).toContain("Create Hub Forum");
+    expect(forumsSrc).toContain("HubForumsAndBroadcasts");
+
+    const hubSlugSrc = readRel("src/routes/hubs.$slug.tsx");
+    expect(hubSlugSrc).toContain("Group Chat");
+    expect(hubSlugSrc).not.toContain("HubForumsAndBroadcasts");
 
     const signalsSrc = readRel("src/routes/signals.tsx");
-    expect(signalsSrc).toContain("Community Destination · Signal");
+    expect(signalsSrc).toContain("Institutional Broadcasting");
     expect(signalsSrc).toContain("bg-gold/15 text-gold border border-gold/30");
+    expect(signalsSrc).not.toContain("Open Hubs & Forums");
+    expect(signalsSrc).not.toContain("Open Direct Messages");
   });
 
   it("wires top-right menu drawer on profile page to DOT balance, wallet, verification, settings, and tabs", () => {
