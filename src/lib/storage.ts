@@ -10,6 +10,7 @@ import {
 import { RESUMABLE_UPLOAD_THRESHOLD_BYTES, uploadViaTusResumable } from "@/lib/resumable-upload";
 import {
   CloudflareR2MediaProvider,
+  extractSupabasePublicMediaPath,
   isR2ClientFlagEnabled,
   parseMediaReference,
   type MediaReadOptions,
@@ -40,13 +41,18 @@ interface CachedSignedUrl {
 }
 
 const signedUrlCache = new Map<string, CachedSignedUrl>();
+const inFlightSignedUrlRequests = new Map<string, Promise<string | null>>();
 
 export function clearPrivateDmSignedUrlCache(): void {
   signedUrlCache.clear();
+  inFlightSignedUrlRequests.clear();
+  defaultR2ReadProvider.clearSignedUrlCache();
 }
 
 export function clearAllPrivateSignedUrlCaches(): void {
   signedUrlCache.clear();
+  inFlightSignedUrlRequests.clear();
+  defaultR2ReadProvider.clearSignedUrlCache();
 }
 
 export function formatStorageUploadError(
@@ -483,21 +489,33 @@ export class LovableCloudMediaProvider implements MediaStorageProvider {
       return cached.signedUrl;
     }
 
-    const ttlSec = Math.max(60, options.expiresInSec ?? DEFAULT_DM_SIGNED_URL_TTL_SEC);
-    const { data, error } = await supabase.storage
-      .from(parsed.bucket)
-      .createSignedUrl(parsed.objectKey, ttlSec);
-
-    if (error || !data?.signedUrl) {
-      signedUrlCache.delete(cacheKey);
-      return null;
+    if (!options.forceRefresh) {
+      const inFlight = inFlightSignedUrlRequests.get(cacheKey);
+      if (inFlight) return inFlight;
     }
 
-    signedUrlCache.set(cacheKey, {
-      signedUrl: data.signedUrl,
-      expiresAtMs: Date.now() + ttlSec * 1000,
+    const ttlSec = Math.max(60, options.expiresInSec ?? DEFAULT_DM_SIGNED_URL_TTL_SEC);
+    const pending = (async () => {
+      const { data, error } = await supabase.storage
+        .from(parsed.bucket!)
+        .createSignedUrl(parsed.objectKey!, ttlSec);
+
+      if (error || !data?.signedUrl) {
+        signedUrlCache.delete(cacheKey);
+        return null;
+      }
+
+      signedUrlCache.set(cacheKey, {
+        signedUrl: data.signedUrl,
+        expiresAtMs: Date.now() + ttlSec * 1000,
+      });
+      return data.signedUrl;
+    })().finally(() => {
+      inFlightSignedUrlRequests.delete(cacheKey);
     });
-    return data.signedUrl;
+
+    inFlightSignedUrlRequests.set(cacheKey, pending);
+    return pending;
   }
 
   async deleteObjects(
@@ -811,6 +829,56 @@ export async function createAuthorizedMediaReadUrl(
     return r2Reader.getReadUrl(urlOrRef, options);
   }
   return defaultLovableProvider.getReadUrl(urlOrRef, options);
+}
+
+/**
+ * Fallback resolver exclusively for public `media` bucket HTTPS URLs whose direct
+ * `/storage/v1/object/public/media/...` load failed (for example, while a Supabase
+ * environment still has `media.public = false` prior to migration 0038).
+ *
+ * Strictly scoped to the public `media` bucket — never turns private buckets into public URLs.
+ */
+export async function createSupabaseMediaBucketFallbackSignedUrl(
+  publicUrl: string,
+  options: { forceRefresh?: boolean; expiresInSec?: number } = {},
+): Promise<string | null> {
+  const objectKey = extractSupabasePublicMediaPath(publicUrl);
+  if (!objectKey) return null;
+
+  const cacheKey = `${MEDIA_BUCKET}:${objectKey}`;
+  const now = Date.now();
+  const cached = signedUrlCache.get(cacheKey);
+  if (!options.forceRefresh && cached && cached.expiresAtMs - SIGNED_URL_REFRESH_BUFFER_MS > now) {
+    return cached.signedUrl;
+  }
+
+  if (!options.forceRefresh) {
+    const inFlight = inFlightSignedUrlRequests.get(cacheKey);
+    if (inFlight) return inFlight;
+  }
+
+  const ttlSec = Math.max(60, options.expiresInSec ?? DEFAULT_DM_SIGNED_URL_TTL_SEC);
+  const pending = (async () => {
+    const { data, error } = await supabase.storage
+      .from(MEDIA_BUCKET)
+      .createSignedUrl(objectKey, ttlSec);
+
+    if (error || !data?.signedUrl) {
+      signedUrlCache.delete(cacheKey);
+      return null;
+    }
+
+    signedUrlCache.set(cacheKey, {
+      signedUrl: data.signedUrl,
+      expiresAtMs: Date.now() + ttlSec * 1000,
+    });
+    return data.signedUrl;
+  })().finally(() => {
+    inFlightSignedUrlRequests.delete(cacheKey);
+  });
+
+  inFlightSignedUrlRequests.set(cacheKey, pending);
+  return pending;
 }
 
 /**

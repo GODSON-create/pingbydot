@@ -29,6 +29,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { ImageUploadField } from "@/components/media/ImageUploadField";
+import { ResolvedMomentThumb } from "@/components/media/ResolvedPrivateMedia";
 import {
   signalBySlugQuery,
   signalPostsQuery,
@@ -179,12 +180,12 @@ function SignalPostCard({
       {post.media_urls && post.media_urls.length > 0 && (
         <div className="mt-4 grid gap-2 overflow-hidden rounded-2xl">
           {post.media_urls.map((url, i) => (
-            <img
-              key={i}
-              src={url}
-              alt="Broadcast media attachment"
+            <ResolvedMomentThumb
+              key={`${post.id}-media-${i}`}
+              mediaUrl={url}
+              mediaType={/\.(mp4|webm|mov)(\?|$)/i.test(url) ? "video" : "image"}
+              alt={`${post.title} attachment`}
               className="max-h-96 w-full rounded-2xl object-cover border border-border/40"
-              loading="lazy"
             />
           ))}
         </div>
@@ -205,6 +206,7 @@ function NewBroadcastDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const { user } = useAuth();
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [category, setCategory] = useState("announcement");
@@ -295,15 +297,17 @@ function NewBroadcastDialog({
             />
           </div>
 
-          <div>
-            <Label className="text-xs font-semibold">Optional Attachment Image URL</Label>
-            <Input
-              value={mediaUrl}
-              onChange={(e) => setMediaUrl(e.target.value)}
-              placeholder="https://…/image.png"
-              className="mt-1 rounded-xl"
-            />
-          </div>
+          <ImageUploadField
+            folder="signals"
+            userId={user?.id}
+            value={mediaUrl}
+            onChange={setMediaUrl}
+            label="Optional Broadcast Attachment"
+            placeholder="Upload an image or graphic…"
+            fallbackName={title || "Signal"}
+            shape="rounded"
+            disabled={createPost.isPending}
+          />
 
           <div className="flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-secondary/40 px-4 py-3">
             <div>
@@ -854,6 +858,18 @@ function SignalDetailPage() {
           qc.invalidateQueries({ queryKey: ["signal-messages", signal.id] });
         },
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "signal_followers",
+          filter: `signal_id=eq.${signal.id}`,
+        },
+        () => {
+          qc.invalidateQueries({ queryKey: ["signal", slug] });
+        },
+      )
       .subscribe();
 
     return () => {
@@ -937,10 +953,16 @@ function SignalDetailPage() {
         <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-4">
             {signal.avatar_url ? (
-              <img
-                src={signal.avatar_url}
+              <ResolvedMomentThumb
+                mediaUrl={signal.avatar_url}
+                mediaType="image"
                 alt={signal.name}
                 className="size-16 rounded-2xl object-cover border border-border/50 shrink-0"
+                fallback={
+                  <div className="flex size-16 items-center justify-center rounded-2xl bg-primary/10 text-primary shrink-0">
+                    <Radio className="size-8" />
+                  </div>
+                }
               />
             ) : (
               <div className="flex size-16 items-center justify-center rounded-2xl bg-primary/10 text-primary shrink-0">

@@ -8,6 +8,7 @@ import {
   ExternalLink,
   HelpCircle,
   Lock,
+  QrCode,
   Share2,
   ShieldCheck,
   Smartphone,
@@ -17,6 +18,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { generateQrSvgPath } from "@/lib/qr-svg";
+import { siteUrl } from "@/lib/site";
 import {
   FALLBACK_EARLY_ACCESS_MANIFEST,
   fetchEarlyAccessManifest,
@@ -79,6 +82,21 @@ function DownloadCentrePage() {
   });
 
   const manifest = manifestQuery.data ?? FALLBACK_EARLY_ACCESS_MANIFEST;
+
+  const downloadPageUrl = useMemo(() => {
+    if (typeof window !== "undefined" && /^https?:$/i.test(window.location.protocol)) {
+      return `${window.location.origin}/download`;
+    }
+    return siteUrl("/download");
+  }, []);
+
+  const downloadQr = useMemo(() => {
+    try {
+      return generateQrSvgPath(downloadPageUrl);
+    } catch {
+      return generateQrSvgPath("https://justping.cv/download");
+    }
+  }, [downloadPageUrl]);
 
   useEffect(() => {
     const plat = detectPwaPlatform();
@@ -385,6 +403,117 @@ function DownloadCentrePage() {
             </Button>
           )}
         </article>
+      </section>
+
+      {/* Mobile QR Code & Device Compatibility Matrix */}
+      <section
+        aria-label="Mobile QR code and device compatibility"
+        className="grid gap-5 md:grid-cols-12 items-stretch"
+      >
+        <div className="surface-card md:col-span-5 rounded-2xl border border-border p-6 flex flex-col items-center justify-between text-center space-y-4">
+          <div className="space-y-1">
+            <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-primary">
+              <QrCode className="size-3.5" /> Scan on Your Phone
+            </span>
+            <h2 className="font-display text-lg font-bold">Open Official Download Page</h2>
+            <p className="text-xs text-muted-foreground">
+              Scan with your Android or iPhone camera to open this verified installation page and
+              install Ping directly.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-border bg-white p-3 shadow-sm">
+            <svg
+              role="img"
+              aria-label={`QR code for ${downloadPageUrl}`}
+              viewBox={`0 0 ${downloadQr.viewBoxSize} ${downloadQr.viewBoxSize}`}
+              className="size-40"
+              shapeRendering="crispEdges"
+            >
+              <rect width={downloadQr.viewBoxSize} height={downloadQr.viewBoxSize} fill="#ffffff" />
+              <path d={downloadQr.path} fill="#090B0A" />
+            </svg>
+          </div>
+          <div className="w-full space-y-2">
+            <p className="font-mono text-[11px] text-muted-foreground break-all">
+              {downloadPageUrl}
+            </p>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="w-full rounded-full gap-1.5"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(downloadPageUrl);
+                  toast.success("Official download link copied.");
+                } catch {
+                  toast.error("Could not copy download link.");
+                }
+              }}
+            >
+              <Copy className="size-3.5" /> Copy Official Install Link
+            </Button>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-card md:col-span-7 p-6 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-display text-lg font-bold">Version &amp; Device Compatibility</h2>
+            <span className="rounded-full bg-secondary px-2.5 py-0.5 font-mono text-[11px] font-semibold text-foreground">
+              v{manifest.version} · {manifest.releaseChannel}
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-border text-muted-foreground">
+                  <th className="pb-2 pr-3 font-semibold">Platform</th>
+                  <th className="pb-2 pr-3 font-semibold">Minimum OS / Browser</th>
+                  <th className="pb-2 font-semibold">Install Path</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60 text-muted-foreground">
+                <tr>
+                  <td className="py-2.5 pr-3 font-semibold text-foreground">Web App (PWA)</td>
+                  <td className="py-2.5 pr-3">
+                    Android Chrome, iOS Safari 15.4+, Desktop Chrome/Edge
+                  </td>
+                  <td className="py-2.5 text-emerald-700 dark:text-emerald-300 font-semibold">
+                    Available Now
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-2.5 pr-3 font-semibold text-foreground">Android Native</td>
+                  <td className="py-2.5 pr-3">
+                    Android 7.0+ (API {manifest.android.minSdk}+) ·{" "}
+                    <span className="font-mono">{manifest.appId}</span>
+                  </td>
+                  <td className="py-2.5">
+                    {manifest.android.status === "available"
+                      ? "Signed Release APK"
+                      : "Awaiting signed APK (PWA ready)"}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-2.5 pr-3 font-semibold text-foreground">iPhone &amp; iPad</td>
+                  <td className="py-2.5 pr-3">
+                    iOS / iPadOS 15.0+ · <span className="font-mono">{manifest.ios.bundleId}</span>
+                  </td>
+                  <td className="py-2.5">
+                    {manifest.ios.status === "available"
+                      ? "TestFlight Beta"
+                      : "Safari PWA ready · TestFlight pending"}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            Authentication sessions persist cleanly across standalone PWA launch and native App
+            Links. Signing keys and store builds are never faked—check this page for official
+            SHA-256 checksums once signed binaries ship.
+          </p>
+        </div>
       </section>
 
       {/* Step-by-step installation guides */}

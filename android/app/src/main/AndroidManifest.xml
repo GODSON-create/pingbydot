@@ -28,6 +28,8 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="justping.cv" />
+                <data android:scheme="https" android:host="www.justping.cv" />
                 <data android:scheme="https" android:host="pingbydot.lovable.app" />
             </intent-filter>
 

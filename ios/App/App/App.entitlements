@@ -6,6 +6,8 @@
 	<string>development</string>
 	<key>com.apple.developer.associated-domains</key>
 	<array>
+		<string>applinks:justping.cv</string>
+		<string>applinks:www.justping.cv</string>
 		<string>applinks:pingbydot.lovable.app</string>
 	</array>
 </dict>

@@ -174,7 +174,7 @@ describe("Ping Stage 2 — Phase 2 Security, Reliability, R2 & Retention (Real P
     const journal = JSON.parse(fs.readFileSync(JOURNAL_PATH, "utf8")) as {
       entries: Array<{ idx: number; tag: string }>;
     };
-    expect(journal.entries.length).toBe(42);
+    expect(journal.entries.length).toBeGreaterThanOrEqual(42);
     expect(journal.entries[41]?.tag).toBe("0041_stage2_phase2_security_reliability_and_retention");
 
     for (const entry of journal.entries) {

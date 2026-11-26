@@ -284,6 +284,38 @@ pass(
   `Stage 2 Phase 2 (0041) security & reliability markers verified (${required0041Markers.length}/${required0041Markers.length})`,
 );
 
+// 7. Feature Restoration & Security Hardening for Moments, Hubs & Signals (0042)
+const sql0042 = readMig("0042_stage2_moments_hubs_signals_restoration.sql");
+const required0042Markers = [
+  "CREATE OR REPLACE FUNCTION public.is_in_close_circle(",
+  "AND hm.status = 'active'",
+  "ADD COLUMN IF NOT EXISTS avatar_url text",
+  "REVOKE INSERT, UPDATE, DELETE ON public.hub_members FROM PUBLIC, anon, authenticated;",
+  "CREATE OR REPLACE FUNCTION public.join_hub(",
+  "CREATE OR REPLACE FUNCTION public.invite_to_hub(",
+  "CREATE OR REPLACE FUNCTION public.guard_signal_write()",
+  "CREATE TRIGGER signals_guard",
+  "CREATE OR REPLACE FUNCTION public.signal_after_insert()",
+  "REVOKE INSERT, UPDATE, DELETE ON public.signal_publishers FROM PUBLIC, anon, authenticated;",
+  "CREATE OR REPLACE FUNCTION public.manage_signal_publisher(",
+  "CREATE OR REPLACE FUNCTION public.request_signal_verification(",
+  "CREATE OR REPLACE FUNCTION public.update_signal(",
+  "CREATE OR REPLACE FUNCTION public.guard_signal_post_write()",
+  "CREATE OR REPLACE FUNCTION public.signal_follower_counter()",
+  "CREATE OR REPLACE FUNCTION public.signal_post_counter()",
+  "CREATE OR REPLACE FUNCTION public.notify_signal_broadcast()",
+  "CREATE OR REPLACE FUNCTION public.get_signal_post_analytics(",
+];
+
+for (const marker of required0042Markers) {
+  if (!sql0042.includes(marker)) {
+    fail(`0042 missing required Moments/Hubs/Signals restoration marker: ${marker}`);
+  }
+}
+pass(
+  `Feature Restoration (0042) Moments/Hubs/Signals markers verified (${required0042Markers.length}/${required0042Markers.length})`,
+);
+
 for (const line of checks) {
   console.log(`  PASS: ${line}`);
 }

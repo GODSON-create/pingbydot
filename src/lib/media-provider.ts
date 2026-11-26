@@ -74,6 +74,30 @@ const KNOWN_PRIVATE_BUCKETS = new Set<string>([
   "private-moments",
 ]);
 
+const R2_SIGNED_URL_REFRESH_BUFFER_MS = 60_000;
+
+/**
+ * Extracts the bucket-relative object key from a Supabase public `media` bucket URL
+ * (`/storage/v1/object/public/media/<key>`). Strictly scoped to the public `media`
+ * bucket so private buckets (`private-moments`, `dm-attachments`, `hub-attachments`)
+ * can never be treated as public URLs.
+ */
+export function extractSupabasePublicMediaPath(urlOrRef: string | null | undefined): string | null {
+  const raw = (urlOrRef ?? "").trim();
+  if (!raw || !/^https?:\/\//i.test(raw)) return null;
+  try {
+    const u = new URL(raw);
+    const marker = "/storage/v1/object/public/media/";
+    const idx = u.pathname.indexOf(marker);
+    if (idx < 0) return null;
+    const key = decodeURIComponent(u.pathname.slice(idx + marker.length)).replace(/^\/+/, "");
+    if (!key || key.includes("..") || key.includes("\\")) return null;
+    return key;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Parses any persisted media string (`r2://bucket/key`, `storage://bucket/key`,
  * canonical bare DM `{conv}/{uid}/{file}`, or legacy `https://...` URL).
@@ -173,12 +197,19 @@ export class CloudflareR2MediaProvider implements MediaStorageProvider {
   private readonly getAccessToken: () => Promise<string | null>;
   private readonly fallbackProvider: MediaStorageProvider;
   private readonly fetchImpl: typeof fetch;
+  private readonly signedUrlCache = new Map<string, { signedUrl: string; expiresAtMs: number }>();
+  private readonly inFlightSigns = new Map<string, Promise<string | null>>();
 
   constructor(options: R2PresignClientOptions) {
     this.apiBaseUrl = (options.apiBaseUrl ?? "").replace(/\/$/, "");
     this.getAccessToken = options.getAccessToken;
     this.fallbackProvider = options.fallbackProvider;
     this.fetchImpl = options.fetchImpl ?? fetch;
+  }
+
+  clearSignedUrlCache(): void {
+    this.signedUrlCache.clear();
+    this.inFlightSigns.clear();
   }
 
   async upload(request: MediaUploadRequest): Promise<MediaUploadResult> {
@@ -312,24 +343,64 @@ export class CloudflareR2MediaProvider implements MediaStorageProvider {
       return this.fallbackProvider.getReadUrl(ref, options);
     }
 
-    const token = options.accessToken ?? (await this.getAccessToken());
-    if (!token) return null;
+    const cacheKey = `${parsed.bucket ?? ""}:${parsed.objectKey ?? ref}`;
+    const now = Date.now();
+    const cached = this.signedUrlCache.get(cacheKey);
+    if (
+      !options.forceRefresh &&
+      cached &&
+      cached.expiresAtMs - R2_SIGNED_URL_REFRESH_BUFFER_MS > now
+    ) {
+      return cached.signedUrl;
+    }
 
-    const res = await this.fetchImpl(`${this.apiBaseUrl}/api/media/sign-read`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        ref,
-        expiresInSec: options.expiresInSec ?? 900,
-      }),
+    if (!options.forceRefresh) {
+      const inFlight = this.inFlightSigns.get(cacheKey);
+      if (inFlight) return inFlight;
+    }
+
+    const ttlSec = Math.max(60, options.expiresInSec ?? 900);
+    const pending = (async () => {
+      const token = options.accessToken ?? (await this.getAccessToken());
+      if (!token) return null;
+
+      const res = await this.fetchImpl(`${this.apiBaseUrl}/api/media/sign-read`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          ref,
+          expiresInSec: ttlSec,
+        }),
+      });
+
+      if (!res.ok) {
+        this.signedUrlCache.delete(cacheKey);
+        return null;
+      }
+      const data = (await res.json().catch(() => null)) as {
+        signedUrl?: string;
+        expiresAtMs?: number;
+      } | null;
+      const signedUrl = data?.signedUrl ?? null;
+      if (!signedUrl) {
+        this.signedUrlCache.delete(cacheKey);
+        return null;
+      }
+      this.signedUrlCache.set(cacheKey, {
+        signedUrl,
+        expiresAtMs:
+          typeof data?.expiresAtMs === "number" ? data.expiresAtMs : Date.now() + ttlSec * 1000,
+      });
+      return signedUrl;
+    })().finally(() => {
+      this.inFlightSigns.delete(cacheKey);
     });
 
-    if (!res.ok) return null;
-    const data = (await res.json().catch(() => null)) as { signedUrl?: string } | null;
-    return data?.signedUrl ?? null;
+    this.inFlightSigns.set(cacheKey, pending);
+    return pending;
   }
 
   async deleteObjects(
@@ -363,8 +434,12 @@ export class CloudflareR2MediaProvider implements MediaStorageProvider {
       deleted?: string[];
       failed?: string[];
     } | null;
+    const deleted = Array.isArray(body?.deleted) ? body.deleted : [];
+    for (const key of deleted) {
+      this.signedUrlCache.delete(`${bucket}:${key}`);
+    }
     return {
-      deleted: Array.isArray(body?.deleted) ? body.deleted : [],
+      deleted,
       failed: Array.isArray(body?.failed) ? body.failed : objectKeys,
     };
   }

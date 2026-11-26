@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { siteUrl } from "@/lib/site";
+import { generateQrSvgPath } from "@/lib/qr-svg";
 import type { Hub } from "@/lib/hubs";
 import { hubError, hubInvitesQuery } from "@/lib/hub-queries";
 
@@ -116,7 +117,13 @@ export function HubShareModal({
   };
 
   const canShare = typeof navigator !== "undefined" && "share" in navigator;
-  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(inviteUrl)}`;
+  const qrData = (() => {
+    try {
+      return generateQrSvgPath(inviteUrl);
+    } catch {
+      return null;
+    }
+  })();
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -214,14 +221,18 @@ export function HubShareModal({
               <QrCode className="size-4" />
               {showQr ? "Hide QR Code" : "Show QR Code for In-Person / Meetup Onboarding"}
             </button>
-            {showQr && (
+            {showQr && qrData && (
               <div className="mt-3 flex flex-col items-center">
-                <img
-                  src={qrCodeUrl}
-                  alt={`QR code for ${hub.name}`}
-                  className="size-48 rounded-xl border border-border shadow-sm"
-                  loading="lazy"
-                />
+                <svg
+                  role="img"
+                  aria-label={`QR code for ${hub.name}`}
+                  viewBox={`0 0 ${qrData.viewBoxSize} ${qrData.viewBoxSize}`}
+                  className="size-48 rounded-xl border border-border bg-white p-2 shadow-sm"
+                  shapeRendering="crispEdges"
+                >
+                  <rect width={qrData.viewBoxSize} height={qrData.viewBoxSize} fill="#ffffff" />
+                  <path d={qrData.path} fill="#090B0A" />
+                </svg>
                 <p className="mt-2 text-xs text-muted-foreground">
                   Scan to accept invite and join {hub.name} instantly.
                 </p>

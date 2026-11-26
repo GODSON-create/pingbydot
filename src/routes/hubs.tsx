@@ -25,6 +25,7 @@ import { hubsQuery, myHubsQuery, myPendingHubsQuery } from "@/lib/hub-queries";
 import { HUB_CATEGORIES, type HubCategory, type Hub } from "@/lib/hubs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ResolvedMomentThumb } from "@/components/media/ResolvedPrivateMedia";
 import { MomentsTray } from "@/components/moments/MomentsTray";
 import { DiscoverableMomentsFeed } from "@/components/moments/DiscoverableMomentsFeed";
 import { MomentComposer } from "@/components/moments/MomentComposer";
@@ -73,8 +74,18 @@ function HubCard({
     <article className="surface-card lift relative flex flex-col justify-between rounded-3xl p-5 sm:p-6">
       <div>
         <header className="flex items-start gap-3">
-          <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-secondary text-xl font-bold">
-            {cat?.emoji ?? "🏢"}
+          <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-secondary text-xl font-bold">
+            {hub.avatar_url ? (
+              <ResolvedMomentThumb
+                mediaUrl={hub.avatar_url}
+                mediaType="image"
+                alt={hub.name}
+                className="size-full object-cover"
+                fallback={<span>{cat?.emoji ?? "🏢"}</span>}
+              />
+            ) : (
+              (cat?.emoji ?? "🏢")
+            )}
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 flex-wrap">

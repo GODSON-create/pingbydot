@@ -11,7 +11,7 @@ This document describes building, signing, versioning, testing, and distributing
 | Both | App Name | `Ping by DOT` |
 | Both | Package / Bundle ID | `app.lovable.pingbydot` |
 | Both | Custom URL Scheme | `pingbydot://` |
-| Both | Verified Web Host (App / Universal Links) | `https://pingbydot.lovable.app` |
+| Both | Verified Web Hosts (App / Universal Links) | `https://justping.cv`, `https://www.justping.cv`, `https://pingbydot.lovable.app` |
 | Android | `minSdkVersion` / `targetSdkVersion` | `24` (Android 7.0) / `36` |
 | iOS | `IPHONEOS_DEPLOYMENT_TARGET` / Families | `15.0` / `1,2` (iPhone & iPad) |
 
@@ -98,7 +98,7 @@ Provide signing credentials in **either**:
 
 ## 6. External Backend & Store Prerequisites Checklist
 
-1. **Supabase Auth Redirect Allowlist**: Add **`pingbydot://login`** and **`pingbydot://login*`** alongside `https://pingbydot.lovable.app/login` in Supabase **Authentication -> URL Configuration -> Redirect URLs**.
+1. **Supabase Auth Redirect Allowlist**: Add **`pingbydot://login`** and **`pingbydot://login*`** alongside `https://justping.cv/login`, `https://www.justping.cv/login`, and `https://pingbydot.lovable.app/login` in Supabase **Authentication -> URL Configuration -> Redirect URLs**.
 2. **Supabase Google OAuth Provider**: Configure Google Web Client ID + Client Secret in Supabase Auth so `@capacitor/browser` (`Chrome Custom Tabs` / `ASWebAuthenticationSession`) completes Google login and returns cleanly via `pingbydot://login?code=...`.
-3. **App Links / Universal Links Domain Verification**: Host `/.well-known/assetlinks.json` (Android SHA-256 Play App Signing + upload key fingerprints) and `/.well-known/apple-app-site-association` on `https://pingbydot.lovable.app`.
+3. **App Links / Universal Links Domain Verification**: Host `/.well-known/assetlinks.json` (Android SHA-256 Play App Signing + upload key fingerprints) and `/.well-known/apple-app-site-association` on `https://justping.cv` (and `https://www.justping.cv` / `https://pingbydot.lovable.app`).
 4. **Push Delivery Credentials**: Add Firebase `google-services.json` (`app.lovable.pingbydot`) for Android and APNs `.p8` key / Apple Developer certificate for iOS.

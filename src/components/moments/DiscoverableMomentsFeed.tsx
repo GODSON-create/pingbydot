@@ -3,6 +3,7 @@ import { Sparkles, Heart, Repeat2, Play, Flame } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { discoverableMomentsQuery, type Moment, type CreatorMomentsSequence } from "@/lib/moments";
 import { FounderAvatar } from "@/components/ping/Avatar";
+import { ResolvedMomentThumb } from "@/components/media/ResolvedPrivateMedia";
 import { MomentViewerModal } from "./MomentViewerModal";
 import { useAuth } from "@/lib/auth";
 import { Link } from "@tanstack/react-router";
@@ -60,17 +61,19 @@ export function DiscoverableMomentsFeed() {
             onClick={() => setSelectedIdx(idx)}
             className="group relative aspect-[9/14] rounded-2xl overflow-hidden bg-black cursor-pointer shadow-sm hover:scale-[1.02] transition-all"
           >
-            {m.media_type === "video" ? (
-              <video
-                src={m.media_url}
-                className="h-full w-full object-cover opacity-90 group-hover:opacity-100"
-              />
-            ) : (
-              <img
-                src={m.media_url}
-                alt="Discoverable moment"
-                className="h-full w-full object-cover opacity-90 group-hover:opacity-100"
-              />
+            <ResolvedMomentThumb
+              mediaUrl={m.media_url}
+              mediaType={m.media_type}
+              alt={m.caption || "Discoverable moment"}
+              className="h-full w-full object-cover opacity-90 group-hover:opacity-100"
+            />
+            {m.media_type === "video" && (
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute right-2 top-2 z-10 flex size-6 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm"
+              >
+                <Play className="size-3 fill-white" />
+              </span>
             )}
 
             {/* Gradient Overlay */}

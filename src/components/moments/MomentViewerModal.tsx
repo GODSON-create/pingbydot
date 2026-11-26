@@ -24,6 +24,8 @@ import {
   ChevronDown,
   Clapperboard,
   Megaphone,
+  Loader2,
+  RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNowStrict } from "date-fns";
@@ -114,9 +116,12 @@ export function MomentViewerModal({
   const currentMoment: Moment | undefined = currentSequence?.moments[momentIdx];
   const {
     resolvedUrl: resolvedMomentUrl,
+    loading: momentMediaLoading,
     failed: momentMediaFailed,
     handleMediaError: handleMomentMediaError,
+    retry: retryMomentMedia,
   } = useResolvedMediaUrl(currentMoment?.media_url);
+  const [mediaLoaded, setMediaLoaded] = useState(false);
   const isOwner = Boolean(user?.id && currentMoment && user.id === currentMoment.author_id);
   const activeBoost = currentMoment ? activeBoostsMap?.[`moment:${currentMoment.id}`] : undefined;
 
@@ -135,15 +140,16 @@ export function MomentViewerModal({
     }
   }, [open, initialSequenceIndex, initialMomentIndex]);
 
-  // Reset video duration on slide change
+  // Reset video duration and loaded state on slide or resolved URL change
   useEffect(() => {
     setVideoDurationSec(null);
-  }, [currentMoment?.id]);
+    setMediaLoaded(false);
+  }, [currentMoment?.id, resolvedMomentUrl]);
 
-  // Sync HTML5 video play/pause with story pause state
+  // Sync HTML5 video play/pause with story pause state and async signed-URL resolution
   useEffect(() => {
     const vid = videoRef.current;
-    if (!vid) return;
+    if (!vid || !resolvedMomentUrl || momentMediaFailed) return;
     if (
       isPaused ||
       repingModalOpen ||
@@ -164,6 +170,8 @@ export function MomentViewerModal({
     boostDialogOpen,
     clipDialogOpen,
     currentMoment?.id,
+    resolvedMomentUrl,
+    momentMediaFailed,
   ]);
 
   // Record view once per moment per session
@@ -206,12 +214,16 @@ export function MomentViewerModal({
     }
   }, [momentIdx, seqIdx, sequences]);
 
-  // Timer progression for stories
+  // Timer progression for stories (paused while signing, loading, or failed)
   useEffect(() => {
     if (
       !open ||
       !currentMoment ||
       isPaused ||
+      momentMediaLoading ||
+      momentMediaFailed ||
+      !resolvedMomentUrl ||
+      !mediaLoaded ||
       repingModalOpen ||
       highlightDialogOpen ||
       activityDialogOpen ||
@@ -243,6 +255,10 @@ export function MomentViewerModal({
     open,
     currentMoment,
     isPaused,
+    momentMediaLoading,
+    momentMediaFailed,
+    resolvedMomentUrl,
+    mediaLoaded,
     repingModalOpen,
     highlightDialogOpen,
     activityDialogOpen,
@@ -605,35 +621,61 @@ export function MomentViewerModal({
             />
 
             {momentMediaFailed ? (
-              <div className="flex flex-col items-center justify-center gap-2 text-center text-white/80 px-6">
+              <div
+                role="alert"
+                className="relative z-30 flex flex-col items-center justify-center gap-2.5 text-center text-white/85 px-6"
+              >
                 <Lock className="size-7 text-white/60" />
                 <p className="text-sm font-semibold">Moment media unavailable</p>
-                <p className="text-xs text-white/60">
-                  This Moment may have expired or is restricted to an authorized audience.
+                <p className="text-xs text-white/65 max-w-xs">
+                  This Moment may have expired, failed to load, or is restricted to an authorized
+                  audience.
                 </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void retryMomentMedia();
+                  }}
+                  className="mt-1 rounded-full gap-1.5"
+                >
+                  <RotateCcw className="size-3.5" /> Retry loading
+                </Button>
               </div>
-            ) : !resolvedMomentUrl ? (
-              <div className="text-xs text-white/70">Loading Moment…</div>
+            ) : momentMediaLoading || !resolvedMomentUrl ? (
+              <div className="flex flex-col items-center gap-2 text-xs text-white/75" role="status">
+                <Loader2 className="size-6 animate-spin text-white/70" />
+                <span>Loading Moment…</span>
+              </div>
             ) : currentMoment.media_type === "video" ? (
               <video
+                key={currentMoment.id}
                 ref={videoRef}
                 src={resolvedMomentUrl}
                 autoPlay
                 playsInline
+                preload="auto"
                 muted={isMuted}
                 loop={false}
                 onError={() => void handleMomentMediaError()}
+                onLoadedData={() => setMediaLoaded(true)}
+                onCanPlay={() => setMediaLoaded(true)}
                 onLoadedMetadata={(e) => {
                   const d = e.currentTarget.duration;
                   if (Number.isFinite(d) && d > 0) setVideoDurationSec(d);
+                  setMediaLoaded(true);
                 }}
                 onEnded={advanceNext}
                 className="h-full w-full object-contain"
               />
             ) : (
               <img
+                key={currentMoment.id}
                 src={resolvedMomentUrl}
-                alt="Moment content"
+                alt={currentMoment.caption || "Moment content"}
+                onLoad={() => setMediaLoaded(true)}
                 onError={() => void handleMomentMediaError()}
                 className="h-full w-full object-contain"
               />

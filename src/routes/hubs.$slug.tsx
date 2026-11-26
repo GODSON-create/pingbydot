@@ -81,6 +81,7 @@ import { HubShareModal } from "@/components/hubs/HubShareModal";
 import { HubChat } from "@/components/hubs/HubChat";
 import { HubEventsSection } from "@/components/hubs/HubEventsSection";
 import { HubForumsAndBroadcasts } from "@/components/hubs/HubForumsAndBroadcasts";
+import { ResolvedMomentThumb } from "@/components/media/ResolvedPrivateMedia";
 import { cn } from "@/lib/utils";
 import { pageHead } from "@/lib/site";
 
@@ -105,6 +106,7 @@ function MemberRow({
   hubId,
   isStaff,
   isOwner,
+  myRole,
   currentUserId,
   onRefetch,
 }: {
@@ -112,6 +114,7 @@ function MemberRow({
   hubId: string;
   isStaff: boolean;
   isOwner: boolean;
+  myRole?: HubRole | null | undefined;
   currentUserId?: string | undefined;
   onRefetch: () => void | Promise<any>;
 }) {
@@ -256,43 +259,54 @@ function MemberRow({
           </Button>
         )}
 
-        {isStaff && !isSelf && member.role !== "owner" && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="size-8 rounded-full">
-                <MoreVertical className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="rounded-2xl w-44">
-              {isOwner && member.role !== "admin" && (
-                <DropdownMenuItem onSelect={() => manageRole("role", "admin")}>
-                  Promote to Admin
-                </DropdownMenuItem>
-              )}
-              {isOwner && member.role === "admin" && (
-                <DropdownMenuItem onSelect={() => manageRole("role", "member")}>
-                  Demote to Member
-                </DropdownMenuItem>
-              )}
-              {member.role !== "moderator" && (
-                <DropdownMenuItem onSelect={() => manageRole("role", "moderator")}>
-                  Make Moderator
-                </DropdownMenuItem>
-              )}
-              {member.role === "moderator" && (
-                <DropdownMenuItem onSelect={() => manageRole("role", "member")}>
-                  Remove Moderator
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem
-                onSelect={() => manageRole("remove")}
-                className="text-destructive focus:text-destructive"
-              >
-                Remove from Hub
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+        {(() => {
+          if (!isStaff || isSelf || member.role === "owner") return null;
+          const canManageAdminRole = isOwner;
+          const canManageModRole = isOwner || (myRole === "admin" && member.role !== "admin");
+          const canRemoveTarget =
+            isOwner || (member.role !== "admin" && member.role !== "moderator");
+          if (!canManageAdminRole && !canManageModRole && !canRemoveTarget) return null;
+
+          return (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="size-8 rounded-full">
+                  <MoreVertical className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="rounded-2xl w-44">
+                {canManageAdminRole && member.role !== "admin" && (
+                  <DropdownMenuItem onSelect={() => manageRole("role", "admin")}>
+                    Promote to Admin
+                  </DropdownMenuItem>
+                )}
+                {canManageAdminRole && member.role === "admin" && (
+                  <DropdownMenuItem onSelect={() => manageRole("role", "member")}>
+                    Demote to Member
+                  </DropdownMenuItem>
+                )}
+                {canManageModRole && member.role !== "moderator" && (
+                  <DropdownMenuItem onSelect={() => manageRole("role", "moderator")}>
+                    Make Moderator
+                  </DropdownMenuItem>
+                )}
+                {canManageModRole && member.role === "moderator" && (
+                  <DropdownMenuItem onSelect={() => manageRole("role", "member")}>
+                    Remove Moderator
+                  </DropdownMenuItem>
+                )}
+                {canRemoveTarget && (
+                  <DropdownMenuItem
+                    onSelect={() => manageRole("remove")}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    Remove from Hub
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          );
+        })()}
       </div>
     </div>
   );
@@ -790,7 +804,7 @@ function HubDetail() {
   const activeIntent = HUB_INTENTS.some((i) => i.value === intentParam)
     ? (intentParam as HubIntent)
     : null;
-  const validTabs = ["forums", "chat", "feed", "members", "about"] as const;
+  const validTabs = ["forums", "chat", "feed", "events", "members", "about"] as const;
   const activeTab = validTabs.includes(tabParam as (typeof validTabs)[number])
     ? (tabParam as (typeof validTabs)[number])
     : "forums";
@@ -986,8 +1000,18 @@ function HubDetail() {
           <div className="surface-card relative overflow-hidden rounded-[2.5rem] p-6 sm:p-10 border border-border shadow-lift">
             <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-start gap-4 sm:gap-5 min-w-0">
-                <div className="flex size-16 sm:size-20 shrink-0 items-center justify-center rounded-3xl bg-secondary text-3xl sm:text-4xl shadow-soft">
-                  {categoryInfo?.emoji ?? "🏢"}
+                <div className="flex size-16 sm:size-20 shrink-0 items-center justify-center overflow-hidden rounded-3xl bg-secondary text-3xl sm:text-4xl shadow-soft">
+                  {hub.avatar_url ? (
+                    <ResolvedMomentThumb
+                      mediaUrl={hub.avatar_url}
+                      mediaType="image"
+                      alt={hub.name}
+                      className="size-full object-cover"
+                      fallback={<span>{categoryInfo?.emoji ?? "🏢"}</span>}
+                    />
+                  ) : (
+                    (categoryInfo?.emoji ?? "🏢")
+                  )}
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -1378,6 +1402,7 @@ function HubDetail() {
                     hubId={hub.id}
                     isStaff={isStaff}
                     isOwner={isOwner}
+                    myRole={membership?.role}
                     currentUserId={user?.id}
                     onRefetch={() => refetchMembers()}
                   />

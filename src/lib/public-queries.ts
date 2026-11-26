@@ -3,7 +3,14 @@ import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
 import { COMMENT_PAGE_SIZE } from "@/lib/comments";
 import { PLATFORMS, publicConnections, type Platform } from "@/lib/connections";
-import { HUB_PAGE_SIZE, HUB_SELECT } from "@/lib/hubs";
+import { HUB_PAGE_SIZE, HUB_SELECT, HUB_SELECT_LEGACY } from "@/lib/hubs";
+
+function isMissingHubAvatarColumn(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  return (
+    error.code === "42703" || error.code === "PGRST204" || /avatar_url/i.test(error.message ?? "")
+  );
+}
 
 export const PUBLIC_PING_SELECT =
   "id,user_id,category,content,image_url,cta_url,cta_label,created_at,updated_at,author:profiles!pings_user_id_fkey(id,username,display_name,avatar_url),likes(count),replies:comments!comments_ping_id_fkey(count),source_ping_id,source_comment_id,source_comment:comments!pings_source_comment_id_fkey(id,ping_id,content,deleted_at,author:profiles!comments_user_id_fkey(username,display_name))";
@@ -76,17 +83,24 @@ export async function fetchPublicHubs(
   client: PublicSupabaseLike,
   data: { q: string; category: string | null; page: number },
 ) {
-  let query = client
-    .from("hubs")
-    .select(HUB_SELECT)
-    .is("hidden_at", null)
-    .order("member_count", { ascending: false })
-    .order("created_at", { ascending: false })
-    .range(data.page * HUB_PAGE_SIZE, data.page * HUB_PAGE_SIZE + HUB_PAGE_SIZE - 1);
-  if (data.category) query = query.eq("category", data.category);
-  const term = data.q.replace(/[%_,()*]/g, " ").trim();
-  if (term) query = query.or(`name.ilike.%${term}%,tagline.ilike.%${term}%`);
-  const { data: hubs, error } = await query;
+  const buildQuery = (columns: string) => {
+    let query = client
+      .from("hubs")
+      .select(columns)
+      .is("hidden_at", null)
+      .order("member_count", { ascending: false })
+      .order("created_at", { ascending: false })
+      .range(data.page * HUB_PAGE_SIZE, data.page * HUB_PAGE_SIZE + HUB_PAGE_SIZE - 1);
+    if (data.category) query = query.eq("category", data.category);
+    const term = data.q.replace(/[%_,()*]/g, " ").trim();
+    if (term) query = query.or(`name.ilike.%${term}%,tagline.ilike.%${term}%`);
+    return query;
+  };
+
+  let { data: hubs, error } = await buildQuery(HUB_SELECT);
+  if (isMissingHubAvatarColumn(error)) {
+    ({ data: hubs, error } = await buildQuery(HUB_SELECT_LEGACY));
+  }
   if (error) throw new Error("Couldn't load hubs. Please try again.");
   return hubs ?? [];
 }
@@ -95,12 +109,22 @@ export async function fetchPublicHub(
   client: PublicSupabaseLike,
   data: { slug: string; intent: string | null },
 ) {
-  const { data: hub, error } = await client
+  let { data: hub, error } = await client
     .from("hubs")
     .select(HUB_SELECT)
     .eq("slug", data.slug.toLowerCase())
     .is("hidden_at", null)
     .maybeSingle();
+  if (isMissingHubAvatarColumn(error)) {
+    const legacyRes = await client
+      .from("hubs")
+      .select(HUB_SELECT_LEGACY)
+      .eq("slug", data.slug.toLowerCase())
+      .is("hidden_at", null)
+      .maybeSingle();
+    hub = legacyRes.data ? { ...legacyRes.data, avatar_url: null } : null;
+    error = legacyRes.error;
+  }
   if (error) throw new Error("Couldn't load this hub. Please try again.");
   if (!hub) return { hub: null, feed: [] };
   if (hub.access !== "public") return { hub, feed: [] };

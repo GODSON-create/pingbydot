@@ -511,6 +511,7 @@ export type Database = {
       hubs: {
         Row: {
           access: string;
+          avatar_url: string | null;
           category: string;
           created_at: string;
           description: string;
@@ -530,6 +531,7 @@ export type Database = {
         };
         Insert: {
           access?: string;
+          avatar_url?: string | null;
           category?: string;
           created_at?: string;
           description?: string;
@@ -549,6 +551,7 @@ export type Database = {
         };
         Update: {
           access?: string;
+          avatar_url?: string | null;
           category?: string;
           created_at?: string;
           description?: string;
