@@ -89,6 +89,7 @@ import {
 import { useUserPrivacy } from "@/lib/privacy";
 import {
   CHAT_RETENTION_POLICIES,
+  computeEffectiveConversationMaxPolicy,
   formatMessageExpiryBadge,
   formatStorageBytes,
   getRetentionPolicyMeta,
@@ -231,6 +232,16 @@ export function DirectMessageChat({
   const retentionEnabled = Boolean(retentionEntitlement?.feature_enabled);
   const activeRetentionPolicy = (conversation.retention_policy ?? "7d") as ChatRetentionPolicy;
   const activeRetentionMeta = getRetentionPolicyMeta(activeRetentionPolicy);
+  const effectiveConversationMaxPolicy = useMemo<ChatRetentionPolicy>(() => {
+    const ceilings: ChatRetentionPolicy[] = [];
+    if (retentionEntitlement?.max_retention_policy) {
+      ceilings.push(retentionEntitlement.max_retention_policy);
+    }
+    if (conversation.effective_max_retention_policy) {
+      ceilings.push(conversation.effective_max_retention_policy);
+    }
+    return ceilings.length > 0 ? computeEffectiveConversationMaxPolicy(ceilings) : "7d";
+  }, [retentionEntitlement?.max_retention_policy, conversation.effective_max_retention_policy]);
 
   const messageIds = useMemo(() => messages.map((m) => m.id), [messages]);
   const { data: reactionsMap = {} } = useQuery(
@@ -1899,6 +1910,31 @@ export function DirectMessageChat({
                   variant="ghost"
                   className="justify-start rounded-xl gap-2"
                   onClick={() => {
+                    const isCurrentlySaved = savedMessages.has(mobileActionMsg.id);
+                    saveMessageMutation.mutate(
+                      { messageId: mobileActionMsg.id, currentlySaved: isCurrentlySaved },
+                      {
+                        onSuccess: (saved) =>
+                          toast.success(
+                            saved ? "Saved in chat (protected from expiry)" : "Removed from saved",
+                          ),
+                        onError: (err) =>
+                          toast.error(
+                            err instanceof Error ? err.message : "Couldn't update saved status.",
+                          ),
+                      },
+                    );
+                    setMobileActionMsg(null);
+                  }}
+                >
+                  <Bookmark className="size-4" />{" "}
+                  {savedMessages.has(mobileActionMsg.id) ? "Remove from saved" : "Save in chat"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="justify-start rounded-xl gap-2"
+                  onClick={() => {
                     pinMessageMutation.mutate(mobileActionMsg.id, {
                       onSuccess: (res) =>
                         toast.success(res.is_pinned ? "Message pinned" : "Message unpinned"),
@@ -1967,11 +2003,11 @@ export function DirectMessageChat({
           </DialogHeader>
 
           {retentionEntitlement && (
-            <div className="rounded-2xl border border-border/60 bg-secondary/40 px-3 py-2 text-[11px] text-muted-foreground flex items-center justify-between gap-2">
+            <div className="rounded-2xl border border-border/60 bg-secondary/40 px-3 py-2 text-[11px] text-muted-foreground flex flex-wrap items-center justify-between gap-2">
               <span>
-                Your limit:{" "}
+                Chat limit:{" "}
                 <strong className="text-foreground">
-                  {getRetentionPolicyMeta(retentionEntitlement.max_retention_policy).label}
+                  {getRetentionPolicyMeta(effectiveConversationMaxPolicy).label}
                 </strong>
               </span>
               <span className="font-mono">
@@ -1983,12 +2019,13 @@ export function DirectMessageChat({
 
           <div className="space-y-1.5">
             {CHAT_RETENTION_POLICIES.map((opt) => {
-              const allowedByMine = retentionEntitlement
-                ? isPolicyAllowedByMax(opt.value, retentionEntitlement.max_retention_policy)
-                : opt.rank <= 2;
+              const allowedByConversation = isPolicyAllowedByMax(
+                opt.value,
+                effectiveConversationMaxPolicy,
+              );
               const selected = activeRetentionPolicy === opt.value;
               const disabled =
-                !allowedByMine ||
+                !allowedByConversation ||
                 setRetentionMutation.isPending ||
                 (isGroup && myRole !== "owner" && myRole !== "admin");
               return (
@@ -2020,9 +2057,12 @@ export function DirectMessageChat({
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-semibold text-foreground">{opt.label}</span>
-                    {!allowedByMine && (
+                    {!allowedByConversation && (
                       <span className="text-[10px] text-muted-foreground">
-                        {opt.requiredTierLabel}
+                        {retentionEntitlement &&
+                        isPolicyAllowedByMax(opt.value, retentionEntitlement.max_retention_policy)
+                          ? "Limited by participant tier"
+                          : opt.requiredTierLabel}
                       </span>
                     )}
                   </div>

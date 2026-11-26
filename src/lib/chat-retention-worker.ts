@@ -287,6 +287,47 @@ export async function handleChatRetentionCronRequest(
         const txt = await res.text().catch(() => "");
         return { ok: false, error: `Supabase Storage delete failed (HTTP ${res.status}): ${txt}` };
       }
+
+      // M1: Verify Supabase Storage batch DELETE response JSON so silently skipped keys trigger retry
+      const rawBody = await res.text().catch(() => "");
+      if (rawBody.trim()) {
+        try {
+          const parsed = JSON.parse(rawBody) as unknown;
+          if (Array.isArray(parsed)) {
+            const returnedNames = new Set(
+              parsed
+                .map((row) =>
+                  typeof (row as { name?: unknown } | null)?.name === "string"
+                    ? String((row as { name: string }).name)
+                    : null,
+                )
+                .filter((n): n is string => Boolean(n)),
+            );
+            const missingKeys = keys.filter((k) => !returnedNames.has(k));
+            if (missingKeys.length > 0 && parsed.length < keys.length) {
+              // Confirm via HEAD whether missing keys are already absent vs silently skipped
+              for (const missingKey of missingKeys) {
+                const encodedPath = missingKey
+                  .split("/")
+                  .map((seg) => encodeURIComponent(seg))
+                  .join("/");
+                const headRes = await fetchImpl(
+                  `${supabaseUrl}/storage/v1/object/${encodeURIComponent(bucket)}/${encodedPath}`,
+                  { method: "HEAD", headers: rpcHeaders },
+                );
+                if (headRes.ok) {
+                  return {
+                    ok: false,
+                    error: `Supabase Storage DELETE silently skipped existing object: ${bucket}/${missingKey}`,
+                  };
+                }
+              }
+            }
+          }
+        } catch {
+          // Non-JSON 200 body — fall through
+        }
+      }
       return { ok: true };
     },
   };

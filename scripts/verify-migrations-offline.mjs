@@ -255,6 +255,35 @@ for (const marker of required0040Markers) {
 }
 pass(`Stage 2 Phase 1 (0040) P0 security remediation markers verified (${required0040Markers.length}/${required0040Markers.length})`);
 
+// 6. Stage 2 Phase 2 Security, Reliability, R2 & Retention (0041) checks
+const sql0041 = readMig("0041_stage2_phase2_security_reliability_and_retention.sql");
+const required0041Markers = [
+  "ADD COLUMN IF NOT EXISTS claimed_at timestamptz",
+  "CREATE INDEX IF NOT EXISTS private_messages_conv_media_url_idx",
+  "CREATE INDEX IF NOT EXISTS private_messages_24h_unviewed_idx",
+  "CREATE OR REPLACE FUNCTION public.can_read_dm_media_object(",
+  "CREATE OR REPLACE FUNCTION public.can_access_private_moment_object(",
+  'CREATE POLICY "Public hub attachments readable by anon" ON storage.objects',
+  "q.claimed_at < now() - interval '10 minutes'",
+  "'permanently_failed_jobs', v_permanently_failed_count",
+  "WHEN 'institution' THEN 'premium_eligible'",
+  "CREATE OR REPLACE FUNCTION public.recalculate_private_message_save_state(",
+  "CREATE TRIGGER sync_private_message_after_saved_delete",
+  "CREATE TRIGGER purge_saved_messages_on_soft_delete",
+  "CREATE OR REPLACE FUNCTION public.get_conversation_retention_info(",
+  "CREATE TRIGGER guard_moment_audience_bucket_boundary",
+  "CREATE OR REPLACE FUNCTION public.publish_moment_as_clip(",
+];
+
+for (const marker of required0041Markers) {
+  if (!sql0041.includes(marker)) {
+    fail(`0041 missing required Phase 2 remediation marker: ${marker}`);
+  }
+}
+pass(
+  `Stage 2 Phase 2 (0041) security & reliability markers verified (${required0041Markers.length}/${required0041Markers.length})`,
+);
+
 for (const line of checks) {
   console.log(`  PASS: ${line}`);
 }

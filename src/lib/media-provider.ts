@@ -221,9 +221,11 @@ export class CloudflareR2MediaProvider implements MediaStorageProvider {
     const plan = (await presignRes.json()) as {
       mode: "single" | "multipart";
       uploadUrl?: string;
+      requiredHeaders?: Record<string, string>;
       uploadId?: string;
       partUrls?: MultipartPartUrl[];
       completeUrl?: string;
+      abortUrl?: string;
       chunkSizeBytes?: number;
       storedRef: string;
       readUrl: string;
@@ -233,37 +235,53 @@ export class CloudflareR2MediaProvider implements MediaStorageProvider {
     };
 
     if (plan.mode === "multipart" && plan.partUrls?.length) {
-      const completedParts = await uploadPartsDirectly({
-        file: request.file,
-        partUrls: plan.partUrls,
-        ...(plan.chunkSizeBytes ? { chunkSizeBytes: plan.chunkSizeBytes } : {}),
-        ...(request.onProgress ? { onProgress: request.onProgress } : {}),
-        fetchImpl: this.fetchImpl,
-      });
-
-      if (plan.completeUrl) {
-        const xmlBody = [
-          "<CompleteMultipartUpload>",
-          ...completedParts.map(
-            (p) => `<Part><PartNumber>${p.partNumber}</PartNumber><ETag>${p.etag}</ETag></Part>`,
-          ),
-          "</CompleteMultipartUpload>",
-        ].join("");
-        const completeRes = await this.fetchImpl(plan.completeUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/xml" },
-          body: xmlBody,
+      try {
+        const completedParts = await uploadPartsDirectly({
+          file: request.file,
+          partUrls: plan.partUrls,
+          ...(plan.chunkSizeBytes ? { chunkSizeBytes: plan.chunkSizeBytes } : {}),
+          ...(request.onProgress ? { onProgress: request.onProgress } : {}),
+          fetchImpl: this.fetchImpl,
         });
-        if (!completeRes.ok) {
-          throw new Error(`R2 multipart completion failed (HTTP ${completeRes.status}).`);
+
+        if (plan.completeUrl) {
+          const xmlBody = [
+            "<CompleteMultipartUpload>",
+            ...completedParts.map(
+              (p) => `<Part><PartNumber>${p.partNumber}</PartNumber><ETag>${p.etag}</ETag></Part>`,
+            ),
+            "</CompleteMultipartUpload>",
+          ].join("");
+          const completeRes = await this.fetchImpl(plan.completeUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/xml" },
+            body: xmlBody,
+          });
+          const completeXml = await completeRes.text().catch(() => "");
+          // M5: S3/R2 can return HTTP 200 with an XML <Error> body on async multipart completion failure
+          if (!completeRes.ok || /<Error[\s>]/i.test(completeXml)) {
+            const codeMatch = completeXml.match(/<Code>\s*([^<\s]+)\s*<\/Code>/i);
+            const detail = codeMatch?.[1] ? ` (${codeMatch[1]})` : "";
+            throw new Error(
+              `R2 multipart completion failed (HTTP ${completeRes.status}${detail}).`,
+            );
+          }
         }
+      } catch (multipartErr) {
+        // M5: Always issue AbortMultipartUpload so incomplete parts do not accumulate storage billing
+        if (plan.abortUrl) {
+          await this.fetchImpl(plan.abortUrl, { method: "DELETE" }).catch(() => {});
+        }
+        throw multipartErr;
       }
     } else if (plan.uploadUrl) {
+      const putHeaders: Record<string, string> = {
+        "Content-Type": request.contentType || "application/octet-stream",
+        ...(plan.requiredHeaders ?? {}),
+      };
       const putRes = await this.fetchImpl(plan.uploadUrl, {
         method: "PUT",
-        headers: {
-          "Content-Type": request.contentType || "application/octet-stream",
-        },
+        headers: putHeaders,
         body: request.file,
       });
       if (!putRes.ok) {
@@ -318,6 +336,36 @@ export class CloudflareR2MediaProvider implements MediaStorageProvider {
     bucket: StorageBucketId,
     objectKeys: string[],
   ): Promise<{ deleted: string[]; failed: string[] }> {
-    return this.fallbackProvider.deleteObjects(bucket, objectKeys);
+    if (objectKeys.length === 0) return { deleted: [], failed: [] };
+    const token = await this.getAccessToken();
+    if (!token) {
+      return { deleted: [], failed: objectKeys };
+    }
+
+    const res = await this.fetchImpl(`${this.apiBaseUrl}/api/media/delete`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ bucket, objectKeys }),
+    });
+
+    if (res.status === 503 || res.status === 404) {
+      return this.fallbackProvider.deleteObjects(bucket, objectKeys);
+    }
+
+    if (!res.ok) {
+      return { deleted: [], failed: objectKeys };
+    }
+
+    const body = (await res.json().catch(() => null)) as {
+      deleted?: string[];
+      failed?: string[];
+    } | null;
+    return {
+      deleted: Array.isArray(body?.deleted) ? body.deleted : [],
+      failed: Array.isArray(body?.failed) ? body.failed : objectKeys,
+    };
   }
 }

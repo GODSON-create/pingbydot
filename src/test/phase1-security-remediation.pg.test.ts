@@ -158,7 +158,7 @@ describe("Ping Stage 2 — Phase 1 P0 Security Remediation (Real PostgreSQL 17 I
     const journal = JSON.parse(fs.readFileSync(JOURNAL_PATH, "utf8")) as {
       entries: Array<{ idx: number; tag: string }>;
     };
-    expect(journal.entries.length).toBe(41);
+    expect(journal.entries.length).toBeGreaterThanOrEqual(41);
     expect(journal.entries[40]?.tag).toBe("0040_stage2_phase1_security_remediation");
 
     for (const entry of journal.entries) {

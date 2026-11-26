@@ -45,7 +45,10 @@ export function buildUniqueMediaFilename(fileName: string, fallbackExt = "bin"):
     typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
       ? crypto.randomUUID().replace(/-/g, "").slice(0, 12)
       : Math.random().toString(36).slice(2, 14);
-  return `${Date.now()}-${rand}.${ext}`;
+  // H7: Preserve safe `voice-note-` prefix so Hub WebM/Opus voice notes render as `<audio>` instead of `<video>`
+  const baseName = (fileName || "").split(/[\\/]/).pop() ?? "";
+  const prefix = /^voice-note-/i.test(baseName) ? "voice-note-" : "";
+  return `${prefix}${Date.now()}-${rand}.${ext}`;
 }
 
 export async function computeFileSha256(file: Blob): Promise<string | null> {

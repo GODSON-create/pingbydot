@@ -155,7 +155,7 @@ async function runCheckOnly(cfg) {
     console.error(
       "\nACTION REQUIRED: Public bucket 'media' is either missing or configured with public=false on " +
         `'${EXPECTED_PROJECT_REF}'.\n` +
-        "Apply migrations 0036–0039 inside Lovable Cloud SQL/migrations (or run --apply on a direct PostgreSQL cluster with LOVABLE_DB_MIGRATION_URL).",
+        "First run 'node scripts/audit-live-storage-and-schema.mjs' to check C6 legacy private files, then apply migrations 0036–0041.",
     );
     process.exit(1);
   }
@@ -165,20 +165,20 @@ async function runCheckOnly(cfg) {
 
 async function runApply(cfg) {
   const { port } = validateMigrationUrl(cfg.migrationUrl);
-  const sqlFilePath = path.resolve(
-    process.cwd(),
-    "drizzle/migrations/0036_storage_buckets_dm_rls_and_voice_preview.sql",
-  );
-  if (!fs.existsSync(sqlFilePath)) {
-    console.error(`Missing migration SQL file: ${sqlFilePath}`);
+  const readOptionalMig = (fileName) => {
+    const p = path.resolve(process.cwd(), "drizzle/migrations", fileName);
+    return fs.existsSync(p) ? fs.readFileSync(p, "utf8") : null;
+  };
+  const ddl0036 = readOptionalMig("0036_storage_buckets_dm_rls_and_voice_preview.sql");
+  if (!ddl0036) {
+    console.error("Missing migration 0036_storage_buckets_dm_rls_and_voice_preview.sql");
     process.exit(1);
   }
-  const ddl = fs.readFileSync(sqlFilePath, "utf8");
-  const sql0037Path = path.resolve(
-    process.cwd(),
-    "drizzle/migrations/0037_stage1_messaging_privacy_and_security_hardening.sql",
-  );
-  const ddl0037 = fs.existsSync(sql0037Path) ? fs.readFileSync(sql0037Path, "utf8") : null;
+  const ddl0037 = readOptionalMig("0037_stage1_messaging_privacy_and_security_hardening.sql");
+  const ddl0038 = readOptionalMig("0038_stage2_storage_buckets_rls_and_media_assets.sql");
+  const ddl0039 = readOptionalMig("0039_stage2_scalable_chat_retention_system.sql");
+  const ddl0040 = readOptionalMig("0040_stage2_phase1_security_remediation.sql");
+  const ddl0041 = readOptionalMig("0041_stage2_phase2_security_reliability_and_retention.sql");
 
   console.log(
     `[APPLY] Connecting to PING Supabase PostgreSQL (port ${port}, project=${EXPECTED_PROJECT_REF})...`,
@@ -186,9 +186,9 @@ async function runApply(cfg) {
   const sql = postgres(cfg.migrationUrl, { max: 1, prepare: false, onnotice: () => {} });
   try {
     await sql.begin(async (tx) => {
-      await tx.unsafe(ddl);
-      // Guard: if Stage 1 (0037) schema is already present, re-apply 0037 idempotently
-      // so running standalone bucket provisioning never downgrades 0037 messaging/storage RLS.
+      await tx.unsafe(ddl0036);
+      // Guard: if Stage 1 (0037) schema is already present, re-apply 0037..0041 idempotently
+      // so standalone bucket provisioning never downgrades Stage 1/2 security policies.
       if (ddl0037) {
         const [{ has_stage1 }] = await tx`
           SELECT EXISTS (
@@ -202,11 +202,25 @@ async function runApply(cfg) {
           await tx.unsafe(ddl0037);
         }
       }
+
+      if (ddl0038) {
+        const [{ has_media_assets }] = await tx`
+          SELECT to_regclass('public.media_assets') IS NOT NULL AS has_media_assets
+        `;
+        if (has_media_assets) {
+          // H1 idempotency guard when re-running 0038 standalone without modifying 0038
+          await tx`ALTER TABLE public.media_assets DROP CONSTRAINT IF EXISTS media_assets_visibility_check`;
+          await tx.unsafe(ddl0038);
+          if (ddl0039) await tx.unsafe(ddl0039);
+          if (ddl0040) await tx.unsafe(ddl0040);
+          if (ddl0041) await tx.unsafe(ddl0041);
+        }
+      }
     });
     const buckets = await sql`
       SELECT id, public, file_size_limit
       FROM storage.buckets
-      WHERE id IN ('media', 'dm-attachments')
+      WHERE id IN ('media', 'dm-attachments', 'hub-attachments', 'private-moments')
       ORDER BY id ASC
     `;
     const policies = await sql`
@@ -218,12 +232,16 @@ async function runApply(cfg) {
           'DM conversation participants read signed files',
           'DM uploaders manage own files',
           'DM uploaders update own files',
-          'DM uploaders delete own files'
+          'DM uploaders delete own files',
+          'Hub attachments readable by authorized viewers',
+          'Public hub attachments readable by anon',
+          'Active hub members upload own hub attachments',
+          'Authorized audience reads private moments'
         )
       ORDER BY policyname ASC
     `;
     console.log("[APPLY] Verified buckets:", JSON.stringify(buckets));
-    console.log("[APPLY] Verified DM storage policies:", JSON.stringify(policies));
+    console.log("[APPLY] Verified storage policies:", JSON.stringify(policies));
     await sql`NOTIFY pgrst, 'reload schema'`;
   } finally {
     await sql.end({ timeout: 5 });

@@ -5,9 +5,11 @@
  * - NEVER proxies or buffers binary file bytes through server functions.
  * - Strict JSON-only metadata validation (max 16 KB body).
  * - Verifies caller identity via Supabase Bearer JWT and checks live Postgres
- *   authorization (conversation membership, Hub membership/access, restricted
- *   Moment audience, and non-expired Chat Retention state) before minting any
- *   short-lived presigned R2 URL.
+ *   authorization using fail-closed SECURITY DEFINER RPCs (`can_read_dm_media_object`,
+ *   `can_access_private_moment_object`, `is_storage_object_pending_deletion`).
+ * - Cryptographically binds `Content-Type` and `Content-Length` in AWS SigV4 presigned
+ *   headers (C5), requires `R2_PUBLIC_CDN_URL` for public uploads (M6), and returns
+ *   presigned `abortUrl` for multipart upload failure cleanup (M5).
  * - Feature-flagged behind `PING_MEDIA_PROVIDER=cloudflare_r2` + R2 secrets;
  *   returns HTTP 503 when disabled so clients stay on Lovable Cloud Storage.
  */
@@ -19,10 +21,13 @@ import {
   RESUMABLE_UPLOAD_THRESHOLD_BYTES,
 } from "@/lib/resumable-upload";
 import { parseMediaReference } from "@/lib/media-provider";
+import { isSafeDeletionTarget } from "@/lib/chat-retention-worker";
 import {
+  deleteR2ObjectServer,
   getR2EndpointHost,
   presignS3Request,
   readR2ServerConfig,
+  resolveRuntimeEnv,
   type R2ServerConfig,
 } from "@/lib/r2-sigv4";
 
@@ -32,7 +37,7 @@ const MAX_SIGNED_READ_TTL_SEC = 900;
 const presignUploadSchema = z
   .object({
     bucket: z.enum(["media", "dm-attachments", "hub-attachments", "private-moments"]),
-    objectKey: z.string().min(3).max(320),
+    objectKey: z.string().min(3).max(360),
     fileName: z.string().min(1).max(180),
     contentType: z.string().min(1).max(120),
     sizeBytes: z.number().int().positive().max(52_428_800),
@@ -50,6 +55,13 @@ const signReadSchema = z
   })
   .strict();
 
+const deleteMediaSchema = z
+  .object({
+    bucket: z.enum(["media", "dm-attachments", "hub-attachments", "private-moments"]),
+    objectKeys: z.array(z.string().min(3).max(360)).min(1).max(50),
+  })
+  .strict();
+
 export interface MediaServerDeps {
   env?: Record<string, string | undefined>;
   fetchImpl?: typeof fetch;
@@ -57,7 +69,7 @@ export interface MediaServerDeps {
   authorizeAction?: (params: {
     token: string;
     userId: string;
-    action: "upload" | "read";
+    action: "upload" | "read" | "delete";
     bucket: string;
     objectKey: string;
     conversationId?: string;
@@ -128,31 +140,56 @@ async function defaultVerifySupabaseUser(
   return user?.id ? { id: user.id } : null;
 }
 
-async function defaultAuthorizeAgainstSupabase(params: {
+/**
+ * Authorizes a media upload, read, or delete request against live Supabase Postgres.
+ *
+ * Security invariants (C4):
+ * - NEVER fails open on PostgREST/RPC errors or empty rows.
+ * - Uses SECURITY DEFINER `can_read_dm_media_object()` for `dm-attachments` reads so
+ *   expired/deleted/scrubbed rows hidden by SELECT RLS are explicitly denied (403).
+ * - Checks `is_storage_object_pending_deletion()` for private buckets on reads.
+ */
+export async function defaultAuthorizeAgainstSupabase(params: {
   token: string;
   userId: string;
-  action: "upload" | "read";
+  action: "upload" | "read" | "delete";
   bucket: string;
   objectKey: string;
   conversationId?: string;
   hubId?: string;
   momentAudience?: string;
   fetchImpl: typeof fetch;
+  supabaseUrlOverride?: string;
+  supabaseAnonKeyOverride?: string;
 }): Promise<{ allowed: boolean; reason?: string }> {
-  let cfg: { url: string; publishableKey: string };
-  try {
-    cfg = resolvePublicSupabaseConfig();
-  } catch {
+  if (!isSafeDeletionTarget(params.bucket, params.objectKey)) {
+    return { allowed: false, reason: "Invalid or unsafe storage bucket/objectKey scope." };
+  }
+
+  let url = params.supabaseUrlOverride;
+  let publishableKey = params.supabaseAnonKeyOverride;
+  if (!url || !publishableKey) {
+    try {
+      const cfg = resolvePublicSupabaseConfig();
+      url = url || cfg.url;
+      publishableKey = publishableKey || cfg.publishableKey;
+    } catch {
+      return { allowed: false, reason: "Supabase authorization endpoint unavailable." };
+    }
+  }
+  if (!url || !publishableKey) {
     return { allowed: false, reason: "Supabase authorization endpoint unavailable." };
   }
-  if (!cfg.url || !cfg.publishableKey) {
-    return { allowed: false, reason: "Supabase authorization endpoint unavailable." };
-  }
-  const restBase = `${cfg.url.replace(/\/$/, "")}/rest/v1`;
+
+  const restBase = `${url.replace(/\/$/, "")}/rest/v1`;
   const headers = {
     Authorization: `Bearer ${params.token}`,
-    apikey: cfg.publishableKey,
+    apikey: publishableKey,
     Accept: "application/json",
+  };
+  const jsonHeaders = {
+    ...headers,
+    "Content-Type": "application/json",
   };
 
   if (params.bucket === "media") {
@@ -160,54 +197,54 @@ async function defaultAuthorizeAgainstSupabase(params: {
     const firstSeg = params.objectKey.split("/")[0];
     return firstSeg === params.userId
       ? { allowed: true }
-      : { allowed: false, reason: "Public media uploads must target caller's own UID folder." };
+      : { allowed: false, reason: "Public media writes must target caller's own UID folder." };
   }
 
   if (params.bucket === "dm-attachments") {
     const parts = params.objectKey.split("/");
-    const convId = params.conversationId || parts[0];
+    const convId =
+      params.conversationId || (parts[1] === "dm" && parts.length >= 4 ? parts[2] : parts[0]);
     const senderSeg = parts[1];
-    if (!convId || (params.action === "upload" && senderSeg !== params.userId)) {
+    if (!convId) {
       return { allowed: false, reason: "Invalid DM attachment object scope." };
+    }
+    if ((params.action === "upload" || params.action === "delete") && senderSeg !== params.userId) {
+      return {
+        allowed: false,
+        reason: "DM attachment writes must target caller's own UID folder.",
+      };
+    }
+
+    if (params.action === "read") {
+      // C4 FAIL-CLOSED RPC: bypasses private_messages SELECT RLS safely to require an
+      // explicit live non-expired, non-deleted message (or fresh uploader staging asset).
+      const rpcRes = await params.fetchImpl(`${restBase}/rpc/can_read_dm_media_object`, {
+        method: "POST",
+        headers: jsonHeaders,
+        body: JSON.stringify({
+          p_conversation_id: convId,
+          p_object_key: params.objectKey,
+        }),
+      });
+      if (!rpcRes.ok) {
+        return { allowed: false, reason: "DM attachment authorization check failed." };
+      }
+      const allowed = (await rpcRes.json().catch(() => false)) as unknown;
+      return allowed === true
+        ? { allowed: true }
+        : { allowed: false, reason: "Attachment is unavailable, expired, or unauthorized." };
     }
 
     const memRes = await params.fetchImpl(
       `${restBase}/conversation_members?conversation_id=eq.${encodeURIComponent(convId)}&user_id=eq.${encodeURIComponent(params.userId)}&hidden_at=is.null&select=conversation_id`,
       { headers },
     );
-    const memRows = (await memRes.json().catch(() => [])) as Array<{ conversation_id: string }>;
-    if (!memRes.ok || memRows.length === 0) {
-      return { allowed: false, reason: "Caller is not an active conversation participant." };
+    if (!memRes.ok) {
+      return { allowed: false, reason: "Conversation membership verification failed." };
     }
-
-    if (params.action === "read") {
-      // Recheck non-expired & non-deleted status in private_messages on every signed read request
-      const refCandidates = [params.objectKey, `r2://dm-attachments/${params.objectKey}`]
-        .map((v) => `"${v.replace(/"/g, "")}"`)
-        .join(",");
-      const msgRes = await params.fetchImpl(
-        `${restBase}/private_messages?conversation_id=eq.${encodeURIComponent(convId)}&media_url=in.(${encodeURIComponent(refCandidates)})&select=deleted_at,expired_at,expires_at,is_saved_in_chat`,
-        { headers },
-      );
-      if (msgRes.ok) {
-        const msgs = (await msgRes.json().catch(() => [])) as Array<{
-          deleted_at: string | null;
-          expired_at: string | null;
-          expires_at: string | null;
-          is_saved_in_chat: boolean;
-        }>;
-        const blocked = msgs.some(
-          (m) =>
-            Boolean(m.deleted_at) ||
-            Boolean(m.expired_at) ||
-            (m.expires_at !== null &&
-              new Date(m.expires_at).getTime() <= Date.now() &&
-              !m.is_saved_in_chat),
-        );
-        if (blocked) {
-          return { allowed: false, reason: "Attachment has expired or been deleted." };
-        }
-      }
+    const memRows = (await memRes.json().catch(() => [])) as Array<{ conversation_id: string }>;
+    if (!Array.isArray(memRows) || memRows.length === 0) {
+      return { allowed: false, reason: "Caller is not an active conversation participant." };
     }
     return { allowed: true };
   }
@@ -216,24 +253,61 @@ async function defaultAuthorizeAgainstSupabase(params: {
     const parts = params.objectKey.split("/");
     const hubId = params.hubId || parts[0];
     const senderSeg = parts[1];
-    if (!hubId || (params.action === "upload" && senderSeg !== params.userId)) {
+    if (!hubId) {
       return { allowed: false, reason: "Invalid Hub attachment object scope." };
+    }
+    if (params.action === "upload" && senderSeg !== params.userId) {
+      return {
+        allowed: false,
+        reason: "Hub attachment uploads must target caller's own UID folder.",
+      };
+    }
+
+    if (params.action === "read") {
+      const pendRes = await params.fetchImpl(`${restBase}/rpc/is_storage_object_pending_deletion`, {
+        method: "POST",
+        headers: jsonHeaders,
+        body: JSON.stringify({
+          p_bucket: "hub-attachments",
+          p_object_key: params.objectKey,
+        }),
+      });
+      if (!pendRes.ok) {
+        return { allowed: false, reason: "Hub attachment deletion-state verification failed." };
+      }
+      const pending = (await pendRes.json().catch(() => true)) as unknown;
+      if (pending !== false) {
+        return { allowed: false, reason: "Hub attachment has been removed." };
+      }
     }
 
     const memRes = await params.fetchImpl(
       `${restBase}/hub_members?hub_id=eq.${encodeURIComponent(hubId)}&user_id=eq.${encodeURIComponent(params.userId)}&status=eq.active&select=role`,
       { headers },
     );
-    const memRows = (await memRes.json().catch(() => [])) as Array<{ role: string }>;
-    if (memRes.ok && memRows.length > 0) return { allowed: true };
+    if (memRes.ok) {
+      const memRows = (await memRes.json().catch(() => [])) as Array<{ role: string }>;
+      if (Array.isArray(memRows) && memRows.length > 0) {
+        if (params.action === "delete") {
+          const role = memRows[0]?.role ?? "";
+          if (senderSeg === params.userId || ["owner", "admin", "moderator"].includes(role)) {
+            return { allowed: true };
+          }
+          return { allowed: false, reason: "Only the uploader or Hub staff may delete Hub files." };
+        }
+        return { allowed: true };
+      }
+    }
 
     if (params.action === "read") {
       const hubRes = await params.fetchImpl(
         `${restBase}/hubs?id=eq.${encodeURIComponent(hubId)}&hidden_at=is.null&select=access`,
         { headers },
       );
-      const hubs = (await hubRes.json().catch(() => [])) as Array<{ access: string }>;
-      if (hubRes.ok && hubs[0]?.access === "public") return { allowed: true };
+      if (hubRes.ok) {
+        const hubs = (await hubRes.json().catch(() => [])) as Array<{ access: string }>;
+        if (Array.isArray(hubs) && hubs[0]?.access === "public") return { allowed: true };
+      }
     }
     return { allowed: false, reason: "Active Hub membership required." };
   }
@@ -241,17 +315,21 @@ async function defaultAuthorizeAgainstSupabase(params: {
   if (params.bucket === "private-moments") {
     const parts = params.objectKey.split("/");
     const authorSeg = parts[0];
-    if (authorSeg === params.userId) return { allowed: true };
-    if (params.action === "upload") {
-      return { allowed: false, reason: "Restricted Moments must be uploaded under author's UID." };
+    if (params.action === "upload" || params.action === "delete") {
+      return authorSeg === params.userId
+        ? { allowed: true }
+        : { allowed: false, reason: "Restricted Moments must be managed under author's UID." };
     }
     const rpcRes = await params.fetchImpl(`${restBase}/rpc/can_access_private_moment_object`, {
       method: "POST",
-      headers: { ...headers, "Content-Type": "application/json" },
+      headers: jsonHeaders,
       body: JSON.stringify({ p_object_name: params.objectKey }),
     });
-    const allowed = (await rpcRes.json().catch(() => false)) as boolean;
-    return allowed
+    if (!rpcRes.ok) {
+      return { allowed: false, reason: "Moment audience authorization failed." };
+    }
+    const allowed = (await rpcRes.json().catch(() => false)) as unknown;
+    return allowed === true
       ? { allowed: true }
       : { allowed: false, reason: "Caller is not in this Moment's authorized audience." };
   }
@@ -265,7 +343,8 @@ function resolveTargetR2Bucket(config: R2ServerConfig, logicalBucket: string): s
 
 /**
  * `POST /api/media/presign-upload`
- * Issues direct-to-R2 single PUT or Multipart presigned URLs (0 bytes proxied).
+ * Issues direct-to-R2 single PUT or Multipart presigned URLs (0 bytes proxied) with
+ * cryptographically signed `Content-Type` and `Content-Length` headers (C5).
  */
 export async function handlePresignUploadRequest(
   request: Request,
@@ -297,8 +376,16 @@ export async function handlePresignUploadRequest(
   }
 
   const input = validated.data;
-  if (input.objectKey.includes("..") || input.objectKey.startsWith("/")) {
-    return jsonResponse({ error: "Invalid objectKey path." }, 400);
+  if (!isSafeDeletionTarget(input.bucket, input.objectKey)) {
+    return jsonResponse({ error: "Invalid or unsafe objectKey path." }, 400);
+  }
+
+  // M6: Require R2_PUBLIC_CDN_URL when uploading public objects so unrenderable `r2://media/...` is never emitted
+  if (input.visibility === "public" && !r2Cfg.publicCdnUrl) {
+    return jsonResponse(
+      { error: "R2_PUBLIC_CDN_URL must be configured before serving public R2 media." },
+      503,
+    );
   }
 
   const kind = detectMediaKind({ type: input.contentType, name: input.fileName });
@@ -349,11 +436,11 @@ export async function handlePresignUploadRequest(
     input.bucket === "media" ? input.objectKey : `${input.bucket}/${input.objectKey}`;
   const endpointHost = getR2EndpointHost(r2Cfg.accountId);
   const storedRef =
-    input.visibility === "public" && r2Cfg.publicCdnUrl
+    input.visibility === "public"
       ? `${r2Cfg.publicCdnUrl}/${scopedKey}`
       : `r2://${input.bucket}/${input.objectKey}`;
 
-  // Large files (> 6 MB): initiate direct-to-R2 S3 Multipart upload
+  // Large files (> 6 MB): initiate direct-to-R2 S3 Multipart upload with bound Content-Type & per-part Content-Length
   if (input.sizeBytes > RESUMABLE_UPLOAD_THRESHOLD_BYTES) {
     const initiateUrl = await presignS3Request({
       method: "POST",
@@ -365,6 +452,9 @@ export async function handlePresignUploadRequest(
       region: r2Cfg.region,
       expiresInSec: 300,
       queryParams: { uploads: "" },
+      signedHeaders: {
+        "content-type": input.contentType,
+      },
     });
 
     const initRes = await fetchImpl(initiateUrl, {
@@ -388,6 +478,8 @@ export async function handlePresignUploadRequest(
     const partUrls = await Promise.all(
       Array.from({ length: totalParts }, async (_, idx) => {
         const partNumber = idx + 1;
+        const start = idx * MULTIPART_CHUNK_SIZE_BYTES;
+        const partBytes = Math.min(MULTIPART_CHUNK_SIZE_BYTES, input.sizeBytes - start);
         const url = await presignS3Request({
           method: "PUT",
           endpointHost,
@@ -398,8 +490,11 @@ export async function handlePresignUploadRequest(
           region: r2Cfg.region,
           expiresInSec: 900,
           queryParams: { partNumber: String(partNumber), uploadId },
+          signedHeaders: {
+            "content-length": String(partBytes),
+          },
         });
-        return { partNumber, url };
+        return { partNumber, url, expectedBytes: partBytes };
       }),
     );
 
@@ -413,10 +508,25 @@ export async function handlePresignUploadRequest(
       region: r2Cfg.region,
       expiresInSec: 900,
       queryParams: { uploadId },
+      signedHeaders: {
+        "content-type": "application/xml",
+      },
+    });
+
+    const abortUrl = await presignS3Request({
+      method: "DELETE",
+      endpointHost,
+      bucket: r2Bucket,
+      objectKey: scopedKey,
+      accessKeyId: r2Cfg.accessKeyId,
+      secretAccessKey: r2Cfg.secretAccessKey,
+      region: r2Cfg.region,
+      expiresInSec: 900,
+      queryParams: { uploadId },
     });
 
     const readUrl =
-      input.visibility === "public" && r2Cfg.publicCdnUrl
+      input.visibility === "public"
         ? `${r2Cfg.publicCdnUrl}/${scopedKey}`
         : await presignS3Request({
             method: "GET",
@@ -434,6 +544,7 @@ export async function handlePresignUploadRequest(
       uploadId,
       partUrls,
       completeUrl,
+      abortUrl,
       chunkSizeBytes: MULTIPART_CHUNK_SIZE_BYTES,
       r2Bucket,
       objectKey: input.objectKey,
@@ -443,7 +554,7 @@ export async function handlePresignUploadRequest(
     });
   }
 
-  // Standard <= 6 MB: direct-to-R2 single PUT presigned URL
+  // Standard <= 6 MB: direct-to-R2 single PUT presigned URL with cryptographically bound Content-Type + Content-Length (C5)
   const uploadUrl = await presignS3Request({
     method: "PUT",
     endpointHost,
@@ -453,10 +564,14 @@ export async function handlePresignUploadRequest(
     secretAccessKey: r2Cfg.secretAccessKey,
     region: r2Cfg.region,
     expiresInSec: 300,
+    signedHeaders: {
+      "content-type": input.contentType,
+      "content-length": String(input.sizeBytes),
+    },
   });
 
   const readUrl =
-    input.visibility === "public" && r2Cfg.publicCdnUrl
+    input.visibility === "public"
       ? `${r2Cfg.publicCdnUrl}/${scopedKey}`
       : await presignS3Request({
           method: "GET",
@@ -472,6 +587,10 @@ export async function handlePresignUploadRequest(
   return jsonResponse({
     mode: "single",
     uploadUrl,
+    requiredHeaders: {
+      "Content-Type": input.contentType,
+      "Content-Length": String(input.sizeBytes),
+    },
     r2Bucket,
     objectKey: input.objectKey,
     storedRef,
@@ -482,7 +601,8 @@ export async function handlePresignUploadRequest(
 
 /**
  * `POST /api/media/sign-read`
- * Rechecks authorization on every call and issues a short-lived presigned R2 GET URL.
+ * Rechecks fail-closed authorization on every call and issues a short-lived presigned R2 GET URL.
+ * Works whenever R2 credentials are configured (even if write flag was rolled back to Lovable Cloud — H2).
  */
 export async function handleSignReadRequest(
   request: Request,
@@ -490,8 +610,11 @@ export async function handleSignReadRequest(
 ): Promise<Response> {
   const fetchImpl = deps.fetchImpl ?? fetch;
   const r2Cfg = readR2ServerConfig(deps.env);
-  if (!r2Cfg.enabled) {
-    return jsonResponse({ error: "Cloudflare R2 media provider is not enabled." }, 503);
+  const env = resolveRuntimeEnv(deps.env);
+  const hasR2Creds = Boolean(r2Cfg.accountId && r2Cfg.accessKeyId && r2Cfg.secretAccessKey);
+  const allowDualRead = hasR2Creds && (r2Cfg.enabled || env["R2_ALLOW_DUAL_READ"] !== "false");
+  if (!allowDualRead) {
+    return jsonResponse({ error: "Cloudflare R2 media provider is not configured." }, 503);
   }
 
   const token = extractBearerToken(request);
@@ -508,8 +631,13 @@ export async function handleSignReadRequest(
   }
 
   const parsedRef = parseMediaReference(validated.data.ref);
-  if (parsedRef.provider !== "cloudflare_r2" || !parsedRef.bucket || !parsedRef.objectKey) {
-    return jsonResponse({ error: "Expected an r2://bucket/key reference." }, 400);
+  if (
+    parsedRef.provider !== "cloudflare_r2" ||
+    !parsedRef.bucket ||
+    !parsedRef.objectKey ||
+    !isSafeDeletionTarget(parsedRef.bucket, parsedRef.objectKey)
+  ) {
+    return jsonResponse({ error: "Expected a valid r2://bucket/key reference." }, 400);
   }
 
   const user = await (deps.verifyAuthUser
@@ -565,4 +693,83 @@ export async function handleSignReadRequest(
     signedUrl,
     expiresAtMs: Date.now() + ttlSec * 1000,
   });
+}
+
+/**
+ * `POST /api/media/delete` (M6)
+ * Authorizes caller ownership per key before issuing direct server-side R2 DELETE calls.
+ */
+export async function handleDeleteMediaRequest(
+  request: Request,
+  deps: MediaServerDeps = {},
+): Promise<Response> {
+  const fetchImpl = deps.fetchImpl ?? fetch;
+  const r2Cfg = readR2ServerConfig(deps.env);
+  if (!r2Cfg.accountId || !r2Cfg.accessKeyId || !r2Cfg.secretAccessKey) {
+    return jsonResponse({ error: "Cloudflare R2 media provider is not configured." }, 503);
+  }
+
+  const token = extractBearerToken(request);
+  if (!token) {
+    return jsonResponse({ error: "Missing Bearer authorization token." }, 401);
+  }
+
+  const parsedBody = await readStrictJson(request);
+  if (!parsedBody.ok) return parsedBody.response;
+
+  const validated = deleteMediaSchema.safeParse(parsedBody.data);
+  if (!validated.success) {
+    return jsonResponse({ error: "Invalid media delete request." }, 400);
+  }
+
+  const user = await (deps.verifyAuthUser
+    ? deps.verifyAuthUser(token)
+    : defaultVerifySupabaseUser(token, fetchImpl));
+  if (!user) {
+    return jsonResponse({ error: "Invalid or expired authentication token." }, 401);
+  }
+
+  const { bucket, objectKeys } = validated.data;
+  const r2Bucket = resolveTargetR2Bucket(r2Cfg, bucket);
+  const deleted: string[] = [];
+  const failed: string[] = [];
+
+  for (const objectKey of objectKeys) {
+    if (!isSafeDeletionTarget(bucket, objectKey)) {
+      failed.push(objectKey);
+      continue;
+    }
+
+    const authz = await (deps.authorizeAction
+      ? deps.authorizeAction({
+          token,
+          userId: user.id,
+          action: "delete",
+          bucket,
+          objectKey,
+        })
+      : defaultAuthorizeAgainstSupabase({
+          token,
+          userId: user.id,
+          action: "delete",
+          bucket,
+          objectKey,
+          fetchImpl,
+        }));
+
+    if (!authz.allowed) {
+      failed.push(objectKey);
+      continue;
+    }
+
+    const scopedKey = bucket === "media" ? objectKey : `${bucket}/${objectKey}`;
+    const res = await deleteR2ObjectServer(r2Cfg, r2Bucket, scopedKey, fetchImpl);
+    if (res.ok) {
+      deleted.push(objectKey);
+    } else {
+      failed.push(objectKey);
+    }
+  }
+
+  return jsonResponse({ deleted, failed }, failed.length > 0 && deleted.length === 0 ? 403 : 200);
 }

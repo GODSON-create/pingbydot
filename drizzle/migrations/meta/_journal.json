@@ -288,6 +288,13 @@
       "when": 1797300000000,
       "tag": "0040_stage2_phase1_security_remediation",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1797400000000,
+      "tag": "0041_stage2_phase2_security_reliability_and_retention",
+      "breakpoints": true
     }
   ]
 }

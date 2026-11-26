@@ -619,8 +619,65 @@ async function runSchemaVerification(sql, releaseEntries) {
     );
   }
 
+  // Stage 2 (0038–0041) buckets, tables, indexes, and security RPCs verification (M11)
+  const [
+    {
+      hub_bucket_private,
+      pmoment_bucket_private,
+      has_deletion_queue,
+      has_claimed_at,
+      has_feature_flags,
+      has_conv_media_idx,
+      has_24h_unviewed_idx,
+      auth_media_assets_ins,
+      has_can_read_dm_rpc,
+      has_anon_hub_policy,
+    },
+  ] = await sql`
+    SELECT
+      EXISTS (SELECT 1 FROM storage.buckets WHERE id = 'hub-attachments' AND public = false) AS hub_bucket_private,
+      EXISTS (SELECT 1 FROM storage.buckets WHERE id = 'private-moments' AND public = false) AS pmoment_bucket_private,
+      to_regclass('public.media_deletion_queue') IS NOT NULL AS has_deletion_queue,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'media_deletion_queue' AND column_name = 'claimed_at'
+      ) AS has_claimed_at,
+      to_regclass('public.app_feature_flags') IS NOT NULL AS has_feature_flags,
+      EXISTS (
+        SELECT 1 FROM pg_indexes
+        WHERE schemaname = 'public' AND tablename = 'private_messages' AND indexname = 'private_messages_conv_media_url_idx'
+      ) AS has_conv_media_idx,
+      EXISTS (
+        SELECT 1 FROM pg_indexes
+        WHERE schemaname = 'public' AND tablename = 'private_messages' AND indexname = 'private_messages_24h_unviewed_idx'
+      ) AS has_24h_unviewed_idx,
+      has_table_privilege('authenticated', 'public.media_assets', 'INSERT') AS auth_media_assets_ins,
+      to_regprocedure('public.can_read_dm_media_object(uuid,text)') IS NOT NULL AS has_can_read_dm_rpc,
+      EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE schemaname = 'storage' AND tablename = 'objects'
+          AND policyname = 'Public hub attachments readable by anon'
+      ) AS has_anon_hub_policy
+  `;
+  if (
+    !hub_bucket_private ||
+    !pmoment_bucket_private ||
+    !has_deletion_queue ||
+    !has_claimed_at ||
+    !has_feature_flags ||
+    !has_conv_media_idx ||
+    !has_24h_unviewed_idx ||
+    auth_media_assets_ins ||
+    !has_can_read_dm_rpc ||
+    !has_anon_hub_policy
+  ) {
+    throw new Error(
+      `Schema Verification FAILED — Stage 2 (0038–0041) mismatch (hub_bucket=${hub_bucket_private}, pmoment_bucket=${pmoment_bucket_private}, deletion_queue=${has_deletion_queue}, claimed_at=${has_claimed_at}, auth_media_assets_ins=${auth_media_assets_ins}, can_read_dm=${has_can_read_dm_rpc}, anon_hub=${has_anon_hub_policy})`,
+    );
+  }
+
   console.log(
-    `[SCHEMA VERIFIED] Ledger ${minTag}–${maxTag}: ${releaseEntries.length}/${releaseEntries.length} recorded (total rows=${ledgerRows.length}); ${REQUIRED_TABLES_0011_0020.length}/${REQUIRED_TABLES_0011_0020.length} tables with RLS; storage 'media' bucket, hardened indexes & privileges intact.`,
+    `[SCHEMA VERIFIED] Ledger ${minTag}–${maxTag}: ${releaseEntries.length}/${releaseEntries.length} recorded (total rows=${ledgerRows.length}); ${REQUIRED_TABLES_0011_0020.length}/${REQUIRED_TABLES_0011_0020.length} tables with RLS; Stage 1 & Stage 2 (0038–0041) buckets, indexes & security RPCs intact.`,
   );
 }
 

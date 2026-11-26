@@ -28,6 +28,7 @@ import { mutedUsersQuery, useMuteUser, useUnmuteUser } from "@/lib/mutes";
 import { useBlockUser, type PrivateMessage } from "@/lib/messages";
 import type { Profile } from "@/lib/pings";
 import { FounderAvatar } from "@/components/ping/Avatar";
+import { ResolvedMomentThumb } from "@/components/media/ResolvedPrivateMedia";
 import { VerificationBadge } from "@/components/verification/VerificationBadge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -352,11 +353,12 @@ export function CascadingProfilePanel({
                     key={item.id}
                     className="aspect-square rounded-xl bg-secondary/70 border border-border/50 flex items-center justify-center overflow-hidden text-[10px] text-muted-foreground"
                   >
-                    {item.url.startsWith("http") && item.type === "image" ? (
-                      <img src={item.url} alt="" className="size-full object-cover" />
-                    ) : (
-                      <ImageIcon className="size-4 text-primary/70" />
-                    )}
+                    <ResolvedMomentThumb
+                      mediaUrl={item.url}
+                      mediaType={item.type}
+                      alt="Shared conversation media"
+                      className="size-full object-cover"
+                    />
                   </div>
                 ))}
               </div>

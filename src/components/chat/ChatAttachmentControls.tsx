@@ -747,10 +747,13 @@ export function ResolvedChatMedia({
     );
   }
 
+  const isVoiceNotePath =
+    /voice-note-.*\.(webm|ogg|mp4|m4a)(\?|$)/i.test(mediaUrl) ||
+    /voice-note-.*\.(webm|ogg|mp4|m4a)(\?|$)/i.test(resolvedUrl);
+
   const inferredType =
     mediaType ??
-    (/voice-note-.*\.webm(\?|$)/i.test(resolvedUrl) ||
-    /\.(mp3|m4a|ogg|wav|aac)(\?|$)/i.test(resolvedUrl)
+    (isVoiceNotePath || /\.(mp3|m4a|ogg|wav|aac)(\?|$)/i.test(resolvedUrl)
       ? "audio"
       : /\.(mp4|webm|mov)(\?|$)/i.test(resolvedUrl)
         ? "video"

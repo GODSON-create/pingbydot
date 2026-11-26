@@ -81,10 +81,20 @@ export function validateMomentToClipConversion(input: {
       reason: "Only video Moments can be converted into Ping Clips.",
     };
   }
-  if (!input.moment.media_url || !/^https?:\/\//i.test(input.moment.media_url)) {
+  if (
+    !input.moment.media_url ||
+    input.moment.media_url.startsWith("storage://") ||
+    input.moment.media_url.startsWith("r2://") ||
+    !/^https?:\/\//i.test(input.moment.media_url)
+  ) {
     return {
       eligible: false,
-      reason: "Moment video source URL is unavailable.",
+      reason:
+        input.moment.media_url &&
+        (input.moment.media_url.startsWith("storage://") ||
+          input.moment.media_url.startsWith("r2://"))
+          ? "Restricted private-bucket Moments cannot be directly republished as Clips. Upload the video as a Clip directly."
+          : "Moment video source URL is unavailable.",
     };
   }
   if (input.moment.audience === "close_circle" && input.targetVisibility === "public") {

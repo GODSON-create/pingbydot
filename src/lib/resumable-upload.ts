@@ -238,16 +238,21 @@ export async function uploadPartsDirectly(
           body: slice,
         });
         if (res.ok) {
-          etag = (
-            res.headers.get("ETag") ||
-            res.headers.get("etag") ||
-            `"part-${part.partNumber}"`
-          ).replace(/^"|"$/g, "");
+          const rawEtag = res.headers.get("ETag") || res.headers.get("etag");
+          if (!rawEtag || !rawEtag.trim()) {
+            throw new Error(
+              `Multipart part ${part.partNumber} response missing ETag header (verify R2 CORS ExposeHeaders includes ETag).`,
+            );
+          }
+          etag = rawEtag.trim().replace(/^"|"$/g, "");
           break;
         }
         lastErr = new Error(`Multipart part ${part.partNumber} failed (HTTP ${res.status})`);
       } catch (err) {
         lastErr = err;
+        if (err instanceof Error && /missing ETag header/i.test(err.message)) {
+          throw err;
+        }
       }
       if (attempt < maxRetries) {
         await new Promise((resolve) => setTimeout(resolve, 250 * Math.pow(2, attempt - 1)));

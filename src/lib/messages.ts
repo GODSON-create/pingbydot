@@ -59,6 +59,7 @@ export interface Conversation {
   request_responded_at?: string | null;
   retention_policy?: "24h_after_view" | "7d" | "30d" | "1y" | "until_deleted";
   retention_updated_at?: string | null;
+  effective_max_retention_policy?: "24h_after_view" | "7d" | "30d" | "1y" | "until_deleted";
   created_by: string | null;
   last_message_at: string;
   last_message_preview: string | null;
@@ -228,6 +229,7 @@ export function conversationByIdQuery(conversationId?: string, currentUserId?: s
           conversation:conversations!conversation_members_conversation_id_fkey(
             id, type, title, description, avatar_url, only_admins_can_post,
             request_status, requested_by, request_recipient_id, request_responded_at,
+            retention_policy, retention_updated_at,
             created_by, last_message_at, last_message_preview, created_at, updated_at
           )
         `,
@@ -288,6 +290,8 @@ export function conversationByIdQuery(conversationId?: string, currentUserId?: s
         requested_by?: string | null;
         request_recipient_id?: string | null;
         request_responded_at?: string | null;
+        retention_policy?: Conversation["retention_policy"];
+        retention_updated_at?: string | null;
         created_by: string | null;
         last_message_at: string;
         last_message_preview: string | null;
@@ -295,6 +299,23 @@ export function conversationByIdQuery(conversationId?: string, currentUserId?: s
         updated_at: string;
       };
       const otherMemberRow = members?.[0];
+
+      // M7: Fetch conversation effective participant retention ceiling for deep-linked chats
+      let effectiveMaxPolicy: Conversation["effective_max_retention_policy"];
+      try {
+        const rpcFn = (supabase as unknown as { rpc?: unknown }).rpc;
+        if (typeof rpcFn === "function") {
+          const { data: retInfo, error: retErr } = await (supabase as any).rpc(
+            "get_conversation_retention_info",
+            { p_conversation_id: conv.id },
+          );
+          if (!retErr && retInfo?.effective_max_retention_policy) {
+            effectiveMaxPolicy = retInfo.effective_max_retention_policy;
+          }
+        }
+      } catch {
+        // Non-blocking fallback before migration 0041 is deployed
+      }
 
       return {
         id: conv.id,
@@ -307,6 +328,9 @@ export function conversationByIdQuery(conversationId?: string, currentUserId?: s
         requested_by: conv.requested_by ?? null,
         request_recipient_id: conv.request_recipient_id ?? null,
         request_responded_at: conv.request_responded_at ?? null,
+        ...(conv.retention_policy ? { retention_policy: conv.retention_policy } : {}),
+        retention_updated_at: conv.retention_updated_at ?? null,
+        ...(effectiveMaxPolicy ? { effective_max_retention_policy: effectiveMaxPolicy } : {}),
         created_by: conv.created_by,
         last_message_at: conv.last_message_at,
         last_message_preview: conv.last_message_preview,

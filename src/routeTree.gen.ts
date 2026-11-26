@@ -57,6 +57,7 @@ import { Route as AuthenticatedEditIdRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedSpotlightEditorialRouteImport } from './routes/_authenticated/spotlight.editorial'
 import { Route as ApiCronChatRetentionRouteImport } from './routes/api/cron/chat-retention'
 import { Route as ApiGriotAssistRouteImport } from './routes/api/griot/assist'
+import { Route as ApiMediaDeleteRouteImport } from './routes/api/media/delete'
 import { Route as ApiMediaPresignUploadRouteImport } from './routes/api/media/presign-upload'
 import { Route as ApiMediaSignReadRouteImport } from './routes/api/media/sign-read'
 import { Route as ApiV1HealthRouteImport } from './routes/api/v1/health'
@@ -307,6 +308,11 @@ const ApiGriotAssistRoute = ApiGriotAssistRouteImport.update({
   path: '/api/griot/assist',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMediaDeleteRoute = ApiMediaDeleteRouteImport.update({
+  id: '/api/media/delete',
+  path: '/api/media/delete',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiMediaPresignUploadRoute = ApiMediaPresignUploadRouteImport.update({
   id: '/api/media/presign-upload',
   path: '/api/media/presign-upload',
@@ -396,6 +402,7 @@ export interface FileRoutesByFullPath {
   '/spotlight/editorial': typeof AuthenticatedSpotlightEditorialRoute
   '/api/cron/chat-retention': typeof ApiCronChatRetentionRoute
   '/api/griot/assist': typeof ApiGriotAssistRoute
+  '/api/media/delete': typeof ApiMediaDeleteRoute
   '/api/media/presign-upload': typeof ApiMediaPresignUploadRoute
   '/api/media/sign-read': typeof ApiMediaSignReadRoute
   '/api/v1/health': typeof ApiV1HealthRoute
@@ -453,6 +460,7 @@ export interface FileRoutesByTo {
   '/spotlight/editorial': typeof AuthenticatedSpotlightEditorialRoute
   '/api/cron/chat-retention': typeof ApiCronChatRetentionRoute
   '/api/griot/assist': typeof ApiGriotAssistRoute
+  '/api/media/delete': typeof ApiMediaDeleteRoute
   '/api/media/presign-upload': typeof ApiMediaPresignUploadRoute
   '/api/media/sign-read': typeof ApiMediaSignReadRoute
   '/api/v1/health': typeof ApiV1HealthRoute
@@ -512,6 +520,7 @@ export interface FileRoutesById {
   '/_authenticated/spotlight/editorial': typeof AuthenticatedSpotlightEditorialRoute
   '/api/cron/chat-retention': typeof ApiCronChatRetentionRoute
   '/api/griot/assist': typeof ApiGriotAssistRoute
+  '/api/media/delete': typeof ApiMediaDeleteRoute
   '/api/media/presign-upload': typeof ApiMediaPresignUploadRoute
   '/api/media/sign-read': typeof ApiMediaSignReadRoute
   '/api/v1/health': typeof ApiV1HealthRoute
@@ -571,6 +580,7 @@ export interface FileRouteTypes {
     | '/spotlight/editorial'
     | '/api/cron/chat-retention'
     | '/api/griot/assist'
+    | '/api/media/delete'
     | '/api/media/presign-upload'
     | '/api/media/sign-read'
     | '/api/v1/health'
@@ -628,6 +638,7 @@ export interface FileRouteTypes {
     | '/spotlight/editorial'
     | '/api/cron/chat-retention'
     | '/api/griot/assist'
+    | '/api/media/delete'
     | '/api/media/presign-upload'
     | '/api/media/sign-read'
     | '/api/v1/health'
@@ -686,6 +697,7 @@ export interface FileRouteTypes {
     | '/_authenticated/spotlight/editorial'
     | '/api/cron/chat-retention'
     | '/api/griot/assist'
+    | '/api/media/delete'
     | '/api/media/presign-upload'
     | '/api/media/sign-read'
     | '/api/v1/health'
@@ -726,6 +738,7 @@ export interface RootRouteChildren {
   TagSlugRoute: typeof TagSlugRoute
   ApiCronChatRetentionRoute: typeof ApiCronChatRetentionRoute
   ApiGriotAssistRoute: typeof ApiGriotAssistRoute
+  ApiMediaDeleteRoute: typeof ApiMediaDeleteRoute
   ApiMediaPresignUploadRoute: typeof ApiMediaPresignUploadRoute
   ApiMediaSignReadRoute: typeof ApiMediaSignReadRoute
   ApiV1HealthRoute: typeof ApiV1HealthRoute
@@ -1074,6 +1087,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiGriotAssistRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/media/delete': {
+      id: '/api/media/delete'
+      path: '/api/media/delete'
+      fullPath: '/api/media/delete'
+      preLoaderRoute: typeof ApiMediaDeleteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/media/presign-upload': {
       id: '/api/media/presign-upload'
       path: '/api/media/presign-upload'
@@ -1237,6 +1257,7 @@ const rootRouteChildren: RootRouteChildren = {
   TagSlugRoute: TagSlugRoute,
   ApiCronChatRetentionRoute: ApiCronChatRetentionRoute,
   ApiGriotAssistRoute: ApiGriotAssistRoute,
+  ApiMediaDeleteRoute: ApiMediaDeleteRoute,
   ApiMediaPresignUploadRoute: ApiMediaPresignUploadRoute,
   ApiMediaSignReadRoute: ApiMediaSignReadRoute,
   ApiV1HealthRoute: ApiV1HealthRoute,

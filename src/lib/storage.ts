@@ -25,6 +25,7 @@ export const HUB_MEDIA_BUCKET = "hub-attachments";
 export const PRIVATE_MOMENTS_BUCKET = "private-moments";
 
 const LEGACY_PRIVATE_DM_PREFIX = `storage://${DM_MEDIA_BUCKET}/`;
+const R2_PRIVATE_DM_PREFIX = `r2://${DM_MEDIA_BUCKET}/`;
 const PRIVATE_HUB_PREFIX = `storage://${HUB_MEDIA_BUCKET}/`;
 const PRIVATE_MOMENT_PREFIX = `storage://${PRIVATE_MOMENTS_BUCKET}/`;
 
@@ -219,7 +220,9 @@ export function isPrivateDmMediaRef(urlOrPath: string | null | undefined): boole
   if (!urlOrPath) return false;
   const trimmed = urlOrPath.trim();
   if (!trimmed) return false;
-  if (trimmed.startsWith(LEGACY_PRIVATE_DM_PREFIX)) return true;
+  if (trimmed.startsWith(LEGACY_PRIVATE_DM_PREFIX) || trimmed.startsWith(R2_PRIVATE_DM_PREFIX)) {
+    return true;
+  }
   if (trimmed.startsWith(PRIVATE_HUB_PREFIX) || trimmed.startsWith(PRIVATE_MOMENT_PREFIX)) {
     return false;
   }
@@ -244,6 +247,9 @@ export function extractPrivateDmMediaPath(urlOrPath: string): string | null {
   if (!trimmed) return null;
   if (trimmed.startsWith(LEGACY_PRIVATE_DM_PREFIX)) {
     return trimmed.slice(LEGACY_PRIVATE_DM_PREFIX.length) || null;
+  }
+  if (trimmed.startsWith(R2_PRIVATE_DM_PREFIX)) {
+    return trimmed.slice(R2_PRIVATE_DM_PREFIX.length) || null;
   }
   if (/^(https?:|blob:|data:|\/|r2:\/\/|storage:\/\/)/i.test(trimmed)) return null;
   if (!trimmed.includes("/") || trimmed.includes("..")) return null;
@@ -511,6 +517,10 @@ export class LovableCloudMediaProvider implements MediaStorageProvider {
 }
 
 const defaultLovableProvider = new LovableCloudMediaProvider();
+const defaultR2ReadProvider = new CloudflareR2MediaProvider({
+  getAccessToken: getCurrentSessionAccessToken,
+  fallbackProvider: defaultLovableProvider,
+});
 let activeProviderOverride: MediaStorageProvider | null = null;
 
 export function setMediaStorageProviderForTesting(provider: MediaStorageProvider | null): void {
@@ -791,9 +801,14 @@ export async function createAuthorizedMediaReadUrl(
   const parsed = parseMediaReference(urlOrRef);
   if (!parsed.isPrivate) return urlOrRef;
 
-  const provider = getActiveMediaStorageProvider();
+  // H2: Rollback-safe dual-read — always route `r2://` refs through `/api/media/sign-read`
+  // even when active write provider has been rolled back from R2 to Lovable Cloud.
   if (parsed.provider === "cloudflare_r2") {
-    return provider.getReadUrl(urlOrRef, options);
+    const r2Reader =
+      activeProviderOverride?.id === "cloudflare_r2"
+        ? activeProviderOverride
+        : defaultR2ReadProvider;
+    return r2Reader.getReadUrl(urlOrRef, options);
   }
   return defaultLovableProvider.getReadUrl(urlOrRef, options);
 }
@@ -810,8 +825,8 @@ export async function createPrivateDmSignedUrl(
 
 /**
  * Safely forwards a private DM attachment to a different conversation by downloading
- * the authorized source object and uploading a fresh target-scoped copy under
- * `{targetConversationId}/{forwarderUserId}/{unique_filename}`.
+ * the authorized source object (Lovable Cloud or R2) and uploading a fresh target-scoped
+ * copy under `{targetConversationId}/{forwarderUserId}/{unique_filename}`.
  */
 export async function forwardPrivateDmAttachment(
   sourceUrlOrRef: string,
@@ -824,18 +839,33 @@ export async function forwardPrivateDmAttachment(
     throw new Error("Only private DM attachments require conversation-scoped re-upload.");
   }
 
-  const { data: blob, error: downloadError } = await supabase.storage
-    .from(DM_MEDIA_BUCKET)
-    .download(sourcePath);
+  let blob: Blob;
+  const parsedSource = parseMediaReference(sourceUrlOrRef);
+  if (parsedSource.provider === "cloudflare_r2") {
+    const signedSource = await createAuthorizedMediaReadUrl(sourceUrlOrRef, { forceRefresh: true });
+    if (!signedSource) {
+      throw new Error("Could not authorize access to source R2 attachment for forwarding.");
+    }
+    const fetchRes = await fetch(signedSource);
+    if (!fetchRes.ok) {
+      throw new Error(`Could not download source R2 attachment (HTTP ${fetchRes.status}).`);
+    }
+    blob = await fetchRes.blob();
+  } else {
+    const { data: downloaded, error: downloadError } = await supabase.storage
+      .from(DM_MEDIA_BUCKET)
+      .download(sourcePath);
 
-  if (downloadError || !blob) {
-    throw new Error(
-      formatStorageUploadError(
-        downloadError,
-        "Could not access source attachment for forwarding.",
-        DM_MEDIA_BUCKET,
-      ),
-    );
+    if (downloadError || !downloaded) {
+      throw new Error(
+        formatStorageUploadError(
+          downloadError,
+          "Could not access source attachment for forwarding.",
+          DM_MEDIA_BUCKET,
+        ),
+      );
+    }
+    blob = downloaded;
   }
 
   const sourceFileName = sourcePath.split("/").pop() || "forwarded-attachment.bin";

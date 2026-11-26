@@ -547,7 +547,9 @@ describe("Urgent Repair: Device Media Picker, Storage Buckets/RLS & Voice Notes"
     const convId = "11111111-1111-4111-8111-111111111111";
     const senderId = "22222222-2222-4222-8222-222222222222";
     const pathBuilt = buildDmAttachmentPath(convId, senderId, "voice-note-123.webm", "webm");
-    expect(pathBuilt).toMatch(new RegExp(`^${convId}/${senderId}/\\d+-[a-z0-9-]+\\.webm$`, "i"));
+    expect(pathBuilt).toMatch(
+      new RegExp(`^${convId}/${senderId}/voice-note-\\d+-[a-z0-9-]+\\.webm$`, "i"),
+    );
 
     const voiceFile = new File([new Uint8Array([1, 2, 3, 4])], "voice-note-123.webm", {
       type: "audio/webm",
