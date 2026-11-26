@@ -23,8 +23,11 @@ export function SiteFooter() {
           <Link to="/explore" className="text-muted-foreground hover:text-foreground">
             Explore Pings
           </Link>
+          <Link to="/inbox" className="text-muted-foreground hover:text-foreground">
+            Inbox
+          </Link>
           <Link to="/hubs" className="text-muted-foreground hover:text-foreground">
-            Community Hubs
+            Group Hubs
           </Link>
           <Link to="/signals" className="text-muted-foreground hover:text-foreground">
             Official Signals

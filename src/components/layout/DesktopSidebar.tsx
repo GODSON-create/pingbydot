@@ -1,11 +1,9 @@
-import { Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { Link, useLocation } from "@tanstack/react-router";
 import { useState } from "react";
 import {
   Home,
   Compass,
-  Building2,
-  Radio,
-  MessageSquare,
+  Inbox,
   Settings,
   Plus,
   ShieldCheck,
@@ -14,13 +12,10 @@ import {
   Laptop,
   LogOut,
   User,
-  Users,
   MoreVertical,
   BarChart3,
   Coins,
   Crown,
-  Sparkles,
-  ArrowLeft,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -40,7 +35,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useSignOut } from "./SiteHeader";
-import { isCommunityPath } from "./BottomNav";
+import { isInboxPath } from "./BottomNav";
 import { CreateStackModal } from "./CreateStackModal";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -49,13 +44,11 @@ export function DesktopSidebar() {
   const { user, profile, ready } = useAuth();
   const { theme, resolvedTheme, setTheme } = useTheme();
   const location = useLocation();
-  const navigate = useNavigate();
   const signOut = useSignOut();
   const [createOpen, setCreateOpen] = useState(false);
 
-  const { pathname, searchStr } = location;
-  const inCommunity = isCommunityPath(pathname);
-  const isCommunityMoments = pathname === "/hubs" && searchStr.includes("view=moments");
+  const { pathname } = location;
+  const inInbox = isInboxPath(pathname);
 
   const verifyAdmin = useServerFn(checkAdminAccess);
   const admin = useQuery({
@@ -90,7 +83,12 @@ export function DesktopSidebar() {
   }> = [
     { to: "/", label: "Home", icon: Home, exact: true },
     { to: "/explore", label: "Explore", icon: Compass },
-    { to: "/hubs", label: "Community", icon: Users },
+    {
+      to: "/inbox",
+      label: "Inbox",
+      icon: Inbox,
+      ...(unreadMessages > 0 ? { badge: unreadMessages } : {}),
+    },
     ...(user && profile
       ? [
           {
@@ -101,16 +99,6 @@ export function DesktopSidebar() {
           },
         ]
       : [{ to: "/login", label: "Profile", icon: User }]),
-    ...(user
-      ? [
-          {
-            to: "/messages",
-            label: "Direct Messages",
-            icon: MessageSquare,
-            ...(unreadMessages > 0 ? { badge: unreadMessages } : {}),
-          },
-        ]
-      : []),
     ...(admin.data?.isAdmin ? [{ to: "/admin", label: "Administration", icon: ShieldCheck }] : []),
   ];
 
@@ -130,110 +118,52 @@ export function DesktopSidebar() {
             </Link>
           </div>
 
-          {inCommunity ? (
-            /* Contextual 4-Item Community Navigation on Desktop */
-            <nav className="mt-7 space-y-1" aria-label="Community Navigation">
-              <button
-                type="button"
-                onClick={() => navigate({ to: "/" })}
-                className="relative flex w-full items-center justify-center xl:justify-start gap-3.5 h-11 rounded-2xl px-3.5 transition-all text-sm font-semibold text-muted-foreground hover:bg-secondary/80 hover:text-foreground"
-                title="Back to main navigation"
-              >
-                <ArrowLeft className="size-5 shrink-0" />
-                <span className="hidden xl:inline-block truncate">Back</span>
-              </button>
+          <nav className="mt-7 space-y-1" aria-label="Desktop Main Navigation">
+            {primaryItems.map((item) => {
+              const targetPath = item.params ? `/@${item.params.username}` : item.to;
+              const isActive = item.exact
+                ? pathname === targetPath
+                : item.to === "/inbox"
+                  ? inInbox
+                  : pathname === targetPath || pathname.startsWith(`${targetPath}/`);
+              const Icon = item.icon;
 
-              <Link
-                to="/hubs"
-                search={{}}
-                className={cn(
-                  "relative flex items-center justify-center xl:justify-start gap-3.5 h-11 rounded-2xl px-3.5 transition-all text-sm font-semibold",
-                  pathname.startsWith("/hubs") && !isCommunityMoments
-                    ? "bg-primary/15 text-primary border border-primary/25 shadow-soft"
-                    : "text-muted-foreground hover:bg-secondary/80 hover:text-foreground",
-                )}
-                title="Hub"
-              >
-                <Building2 className="size-5 shrink-0" />
-                <span className="hidden xl:inline-block truncate">Hub</span>
-              </Link>
-
-              <Link
-                to="/signals"
-                className={cn(
-                  "relative flex items-center justify-center xl:justify-start gap-3.5 h-11 rounded-2xl px-3.5 transition-all text-sm font-semibold",
-                  pathname.startsWith("/signals")
-                    ? "bg-primary/15 text-primary border border-primary/25 shadow-soft"
-                    : "text-muted-foreground hover:bg-secondary/80 hover:text-foreground",
-                )}
-                title="Signal"
-              >
-                <Radio className="size-5 shrink-0" />
-                <span className="hidden xl:inline-block truncate">Signal</span>
-              </Link>
-
-              <Link
-                to="/hubs"
-                search={{ view: "moments" }}
-                className={cn(
-                  "relative flex items-center justify-center xl:justify-start gap-3.5 h-11 rounded-2xl px-3.5 transition-all text-sm font-semibold",
-                  isCommunityMoments
-                    ? "bg-primary/15 text-primary border border-primary/25 shadow-soft"
-                    : "text-muted-foreground hover:bg-secondary/80 hover:text-foreground",
-                )}
-                title="Community Moments"
-              >
-                <Sparkles className="size-5 shrink-0" />
-                <span className="hidden xl:inline-block truncate">Moment</span>
-              </Link>
-            </nav>
-          ) : (
-            <nav className="mt-7 space-y-1" aria-label="Desktop Main Navigation">
-              {primaryItems.map((item) => {
-                const targetPath = item.params ? `/@${item.params.username}` : item.to;
-                const isActive = item.exact
-                  ? pathname === targetPath
-                  : item.to === "/hubs"
-                    ? inCommunity
-                    : pathname === targetPath || pathname.startsWith(`${targetPath}/`);
-                const Icon = item.icon;
-
-                return (
-                  <Link
-                    key={item.label}
-                    to={item.to as any}
-                    params={item.params as any}
-                    className={cn(
-                      "relative flex items-center justify-center xl:justify-between gap-3 h-11 rounded-2xl px-3.5 transition-all text-sm font-semibold group",
-                      isActive
-                        ? "bg-primary/15 text-primary border border-primary/25 shadow-soft"
-                        : "text-muted-foreground hover:bg-secondary/80 hover:text-foreground",
-                    )}
-                    title={item.label}
-                  >
-                    <span className="flex items-center gap-3.5 min-w-0">
-                      <Icon
-                        className={cn(
-                          "size-5 shrink-0 transition-transform group-hover:scale-105",
-                          isActive
-                            ? "text-primary"
-                            : "text-muted-foreground group-hover:text-foreground",
-                        )}
-                      />
-                      <span className="hidden xl:inline-block truncate">{item.label}</span>
+              return (
+                <Link
+                  key={item.label}
+                  to={item.to as any}
+                  params={item.params as any}
+                  aria-current={isActive ? "page" : undefined}
+                  className={cn(
+                    "relative flex items-center justify-center xl:justify-between gap-3 h-11 rounded-2xl px-3.5 transition-all text-sm font-semibold group",
+                    isActive
+                      ? "bg-primary/15 text-primary border border-primary/25 shadow-soft"
+                      : "text-muted-foreground hover:bg-secondary/80 hover:text-foreground",
+                  )}
+                  title={item.label}
+                >
+                  <span className="flex items-center gap-3.5 min-w-0">
+                    <Icon
+                      className={cn(
+                        "size-5 shrink-0 transition-transform group-hover:scale-105",
+                        isActive
+                          ? "text-primary"
+                          : "text-muted-foreground group-hover:text-foreground",
+                      )}
+                    />
+                    <span className="hidden xl:inline-block truncate">{item.label}</span>
+                  </span>
+                  {item.badge && item.badge > 0 ? (
+                    <span className="xl:static absolute top-1.5 right-1.5 inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold tabular-nums">
+                      {item.badge > 99 ? "99+" : item.badge}
                     </span>
-                    {item.badge && item.badge > 0 ? (
-                      <span className="xl:static absolute top-1.5 right-1.5 inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold tabular-nums">
-                        {item.badge > 99 ? "99+" : item.badge}
-                      </span>
-                    ) : null}
-                  </Link>
-                );
-              })}
-            </nav>
-          )}
+                  ) : null}
+                </Link>
+              );
+            })}
+          </nav>
 
-          {/* 3. PRIMARY ACTION: CREATE STACK */}
+          {/* PRIMARY ACTION: CREATE STACK */}
           <div className="mt-5">
             <Button
               type="button"
@@ -248,7 +178,7 @@ export function DesktopSidebar() {
           </div>
         </div>
 
-        {/* 4. BOTTOM CONTROLS: THEME TOGGLE & USER PROFILE */}
+        {/* BOTTOM CONTROLS: THEME TOGGLE & USER PROFILE */}
         <div className="space-y-2.5 pt-4 border-t border-border/50">
           <button
             type="button"

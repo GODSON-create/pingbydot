@@ -12,6 +12,8 @@ import {
   ArrowLeft,
   Paperclip,
   Flag,
+  Mic,
+  Users,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -27,6 +29,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   type Conversation,
+  type MessageMediaType,
   type PrivateMessage,
   useSendPrivateMessage,
   useMarkConversationRead,
@@ -53,7 +56,7 @@ export function DirectMessageChat({ conversation, messages, onBack }: DirectMess
   const [content, setContent] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
-  const [mediaType, setMediaType] = useState<"image" | "video" | "document" | null>(null);
+  const [mediaType, setMediaType] = useState<MessageMediaType | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const lastMarkedRef = useRef<string>("");
@@ -64,6 +67,7 @@ export function DirectMessageChat({ conversation, messages, onBack }: DirectMess
   const blockMutation = useBlockUser();
   const deleteMessageMutation = useDeletePrivateMessage();
 
+  const isGroup = conversation.type === "group";
   const otherUser = conversation.other_member;
 
   useConversationRealtime(conversation.id);
@@ -124,9 +128,12 @@ export function DirectMessageChat({ conversation, messages, onBack }: DirectMess
     if (!file || !user) return;
 
     const isVideo = file.type.startsWith("video/");
+    const isAudio = file.type.startsWith("audio/");
+    const uploadKind: "image" | "video" | "audio" = isVideo ? "video" : isAudio ? "audio" : "image";
+
     const check = validateMediaUpload(
       { type: file.type, size: file.size, name: file.name },
-      isVideo ? "video" : "image",
+      uploadKind,
     );
     if (!check.valid) {
       toast.error(check.error || "Unsupported attachment");
@@ -136,7 +143,8 @@ export function DirectMessageChat({ conversation, messages, onBack }: DirectMess
 
     try {
       setIsUploading(true);
-      const ext = file.name.split(".").pop()?.toLowerCase() || (isVideo ? "mp4" : "jpg");
+      const fallbackExt = isVideo ? "mp4" : isAudio ? "webm" : "jpg";
+      const ext = file.name.split(".").pop()?.toLowerCase() || fallbackExt;
       const path = `${user.id}/dm/${conversation.id}/${Date.now()}.${ext}`;
 
       const { data, error } = await supabase.storage.from("media").upload(path, file);
@@ -144,7 +152,7 @@ export function DirectMessageChat({ conversation, messages, onBack }: DirectMess
 
       const { data: urlData } = supabase.storage.from("media").getPublicUrl(data.path);
       setMediaUrl(urlData.publicUrl);
-      setMediaType(isVideo ? "video" : "image");
+      setMediaType(uploadKind);
       toast.success("Attachment ready");
     } catch (err: any) {
       toast.error(err.message || "Upload failed");
@@ -187,7 +195,7 @@ export function DirectMessageChat({ conversation, messages, onBack }: DirectMess
             </Button>
           )}
 
-          {otherUser ? (
+          {otherUser && !isGroup ? (
             <Link
               to="/@{$username}"
               params={{ username: otherUser.username }}
@@ -225,10 +233,17 @@ export function DirectMessageChat({ conversation, messages, onBack }: DirectMess
             </Link>
           ) : (
             <div className="flex items-center gap-2.5">
-              <div className="size-9 rounded-full bg-muted flex items-center justify-center font-bold text-sm">
-                ?
+              <div className="size-9 rounded-full bg-primary/15 text-primary flex items-center justify-center font-bold text-sm">
+                {isGroup ? <Users className="size-4" /> : "?"}
               </div>
-              <h3 className="font-display font-bold text-sm">Direct Conversation</h3>
+              <div>
+                <h3 className="font-display font-bold text-sm">
+                  {isGroup ? "Group Conversation" : "Direct Conversation"}
+                </h3>
+                {isGroup && (
+                  <p className="text-[11px] text-muted-foreground">Private group thread</p>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -246,7 +261,7 @@ export function DirectMessageChat({ conversation, messages, onBack }: DirectMess
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52 rounded-2xl p-1.5">
-            {otherUser && (
+            {otherUser && !isGroup && (
               <>
                 <DropdownMenuItem className="rounded-xl cursor-pointer" onClick={handleReportUser}>
                   <Flag className="size-4 mr-2" /> Report @{otherUser.username}
@@ -293,10 +308,13 @@ export function DirectMessageChat({ conversation, messages, onBack }: DirectMess
             <div className="size-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
               <Send className="size-5 text-primary" />
             </div>
-            <p className="font-display font-bold text-foreground text-sm">Private Direct Message</p>
+            <p className="font-display font-bold text-foreground text-sm">
+              {isGroup ? "Private Group Conversation" : "Private Direct Message"}
+            </p>
             <p className="text-xs text-muted-foreground max-w-xs mt-1">
-              Say hello! Only you and {otherUser?.display_name || "this builder"} can read these
-              messages.
+              {isGroup
+                ? "Messages shared here are visible only to members of this conversation."
+                : `Say hello! Only you and ${otherUser?.display_name || "this builder"} can read these messages.`}
             </p>
           </div>
         ) : (
@@ -311,6 +329,11 @@ export function DirectMessageChat({ conversation, messages, onBack }: DirectMess
                   "mr-auto items-start": !isMe,
                 })}
               >
+                {isGroup && !isMe && msg.sender && (
+                  <span className="mb-1 px-1 text-[11px] font-semibold text-muted-foreground">
+                    {msg.sender.display_name || `@${msg.sender.username}`}
+                  </span>
+                )}
                 <div className="flex items-end gap-1.5">
                   {isMe && (
                     <button
@@ -351,6 +374,13 @@ export function DirectMessageChat({ conversation, messages, onBack }: DirectMess
                           />
                         ) : msg.media_type === "video" ? (
                           <video src={msg.media_url} controls className="max-h-60 rounded-lg" />
+                        ) : msg.media_type === "audio" ? (
+                          <audio
+                            src={msg.media_url}
+                            controls
+                            preload="metadata"
+                            className="max-w-full h-10"
+                          />
                         ) : (
                           <a
                             href={msg.media_url}
@@ -411,11 +441,15 @@ export function DirectMessageChat({ conversation, messages, onBack }: DirectMess
                 alt="Preview"
                 className="size-10 rounded-lg object-cover border border-border"
               />
+            ) : mediaType === "audio" ? (
+              <Mic className="size-4 text-primary shrink-0" />
             ) : (
               <ImageIcon className="size-4 text-primary shrink-0" />
             )}
             <span className="text-xs font-semibold text-primary truncate">
-              Attachment ready to send
+              {mediaType === "audio"
+                ? "Voice / audio clip ready to send"
+                : "Attachment ready to send"}
             </span>
           </div>
           <Button
@@ -443,7 +477,7 @@ export function DirectMessageChat({ conversation, messages, onBack }: DirectMess
           type="file"
           ref={fileInputRef}
           className="hidden"
-          accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
+          accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,audio/webm,audio/mp4,audio/mpeg,audio/ogg,audio/wav"
           onChange={handleFileUpload}
         />
 
@@ -454,7 +488,7 @@ export function DirectMessageChat({ conversation, messages, onBack }: DirectMess
           className="size-9 rounded-full shrink-0 text-muted-foreground hover:text-foreground"
           onClick={() => fileInputRef.current?.click()}
           disabled={isUploading}
-          aria-label="Attach file"
+          aria-label="Attach media or audio"
         >
           {isUploading ? (
             <Loader2 className="size-4 animate-spin text-primary" />
@@ -469,7 +503,7 @@ export function DirectMessageChat({ conversation, messages, onBack }: DirectMess
             setContent(e.target.value);
             notifyTyping(e.target.value.trim().length > 0);
           }}
-          placeholder={`Message ${otherUser?.display_name || ""}…`}
+          placeholder={`Message ${otherUser?.display_name || (isGroup ? "group" : "")}…`}
           className="flex-1 rounded-full bg-secondary/50 border-border/60 px-4 py-2 text-sm focus-visible:ring-primary"
           disabled={sendMutation.isPending}
           maxLength={5000}

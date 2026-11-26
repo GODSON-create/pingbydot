@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect, useDeferredValue, useRef } from "react";
-import { MessageSquare, Shield, ExternalLink, Sparkles, Plus, Search } from "lucide-react";
+import { MessageSquare, Shield, ExternalLink, Sparkles, Plus, Search, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 import {
@@ -11,6 +11,7 @@ import {
 } from "@/lib/messages";
 import { supabase } from "@/integrations/supabase/client";
 import type { Profile } from "@/lib/pings";
+import { InboxSectionTabs } from "@/components/inbox/InboxSectionTabs";
 import { ConversationList } from "@/components/messages/ConversationList";
 import { DirectMessageChat } from "@/components/messages/DirectMessageChat";
 import { FounderAvatar } from "@/components/ping/Avatar";
@@ -42,8 +43,8 @@ export const Route = createFileRoute("/messages")({
   }),
   head: () =>
     pageHead({
-      title: "Direct Messages — Ping by DOT",
-      description: "Private, secure one-to-one conversations on Ping by DOT.",
+      title: "Chats — Inbox on Ping by DOT",
+      description: "Private direct and group conversations inside your Ping Inbox.",
       path: "/messages",
     }),
   component: MessagesPage,
@@ -95,7 +96,7 @@ function NewDirectMessageDialog({
             <MessageSquare className="size-5 text-primary" /> New Direct Message
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
-            Search any founder on Ping to start a private 1-to-1 conversation.
+            Search any founder on Ping to start a private conversation.
           </DialogDescription>
         </DialogHeader>
 
@@ -128,22 +129,23 @@ function NewDirectMessageDialog({
                   try {
                     await onStartChat(p.id);
                     onOpenChange(false);
-                    setSearch("");
                   } finally {
                     setStartingId(null);
                   }
                 }}
-                className="w-full flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-secondary/40 hover:bg-secondary p-3 text-left transition-colors"
+                className="flex w-full items-center justify-between gap-3 rounded-2xl border border-border/60 bg-card p-3 text-left transition-colors hover:border-primary/60 hover:bg-secondary/50 disabled:opacity-60"
               >
-                <div className="flex items-center gap-3 min-w-0">
+                <div className="flex items-center gap-2.5 min-w-0">
                   <FounderAvatar name={p.display_name || p.username} src={p.avatar_url} size="sm" />
                   <div className="min-w-0">
-                    <p className="text-sm font-bold truncate">{p.display_name || p.username}</p>
-                    <p className="text-xs text-muted-foreground truncate">@{p.username}</p>
+                    <p className="font-semibold text-xs text-foreground truncate">
+                      {p.display_name || p.username}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground truncate">@{p.username}</p>
                   </div>
                 </div>
-                <span className="rounded-full bg-primary/15 text-primary px-2.5 py-1 text-xs font-semibold shrink-0">
-                  {startingId === p.id ? "Opening…" : "Chat"}
+                <span className="rounded-full bg-primary/15 px-3 py-1 text-[11px] font-bold text-primary shrink-0">
+                  {startingId === p.id ? "Opening…" : "Message"}
                 </span>
               </button>
             ))
@@ -154,92 +156,127 @@ function NewDirectMessageDialog({
   );
 }
 
-function MessagesPage() {
+export interface ChatsSectionWorkspaceProps {
+  baseRoute: "/inbox" | "/messages";
+  conversationId?: string | undefined;
+  userIdParam?: string | undefined;
+}
+
+export function ChatsSectionWorkspace({
+  baseRoute,
+  conversationId,
+  userIdParam,
+}: ChatsSectionWorkspaceProps) {
   const { user, ready } = useAuth();
   const navigate = useNavigate();
-  const search = Route.useSearch();
-  const [newChatOpen, setNewChatOpen] = useState(false);
-  const handledUserParamRef = useRef<string | null>(null);
-
-  const { mutateAsync: getOrCreateConversation } = useGetOrCreateDirectConversation();
 
   const [activeConversationId, setActiveConversationId] = useState<string | undefined>(
-    search.conversationId,
+    conversationId,
   );
-
-  // If userId query param is provided, open/create conversation with that user once
-  useEffect(() => {
-    if (
-      search.userId &&
-      user &&
-      search.userId !== user.id &&
-      handledUserParamRef.current !== search.userId
-    ) {
-      handledUserParamRef.current = search.userId;
-      getOrCreateConversation(search.userId)
-        .then((convId) => {
-          if (convId) {
-            setActiveConversationId(convId);
-            navigate({ to: "/messages", search: { conversationId: convId } });
-          }
-        })
-        .catch((err) => {
-          toast.error(err instanceof Error ? err.message : "Could not open conversation.");
-        });
-    }
-  }, [search.userId, user, getOrCreateConversation, navigate]);
-
-  // Auth gate
-  useEffect(() => {
-    if (ready && !user) {
-      navigate({ to: "/login", search: { next: "/messages" } });
-    }
-  }, [ready, user, navigate]);
-
-  // Sync search param with state
-  useEffect(() => {
-    if (search.conversationId) {
-      setActiveConversationId(search.conversationId);
-    }
-  }, [search.conversationId]);
+  const [newChatOpen, setNewChatOpen] = useState(false);
 
   const { data: conversations = [] } = useQuery(userConversationsQuery(user?.id));
-
-  // If user opens page with no selected conversation on desktop, default to the first one
-  useEffect(() => {
-    if (
-      !activeConversationId &&
-      conversations.length > 0 &&
-      conversations[0] &&
-      typeof window !== "undefined" &&
-      window.innerWidth >= 1024
-    ) {
-      setActiveConversationId(conversations[0].id);
-    }
-  }, [activeConversationId, conversations]);
-
-  const activeConversation = conversations.find((c) => c.id === activeConversationId);
-
   const { data: messages = [] } = useQuery(
     conversationMessagesQuery(activeConversationId, user?.id),
   );
+  const getOrCreateConv = useGetOrCreateDirectConversation();
+  const handledTargetUserRef = useRef<string | null>(null);
 
+  const navigateToConversation = (nextConvId?: string, replace = false) => {
+    if (baseRoute === "/inbox") {
+      navigate({
+        to: "/inbox",
+        search: nextConvId ? { section: "chats", conversationId: nextConvId } : {},
+        replace,
+      });
+    } else {
+      navigate({
+        to: "/messages",
+        search: nextConvId ? { conversationId: nextConvId } : {},
+        replace,
+      });
+    }
+  };
+
+  // Handle incoming ?userId=<uuid> query parameter to auto-start or open 1-to-1 chat
+  useEffect(() => {
+    if (!userIdParam || !user || !ready) return;
+    if (userIdParam === user.id) return;
+    if (handledTargetUserRef.current === userIdParam) return;
+    handledTargetUserRef.current = userIdParam;
+
+    getOrCreateConv
+      .mutateAsync(userIdParam)
+      .then((convId) => {
+        setActiveConversationId(convId);
+        navigateToConversation(convId, true);
+      })
+      .catch((err: any) => {
+        handledTargetUserRef.current = null;
+        toast.error(err.message || "Could not start conversation");
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userIdParam, user, ready]);
+
+  // Sync URL query param
+  useEffect(() => {
+    setActiveConversationId(conversationId);
+  }, [conversationId]);
+
+  if (!ready) {
+    return (
+      <div className="flex h-[55vh] items-center justify-center text-sm text-muted-foreground">
+        Loading conversations…
+      </div>
+    );
+  }
+
+  if (!user) {
+    const nextPath = baseRoute === "/inbox" ? "/inbox" : "/messages";
+    return (
+      <div className="surface-card mx-auto max-w-lg rounded-3xl p-8 sm:p-10 text-center border border-border/70">
+        <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+          <Lock className="size-6" />
+        </div>
+        <h2 className="mt-4 font-display text-2xl font-extrabold tracking-tight">
+          Sign in to open your Chats
+        </h2>
+        <p className="mt-2 text-xs sm:text-sm text-muted-foreground leading-relaxed">
+          Access your private direct messages, group conversations, attachments, and read receipts —
+          or switch to Hubs and Signals above to browse public groups and institutional channels.
+        </p>
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+          <Button asChild variant="hero" className="rounded-full px-6">
+            <Link to="/login" search={{ next: nextPath }}>
+              Sign in to Chats
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="rounded-full px-5">
+            <Link to="/signup">Create account</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const activeConversation = conversations.find((c) => c.id === activeConversationId);
   const otherUser = activeConversation?.other_member;
 
   const handleStartDirectChat = async (targetUserId: string) => {
     try {
-      const convId = await getOrCreateConversation(targetUserId);
+      const convId = await getOrCreateConv.mutateAsync(targetUserId);
       setActiveConversationId(convId);
-      navigate({ to: "/messages", search: { conversationId: convId } });
+      navigateToConversation(convId);
     } catch (err: any) {
-      toast.error(err?.message || "Failed to start conversation");
+      toast.error(err?.message || "Could not start conversation.");
+      throw err;
     }
   };
 
   return (
     <>
-      <div className="w-full max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 py-3 sm:py-4 h-[calc(100dvh-9.5rem)] md:h-[calc(100dvh-5.5rem)] lg:h-[calc(100dvh-1.5rem)] flex gap-4">
-        {/* 1. LEFT CONVERSATION LIST (Hidden on mobile if a chat is active) */}
+      <div className="w-full h-[calc(100vh-13.5rem)] lg:h-[calc(100vh-8.5rem)] flex gap-4">
+        {/* 1. CONVERSATIONS LIST (Hidden on mobile if a chat is active) */}
         <div
           className={cn(
             "w-full lg:w-80 xl:w-96 shrink-0 h-full",
@@ -252,10 +289,7 @@ function MessagesPage() {
             onNewChat={() => setNewChatOpen(true)}
             onSelect={(c) => {
               setActiveConversationId(c.id);
-              navigate({
-                to: "/messages",
-                search: { conversationId: c.id },
-              });
+              navigateToConversation(c.id);
             }}
           />
         </div>
@@ -273,7 +307,7 @@ function MessagesPage() {
               messages={messages}
               onBack={() => {
                 setActiveConversationId(undefined);
-                navigate({ to: "/messages", search: {} });
+                navigateToConversation(undefined);
               }}
             />
           ) : (
@@ -285,7 +319,7 @@ function MessagesPage() {
                 Your Private Conversations
               </h3>
               <p className="text-xs text-muted-foreground max-w-sm mb-6">
-                Select a conversation from the left or start a new 1-to-1 chat with any founder on
+                Select a conversation from the left or start a new private chat with any founder on
                 Ping.
               </p>
               <div className="flex flex-wrap items-center justify-center gap-2.5">
@@ -311,7 +345,7 @@ function MessagesPage() {
         </div>
 
         {/* 3. RIGHT CONTEXTUAL USER DETAILS (Desktop only: >= 1280px) */}
-        {activeConversation && otherUser && (
+        {activeConversation && otherUser && activeConversation.type !== "group" && (
           <div className="hidden xl:flex flex-col w-72 shrink-0 h-full bg-card/40 rounded-3xl border border-border/70 p-5 overflow-y-auto">
             <div className="flex flex-col items-center text-center pb-5 border-b border-border/50">
               <FounderAvatar
@@ -359,9 +393,24 @@ function MessagesPage() {
       <NewDirectMessageDialog
         open={newChatOpen}
         onOpenChange={setNewChatOpen}
-        currentUserId={user?.id}
+        currentUserId={user.id}
         onStartChat={handleStartDirectChat}
       />
     </>
+  );
+}
+
+function MessagesPage() {
+  const { conversationId, userId } = Route.useSearch();
+
+  return (
+    <div className="mx-auto max-w-6xl w-full px-3 sm:px-5 pt-4 pb-20 lg:pb-4 space-y-4">
+      <InboxSectionTabs activeSection="chats" />
+      <ChatsSectionWorkspace
+        baseRoute="/messages"
+        conversationId={conversationId}
+        userIdParam={userId}
+      />
+    </div>
   );
 }

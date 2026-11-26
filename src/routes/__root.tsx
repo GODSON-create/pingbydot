@@ -176,7 +176,12 @@ function RootComponent() {
               >
                 <Outlet />
               </main>
-              {!pathname.startsWith("/messages") && (
+              {!(
+                pathname.startsWith("/messages") ||
+                (pathname.startsWith("/inbox") &&
+                  !location.href.includes("section=hubs") &&
+                  !location.href.includes("section=signals"))
+              ) && (
                 <div className="pb-24 lg:pb-0">
                   <SiteFooter />
                 </div>
@@ -217,9 +222,9 @@ function RootComponent() {
                   </kbd>
                 </div>
                 <div className="flex items-center justify-between py-1 border-b border-border/40">
-                  <span className="text-muted-foreground">Go to Messages</span>
+                  <span className="text-muted-foreground">Go to Inbox</span>
                   <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
-                    G M
+                    G I
                   </kbd>
                 </div>
                 <div className="flex items-center justify-between py-1 border-b border-border/40">

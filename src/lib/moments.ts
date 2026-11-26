@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { resolveStorageMediaUrls } from "@/lib/storage-url";
 import type { Profile } from "@/lib/pings";
 
 export type MomentAudience = "public" | "followers" | "hub" | "close_circle";
@@ -144,6 +145,9 @@ export function activeMomentsTrayQuery(currentUserId?: string) {
         }
       }
 
+      // Resolve viewer-scoped signed URLs for private storage buckets without mutating DB references
+      const resolvedUrls = await resolveStorageMediaUrls(rawMoments.map((m) => m.media_url));
+
       // Group moments by creator
       const creatorMap = new Map<string, { author: Profile; moments: Moment[] }>();
 
@@ -152,6 +156,7 @@ export function activeMomentsTrayQuery(currentUserId?: string) {
         const authorProfile = m.author as unknown as Profile;
         const parsedMoment: Moment = {
           ...m,
+          media_url: resolvedUrls.get(m.media_url) ?? m.media_url,
           media_type: (m.media_type as MomentMediaType) || "image",
           audience: (m.audience as MomentAudience) || "public",
           stickers: (m.stickers as unknown as MomentSticker[]) || [],
@@ -264,8 +269,11 @@ export function userActiveMomentsQuery(userId: string, currentUserId?: string) {
         if (likes.data) likedMomentIds = new Set(likes.data.map((l) => l.moment_id));
       }
 
+      const resolvedUrls = await resolveStorageMediaUrls(data.map((m) => m.media_url));
+
       return data.map((m) => ({
         ...m,
+        media_url: resolvedUrls.get(m.media_url) ?? m.media_url,
         media_type: (m.media_type as MomentMediaType) || "image",
         audience: (m.audience as MomentAudience) || "public",
         stickers: (m.stickers as unknown as MomentSticker[]) || [],
@@ -319,8 +327,11 @@ export function userHighlightsQuery(userId: string) {
         }
       }
 
+      const resolvedCovers = await resolveStorageMediaUrls(highlights.map((h) => h.cover_url));
+
       return highlights.map((h) => ({
         ...h,
+        cover_url: h.cover_url ? (resolvedCovers.get(h.cover_url) ?? h.cover_url) : null,
         moments_count: countMap.get(h.id) || 0,
       })) as Highlight[];
     },
@@ -355,20 +366,24 @@ export function highlightMomentsQuery(highlightId: string, currentUserId?: strin
       if (error) throw error;
       if (!items) return [];
 
-      return items
-        .filter(
-          (it) => it.moment && !(it.moment as unknown as { deleted_at: string | null }).deleted_at,
-        )
-        .map((it) => {
-          const m = it.moment as unknown as Moment;
-          return {
-            ...m,
-            media_type: (m.media_type as MomentMediaType) || "image",
-            audience: (m.audience as MomentAudience) || "public",
-            stickers: (m.stickers as unknown as MomentSticker[]) || [],
-            mentions: (m.mentions as unknown as string[]) || [],
-          };
-        });
+      const activeItems = items.filter(
+        (it) => it.moment && !(it.moment as unknown as { deleted_at: string | null }).deleted_at,
+      );
+      const resolvedUrls = await resolveStorageMediaUrls(
+        activeItems.map((it) => (it.moment as unknown as Moment).media_url),
+      );
+
+      return activeItems.map((it) => {
+        const m = it.moment as unknown as Moment;
+        return {
+          ...m,
+          media_url: resolvedUrls.get(m.media_url) ?? m.media_url,
+          media_type: (m.media_type as MomentMediaType) || "image",
+          audience: (m.audience as MomentAudience) || "public",
+          stickers: (m.stickers as unknown as MomentSticker[]) || [],
+          mentions: (m.mentions as unknown as string[]) || [],
+        };
+      });
     },
   };
 }
@@ -422,8 +437,11 @@ export function discoverableMomentsQuery(currentUserId?: string) {
         }
       }
 
+      const resolvedUrls = await resolveStorageMediaUrls(data.map((m) => m.media_url));
+
       return data.map((m) => ({
         ...m,
+        media_url: resolvedUrls.get(m.media_url) ?? m.media_url,
         media_type: (m.media_type as MomentMediaType) || "image",
         audience: (m.audience as MomentAudience) || "public",
         stickers: (m.stickers as unknown as MomentSticker[]) || [],

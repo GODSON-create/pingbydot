@@ -22,6 +22,9 @@ import {
   Plus,
   Clock,
   PinOff,
+  ArrowLeft,
+  Bell,
+  BellOff,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -78,7 +81,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { HubShareModal } from "@/components/hubs/HubShareModal";
 import { HubChat } from "@/components/hubs/HubChat";
-import { HubForumsAndBroadcasts } from "@/components/hubs/HubForumsAndBroadcasts";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { pageHead } from "@/lib/site";
 
@@ -782,10 +785,29 @@ function HubDetail() {
   const activeIntent = HUB_INTENTS.some((i) => i.value === intentParam)
     ? (intentParam as HubIntent)
     : null;
-  const validTabs = ["forums", "chat", "feed", "members", "about"] as const;
+  const validTabs = ["chat", "feed", "members", "about"] as const;
   const activeTab = validTabs.includes(tabParam as (typeof validTabs)[number])
     ? (tabParam as (typeof validTabs)[number])
-    : "forums";
+    : "chat";
+  const hubNotifStorageKey = `ping_hub_notifications_${slug}_${user?.id ?? "guest"}`;
+  const [hubNotificationsEnabled, setHubNotificationsEnabled] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    try {
+      return window.localStorage.getItem(hubNotifStorageKey) !== "muted";
+    } catch {
+      return true;
+    }
+  });
+
+  const handleToggleHubNotifications = (enabled: boolean) => {
+    setHubNotificationsEnabled(enabled);
+    try {
+      window.localStorage.setItem(hubNotifStorageKey, enabled ? "active" : "muted");
+    } catch {
+      // Ignore storage quota errors
+    }
+    toast.success(enabled ? "Hub group notifications enabled." : "Hub group notifications muted.");
+  };
 
   // Hub data query
   const {
@@ -899,7 +921,17 @@ function HubDetail() {
     <div className="pb-24">
       {/* Cover Banner */}
       <section className="bg-hero">
-        <div className="mx-auto max-w-5xl px-5 pb-8 pt-10">
+        <div className="mx-auto max-w-5xl px-5 pb-8 pt-6">
+          <div className="mb-4">
+            <Link
+              to="/inbox"
+              search={{ section: "hubs" }}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft className="size-3.5" />
+              Back to Hubs
+            </Link>
+          </div>
           {/* Invitation Acceptance Banner */}
           {inviteTokenParam && (
             <div className="mb-6 rounded-3xl border border-primary/30 bg-primary/10 p-5 sm:p-6 shadow-sm">
@@ -1080,7 +1112,7 @@ function HubDetail() {
         </div>
       </section>
 
-      {/* Tabs Layout */}
+      {/* Tabs Layout — Group Communication Only */}
       <section className="mx-auto max-w-5xl px-5 mt-6">
         <Tabs
           value={activeTab}
@@ -1090,36 +1122,28 @@ function HubDetail() {
               params: { slug: hub.slug },
               search: (prev) => ({
                 ...prev,
-                tab: v === "forums" ? undefined : v,
+                tab: v === "chat" ? undefined : v,
               }),
               replace: true,
             })
           }
         >
           <TabsList className="h-11 rounded-full p-1 bg-secondary/80 overflow-x-auto max-w-full">
-            <TabsTrigger value="forums" className="rounded-full px-5 text-sm font-semibold">
-              Forums & Broadcasts
-            </TabsTrigger>
             <TabsTrigger value="chat" className="rounded-full px-5 text-sm font-semibold">
-              Group Room
+              Group Chat
             </TabsTrigger>
             <TabsTrigger value="feed" className="rounded-full px-5 text-sm font-semibold">
-              Feed ({hub.ping_count ?? 0})
+              Shared Pings ({hub.ping_count ?? 0})
             </TabsTrigger>
             <TabsTrigger value="members" className="rounded-full px-5 text-sm font-semibold">
               Members ({(hub.member_count ?? 0).toLocaleString()})
             </TabsTrigger>
             <TabsTrigger value="about" className="rounded-full px-5 text-sm font-semibold">
-              About & Governance
+              Hub Info
             </TabsTrigger>
           </TabsList>
 
-          {/* TAB: FORUMS & INSTITUTIONAL BROADCASTS */}
-          <TabsContent value="forums" className="mt-6">
-            <HubForumsAndBroadcasts hub={hub} isMember={isMember} isStaff={isStaff} />
-          </TabsContent>
-
-          {/* TAB 0: LIVE CHAT */}
+          {/* TAB 1: GROUP CHAT */}
           <TabsContent value="chat" className="mt-6">
             <HubChat hubId={hub.id} isMember={isMember} isPrivate={isPrivate} isStaff={isStaff} />
           </TabsContent>
@@ -1343,8 +1367,41 @@ function HubDetail() {
             </div>
           </TabsContent>
 
-          {/* TAB 3: ABOUT & RESOURCES */}
+          {/* TAB 4: HUB INFO, MEMBERSHIP & NOTIFICATIONS */}
           <TabsContent value="about" className="mt-6 space-y-6">
+            {user && isMember && (
+              <div className="surface-card rounded-3xl p-6 sm:p-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+                    {hubNotificationsEnabled ? (
+                      <Bell className="size-5" />
+                    ) : (
+                      <BellOff className="size-5" />
+                    )}
+                  </div>
+                  <div>
+                    <h2 className="font-display text-base font-bold">
+                      Group Notifications & Membership
+                    </h2>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      You are an active <strong className="capitalize">{membership?.role}</strong>{" "}
+                      in {hub.name}. Control real-time message alerts for this group.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-semibold text-muted-foreground">
+                    {hubNotificationsEnabled ? "Alerts On" : "Muted"}
+                  </span>
+                  <Switch
+                    checked={hubNotificationsEnabled}
+                    onCheckedChange={handleToggleHubNotifications}
+                    aria-label="Toggle Hub notifications"
+                  />
+                </div>
+              </div>
+            )}
+
             {hub.description && (
               <div className="surface-card rounded-3xl p-6 sm:p-8">
                 <h2 className="font-display text-xl font-bold">About this Hub</h2>

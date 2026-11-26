@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, MessageSquare, Plus } from "lucide-react";
+import { Search, MessageSquare, Plus, Users } from "lucide-react";
 import { FounderAvatar } from "@/components/ping/Avatar";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -25,10 +25,13 @@ export function ConversationList({
 
   const filtered = conversations.filter((c) => {
     if (!query.trim()) return true;
-    const name = c.other_member?.display_name?.toLowerCase() || "";
+    const isGroup = c.type === "group";
+    const name =
+      c.other_member?.display_name?.toLowerCase() || (isGroup ? "group conversation" : "");
     const username = c.other_member?.username?.toLowerCase() || "";
+    const preview = c.last_message_preview?.toLowerCase() || "";
     const q = query.toLowerCase();
-    return name.includes(q) || username.includes(q);
+    return name.includes(q) || username.includes(q) || preview.includes(q);
   });
 
   return (
@@ -37,7 +40,7 @@ export function ConversationList({
       <div className="p-4 border-b border-border/60 space-y-3 bg-card/80 backdrop-blur-md">
         <div className="flex items-center justify-between">
           <h2 className="font-display font-extrabold text-lg text-foreground tracking-tight flex items-center gap-2">
-            <MessageSquare className="size-5 text-primary" /> Messages
+            <MessageSquare className="size-5 text-primary" /> Chats
           </h2>
           {onNewChat && (
             <Button
@@ -72,7 +75,12 @@ export function ConversationList({
         ) : (
           filtered.map((conv) => {
             const isSelected = conv.id === selectedId;
+            const isGroup = conv.type === "group";
             const other = conv.other_member;
+            const title =
+              other?.display_name ||
+              (other?.username ? `@${other.username}` : null) ||
+              (isGroup ? "Group Conversation" : "Direct Message");
 
             return (
               <button
@@ -87,11 +95,17 @@ export function ConversationList({
                 )}
               >
                 <div className="relative shrink-0">
-                  <FounderAvatar
-                    name={other?.display_name || other?.username || "User"}
-                    src={other?.avatar_url}
-                    size="md"
-                  />
+                  {isGroup && !other ? (
+                    <div className="flex size-10 items-center justify-center rounded-full bg-primary/15 text-primary">
+                      <Users className="size-5" />
+                    </div>
+                  ) : (
+                    <FounderAvatar
+                      name={other?.display_name || other?.username || "User"}
+                      src={other?.avatar_url}
+                      size="md"
+                    />
+                  )}
                   {conv.unread_count > 0 && (
                     <span className="absolute -top-0.5 -right-0.5 size-3 bg-primary rounded-full ring-2 ring-card animate-pulse" />
                   )}
@@ -100,7 +114,7 @@ export function ConversationList({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-1 mb-0.5">
                     <span className="font-display font-bold text-sm text-foreground truncate">
-                      {other?.display_name || "Direct Message"}
+                      {title}
                     </span>
                     <span className="text-[10px] text-muted-foreground font-mono shrink-0">
                       {formatDistanceToNow(new Date(conv.last_message_at), { addSuffix: false })}
