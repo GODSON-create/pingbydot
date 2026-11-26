@@ -255,20 +255,64 @@ export function parseStructuredPing(ping: {
   };
 }
 
+export const PARTICIPATION_PATHWAY_VALUES = [
+  "general",
+  "creator",
+  "business",
+  "community",
+  "builder",
+  "investor",
+] as const;
+
+export const participationPathwaySchema = z.enum(PARTICIPATION_PATHWAY_VALUES);
+
+export const ONBOARDING_INTEREST_VALUES = [
+  "technology",
+  "business",
+  "education",
+  "entertainment",
+  "lifestyle",
+  "communities",
+  "creativity",
+  "opportunities",
+  "culture",
+  "other",
+] as const;
+
+export const onboardingInterestSchema = z.enum(ONBOARDING_INTEREST_VALUES);
+
 export const usernameSchema = z
   .string()
   .trim()
   .toLowerCase()
   .regex(/^[a-z0-9_]{3,24}$/, "3–24 characters: letters, numbers or underscores");
 
+export const PROFILE_VISIBILITY_VALUES = ["public", "followers", "private"] as const;
+export type ProfileVisibility = (typeof PROFILE_VISIBILITY_VALUES)[number];
+
 export const profileSchema = z.object({
   username: usernameSchema,
   display_name: z.string().trim().min(1, "Add your name").max(60),
   bio: z.string().trim().max(280, "Keep your bio under 280 characters"),
+  location: z.string().trim().max(100, "Keep location under 100 characters").optional().default(""),
+  country: z.string().trim().max(80, "Keep country under 80 characters").optional().default(""),
+  website_url: z
+    .string()
+    .trim()
+    .max(300, "Keep website URL under 300 characters")
+    .refine(
+      (v) => v === "" || /^https?:\/\/[^\s.]+\.[^\s]+$/i.test(v),
+      "Use a valid website link starting with https://",
+    )
+    .optional()
+    .default(""),
+  profile_visibility: z.enum(PROFILE_VISIBILITY_VALUES).optional().default("public"),
   avatar_url: z
     .string()
     .trim()
     .refine((v) => v === "" || /^https:\/\//i.test(v), "Use an https:// image link")
     .optional()
     .default(""),
+  interests: z.array(onboardingInterestSchema).max(10).optional(),
+  participation_pathways: z.array(participationPathwaySchema).max(6).optional(),
 });

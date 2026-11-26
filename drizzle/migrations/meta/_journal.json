@@ -148,6 +148,160 @@
       "when": 1795300000000,
       "tag": "0020_pre_merge_security_hardening",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1795400000000,
+      "tag": "0021_provision_media_storage_bucket",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1795500000000,
+      "tag": "0022_stabilization_forums_signals_scale",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1795600000000,
+      "tag": "0023_onboarding_and_pathways",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1795700000000,
+      "tag": "0024_universal_onboarding_identity_interests",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1795800000000,
+      "tag": "0025_economic_activity_measurement",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1795900000000,
+      "tag": "0026_verification_and_monetization_foundations",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1796000000000,
+      "tag": "0027_full_audit_repairs_media_privacy",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1796100000000,
+      "tag": "0028_phase1_profile_controls_and_mutes",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1796200000000,
+      "tag": "0029_phase2_social_messaging_hubs_signals_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1796300000000,
+      "tag": "0030_phase3_multimedia_music_and_distribution",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1796400000000,
+      "tag": "0031_phase4_business_commerce_ads_and_wallet",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1796500000000,
+      "tag": "0032_phase5_griot_developer_offline_and_scale",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1796600000000,
+      "tag": "0033_premium_ux_dot_economy_and_interactions",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1796700000000,
+      "tag": "0034_ping_learn_spotlight_and_clips",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1796800000000,
+      "tag": "0035_admin_control_centre_and_early_access",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1796900000000,
+      "tag": "0036_storage_buckets_dm_rls_and_voice_preview",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1797000000000,
+      "tag": "0037_stage1_messaging_privacy_and_security_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1797100000000,
+      "tag": "0038_stage2_storage_buckets_rls_and_media_assets",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1797200000000,
+      "tag": "0039_stage2_scalable_chat_retention_system",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1797300000000,
+      "tag": "0040_stage2_phase1_security_remediation",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1797400000000,
+      "tag": "0041_stage2_phase2_security_reliability_and_retention",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1797500000000,
+      "tag": "0042_stage2_moments_hubs_signals_restoration",
+      "breakpoints": true
     }
   ]
 }

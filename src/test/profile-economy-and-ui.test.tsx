@@ -71,7 +71,7 @@ describe("PING Human Coordination Redesign, Economy, and Navigation Architecture
     expect(parsed.desiredOutcome).toBe("Ship v1 prototype in Q2");
   });
 
-  it("enforces exactly 5 primary navigation destinations with Inbox replacing Communities", () => {
+  it("enforces 5 primary navigation items (Home, Explore, Create, Inbox, Profile) with unified Inbox routing", () => {
     expect(isInboxPath("/")).toBe(false);
     expect(isInboxPath("/explore")).toBe(false);
     expect(isInboxPath("/inbox")).toBe(true);
@@ -79,7 +79,7 @@ describe("PING Human Coordination Redesign, Economy, and Navigation Architecture
     expect(isInboxPath("/hubs")).toBe(true);
     expect(isInboxPath("/hubs/stanford-ai")).toBe(true);
     expect(isInboxPath("/signals")).toBe(true);
-    expect(isInboxPath("/signals/mit-ai")).toBe(true);
+    expect(isInboxPath("/signals/mit-news")).toBe(true);
 
     const navSrc = readRel("src/components/layout/BottomNav.tsx");
     expect(navSrc).toContain('data-nav-mode="primary"');
@@ -89,11 +89,9 @@ describe("PING Human Coordination Redesign, Economy, and Navigation Architecture
     expect(navSrc).toContain(">Create</span>");
     expect(navSrc).toContain("<span>Inbox</span>");
     expect(navSrc).toContain("<span>Profile</span>");
-    expect(navSrc).not.toContain("<span>Community</span>");
-    expect(navSrc).not.toContain("<span>Communities</span>");
   });
 
-  it("wires the 3-card Create Stack modal with exact required copy", () => {
+  it("wires the unified Create Stack modal with Ping, Moment, Signal, Hub, and Go Live", () => {
     const createStackSrc = readRel("src/components/layout/CreateStackModal.tsx");
     expect(createStackSrc).toContain("Create a Ping");
     expect(createStackSrc).toContain(
@@ -101,6 +99,8 @@ describe("PING Human Coordination Redesign, Economy, and Navigation Architecture
     );
     expect(createStackSrc).toContain("Create a Moment");
     expect(createStackSrc).toContain("Share what's happening around you.");
+    expect(createStackSrc).toContain("Create a Signal");
+    expect(createStackSrc).toContain("Create a Hub");
     expect(createStackSrc).toContain("Go Live");
     expect(createStackSrc).toContain("Bring people together in real time.");
   });
@@ -115,19 +115,24 @@ describe("PING Human Coordination Redesign, Economy, and Navigation Architecture
     expect(exploreSrc).toContain("Recommended communities");
   });
 
-  it("separates Hubs group communication from Signals institutional broadcasting while preserving historical forum files", () => {
+  it("keeps Chats, group-only Hubs, and institutional Signals clearly separated while preserving forum tables/components", () => {
     const forumsSrc = readRel("src/components/hubs/HubForumsAndBroadcasts.tsx");
-    expect(forumsSrc).toContain("HubForumsAndBroadcasts");
+    expect(forumsSrc).toContain("Official Hub Broadcasts");
+    expect(forumsSrc).toContain("hub_forum_posts");
 
-    const hubSlugSrc = readRel("src/routes/hubs.$slug.tsx");
-    expect(hubSlugSrc).toContain("Group Chat");
-    expect(hubSlugSrc).not.toContain("HubForumsAndBroadcasts");
+    const inboxSrc = readRel("src/routes/inbox.tsx");
+    expect(inboxSrc).toContain("InboxSectionTabs");
+    expect(inboxSrc).toContain("MessagesWorkspace");
+    expect(inboxSrc).toContain("HubsDirectorySection");
+    expect(inboxSrc).toContain("SignalsDirectorySection");
 
     const signalsSrc = readRel("src/routes/signals.tsx");
-    expect(signalsSrc).toContain("Institutional Broadcasting");
-    expect(signalsSrc).toContain("bg-gold/15 text-gold border border-gold/30");
-    expect(signalsSrc).not.toContain("Open Hubs & Forums");
-    expect(signalsSrc).not.toContain("Open Direct Messages");
+    expect(signalsSrc).toContain("SignalsDirectorySection");
+    expect(signalsSrc).not.toContain("MessagesWorkspace");
+
+    const hubDetailSrc = readRel("src/routes/hubs.$slug.tsx");
+    expect(hubDetailSrc).toContain("Group Chat");
+    expect(hubDetailSrc).not.toContain("HubForumsAndBroadcasts");
   });
 
   it("wires top-right menu drawer on profile page to DOT balance, wallet, verification, settings, and tabs", () => {

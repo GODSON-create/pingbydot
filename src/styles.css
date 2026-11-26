@@ -179,6 +179,96 @@
   --shadow-lift: 0 4px 8px rgba(0, 0, 0, 0.7), 0 20px 40px -15px rgba(0, 0, 0, 0.9);
 }
 
+/* Curated Dark Theme Presets (WCAG AA/AAA Verified) */
+.dark[data-theme-preset="midnight"] {
+  --background: #0a0e17;
+  --paper: #0a0e17;
+  --forest-deep: #0f1523;
+  --card: #141b2b;
+  --card-foreground: #f1f5f9;
+  --popover: #1b2438;
+  --popover-foreground: #f1f5f9;
+  --foreground: #f1f5f9;
+  --secondary: #1b2436;
+  --secondary-foreground: #cbd5e1;
+  --muted: #161e2e;
+  --muted-foreground: #94a3b8;
+  --accent: #222e46;
+  --border: #253149;
+  --input: #253149;
+}
+
+.dark[data-theme-preset="emerald"] {
+  --background: #071410;
+  --paper: #071410;
+  --forest-deep: #0a1b16;
+  --card: #10241d;
+  --card-foreground: #f0f7f2;
+  --popover: #163027;
+  --popover-foreground: #f0f7f2;
+  --foreground: #f0f7f2;
+  --secondary: #163128;
+  --secondary-foreground: #c4d9ce;
+  --muted: #122821;
+  --muted-foreground: #94b3a4;
+  --accent: #1d3c31;
+  --border: #1f3c31;
+  --input: #1f3c31;
+}
+
+/* Curated Accent Presets (Preserving High Contrast on Both Light & Dark) */
+.dark[data-accent="emerald"] {
+  --primary: #4ade80;
+  --primary-foreground: #062111;
+  --ring: #4ade80;
+  --accent-foreground: #4ade80;
+}
+:root:not(.dark)[data-accent="emerald"] {
+  --primary: #156343;
+  --primary-foreground: #ffffff;
+  --ring: #156343;
+}
+.dark[data-accent="gold"] {
+  --primary: #d8b66a;
+  --primary-foreground: #090b0a;
+  --ring: #d8b66a;
+  --accent-foreground: #d8b66a;
+}
+:root:not(.dark)[data-accent="gold"] {
+  --primary: #7a5a12;
+  --primary-foreground: #ffffff;
+  --ring: #7a5a12;
+}
+.dark[data-accent="cyan"] {
+  --primary: #5eead4;
+  --primary-foreground: #042022;
+  --ring: #5eead4;
+  --accent-foreground: #5eead4;
+}
+:root:not(.dark)[data-accent="cyan"] {
+  --primary: #0f5e63;
+  --primary-foreground: #ffffff;
+  --ring: #0f5e63;
+}
+
+/* Text Scale Accessibility Controls */
+html[data-text-scale="compact"] {
+  font-size: 14.5px;
+}
+html[data-text-scale="large"] {
+  font-size: 17.5px;
+}
+
+/* User-Controlled Reduced Motion Override */
+html[data-reduced-motion="true"] *,
+html[data-reduced-motion="true"] *::before,
+html[data-reduced-motion="true"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
 @layer base {
   * {
     border-color: var(--color-border);
@@ -366,8 +456,8 @@
 }
 @keyframes page-in {
   from {
-    opacity: 0;
-    transform: translateY(8px);
+    opacity: 0.94;
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
@@ -414,7 +504,7 @@
   animation: burst 0.6s ease-out forwards;
 }
 @utility animate-page-in {
-  animation: page-in 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: page-in 0.18s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 @utility animate-ping-dot {
   animation: ping-dot 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;

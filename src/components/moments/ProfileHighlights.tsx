@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { ResolvedMomentThumb } from "@/components/media/ResolvedPrivateMedia";
 import { MomentViewerModal } from "./MomentViewerModal";
 import type { Profile } from "@/lib/pings";
 
@@ -174,10 +175,16 @@ export function ProfileHighlights({ profile, isMe }: ProfileHighlightsProps) {
           >
             <div className="relative flex size-16 items-center justify-center rounded-full border-2 border-border/80 p-0.5 group-hover:border-primary transition-colors bg-card overflow-hidden shadow-sm">
               {h.cover_url ? (
-                <img
-                  src={h.cover_url}
+                <ResolvedMomentThumb
+                  mediaUrl={h.cover_url}
+                  mediaType="image"
                   alt={h.title}
                   className="size-full rounded-full object-cover"
+                  fallback={
+                    <div className="flex size-full items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-sm">
+                      {h.title.slice(0, 2).toUpperCase()}
+                    </div>
+                  }
                 />
               ) : (
                 <div className="flex size-full items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-sm">

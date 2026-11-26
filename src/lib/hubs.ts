@@ -41,6 +41,7 @@ export type Hub = {
   category: HubCategory;
   access: "public" | "private";
   resources: HubResource[];
+  avatar_url?: string | null;
   verified: boolean;
   member_count: number;
   ping_count: number;
@@ -50,6 +51,9 @@ export type Hub = {
 };
 
 export const HUB_SELECT =
+  "id,slug,name,tagline,description,rules,category,access,resources,avatar_url,verified,member_count,ping_count,member_limit,owner_id,created_at";
+
+export const HUB_SELECT_LEGACY =
   "id,slug,name,tagline,description,rules,category,access,resources,verified,member_count,ping_count,member_limit,owner_id,created_at";
 
 /** Turn a hub name into a URL-safe slug candidate. */

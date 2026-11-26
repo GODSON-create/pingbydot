@@ -1,11 +1,13 @@
 import { useDeferredValue, useState } from "react";
 import { pageHead } from "@/lib/site";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { QueryErrorCard } from "@/components/QueryErrorCard";
 import {
   ArrowRight,
   Building2,
   Compass,
+  Eye,
   Flame,
   MessageSquare,
   Search,
@@ -20,14 +22,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PingCard } from "@/components/ping/PingCard";
 import { FounderAvatar } from "@/components/ping/Avatar";
+import { VerificationBadge } from "@/components/verification/VerificationBadge";
+import { CascadingProfilePanel } from "@/components/profile/CascadingProfilePanel";
 import { MomentsTray } from "@/components/moments/MomentsTray";
 import { DiscoverableMomentsFeed } from "@/components/moments/DiscoverableMomentsFeed";
+import { SpotlightFeedStrip } from "@/components/spotlight/SpotlightFeedStrip";
 import { AriseCallout } from "@/components/AriseCallout";
 import { feedQuery, likeCount, replyCount, type Ping, type Profile } from "@/lib/pings";
 import { hubsQuery } from "@/lib/hub-queries";
 import { parseStructuredPing } from "@/lib/validation";
 import { useAuth } from "@/lib/auth";
-import { useGetOrCreateDirectConversation } from "@/lib/messages";
+import { blockedUsersQuery, useGetOrCreateDirectConversation } from "@/lib/messages";
+import { mutedUsersQuery } from "@/lib/mutes";
+import { extractTrendingTopics } from "@/lib/feed-engine";
+import { CURATED_DOT_TAGS } from "@/lib/dot-tags";
+import { followedTopicsQuery, useToggleFollowTopic } from "@/lib/social";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -63,9 +72,9 @@ export const Route = createFileRoute("/explore")({
       .enum(["all", "pings", "people", "moments", "communities", "opportunities"])
       .optional(),
     q: z.string().trim().max(120).optional(),
-    page: z.coerce.number().int().min(0).max(10000).catch(0).default(0),
+    page: z.coerce.number().int().min(0).max(10000).optional(),
   }),
-  loaderDeps: ({ search: { c, page } }) => ({ cat: c ?? null, page }),
+  loaderDeps: ({ search: { c, page } }) => ({ cat: c ?? null, page: page ?? 0 }),
   loader: ({ context, deps }) =>
     context.queryClient.ensureQueryData(feedQuery(deps.cat, deps.page)),
   head: () =>
@@ -81,13 +90,20 @@ export const Route = createFileRoute("/explore")({
 function PeopleDiscoveryCard({
   person,
   currentUserId,
+  followed,
+  onFollowChanged,
+  onInspect,
 }: {
   person: Profile;
   currentUserId?: string | undefined;
+  followed: boolean;
+  onFollowChanged: () => void;
+  onInspect?: (person: Profile) => void;
 }) {
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const startChat = useGetOrCreateDirectConversation();
-  const [followed, setFollowed] = useState(false);
+  const [followPending, setFollowPending] = useState(false);
   const name = person.display_name || person.username;
 
   const handleFollow = async () => {
@@ -95,43 +111,67 @@ function PeopleDiscoveryCard({
       navigate({ to: "/login", search: { next: `/@${person.username}` } });
       return;
     }
+    setFollowPending(true);
     try {
       if (followed) {
-        await supabase
+        const { error } = await supabase
           .from("follows")
           .delete()
           .eq("follower_id", currentUserId)
           .eq("following_id", person.id);
-        setFollowed(false);
+        if (error) throw error;
+        toast.success(`Unfollowed @${person.username}`);
       } else {
-        await supabase
+        const { error } = await supabase
           .from("follows")
           .insert({ follower_id: currentUserId, following_id: person.id });
-        setFollowed(true);
+        if (error && error.code !== "23505") throw error;
         toast.success(`Following @${person.username}`);
       }
+      onFollowChanged();
+      qc.invalidateQueries({ queryKey: ["follow", person.id] });
+      qc.invalidateQueries({ queryKey: ["following-feed"] });
+      qc.invalidateQueries({ queryKey: ["header-notifications"] });
     } catch {
       toast.error("Could not update follow status.");
+    } finally {
+      setFollowPending(false);
     }
   };
 
   return (
     <article className="surface-card flex flex-col justify-between rounded-3xl p-5 transition-all hover:border-primary/50">
       <div>
-        <div className="flex items-start justify-between gap-3">
-          <Link
-            to="/@{$username}"
-            params={{ username: person.username }}
-            className="flex min-w-0 items-center gap-3"
-          >
-            <FounderAvatar name={name} src={person.avatar_url} size="md" />
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-3">
+            <Link to="/@{$username}" params={{ username: person.username }} className="shrink-0">
+              <FounderAvatar name={name} src={person.avatar_url} size="md" />
+            </Link>
             <div className="min-w-0">
-              <p className="truncate font-display text-sm font-bold text-foreground hover:underline">
-                {name}
-              </p>
+              <div className="flex items-center gap-1">
+                <Link
+                  to="/@{$username}"
+                  params={{ username: person.username }}
+                  className="truncate font-display text-sm font-bold text-foreground hover:underline"
+                >
+                  {name}
+                </Link>
+                <VerificationBadge userId={person.id} size="xs" />
+              </div>
               <p className="truncate text-xs text-muted-foreground">@{person.username}</p>
             </div>
-          </Link>
+          </div>
+          {onInspect && (
+            <button
+              type="button"
+              onClick={() => onInspect(person)}
+              aria-label={`Inspect ${name}`}
+              title="Quick profile preview"
+              className="shrink-0 rounded-full p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+            >
+              <Eye className="size-3.5" />
+            </button>
+          )}
         </div>
         {person.bio ? (
           <p className="mt-3 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
@@ -149,6 +189,7 @@ function PeopleDiscoveryCard({
           type="button"
           size="sm"
           variant={followed ? "outline" : "hero"}
+          disabled={followPending}
           onClick={handleFollow}
           className="h-8 flex-1 rounded-full text-xs font-semibold"
         >
@@ -182,18 +223,49 @@ function PeopleDiscoveryCard({
 
 function Explore() {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const startChat = useGetOrCreateDirectConversation();
   const { c, filter: filterParam, q, page } = Route.useSearch();
+  const initialExplorePings = Route.useLoaderData();
   const cat = c ?? null;
-  const { data } = useSuspenseQuery(feedQuery(cat, page));
+  const pageNum = page ?? 0;
+  const {
+    data = [],
+    isLoading: isFeedLoading,
+    isError: isFeedError,
+    error: feedError,
+    refetch: refetchFeed,
+  } = useQuery({
+    ...feedQuery(cat, pageNum),
+    initialData: initialExplorePings,
+    initialDataUpdatedAt: 0,
+  });
 
   const [activeFilter, setActiveFilter] = useState<DiscoveryFilter>(
     filterParam ?? (cat === "opportunity" ? "opportunities" : "all"),
   );
+  const [sortBy, setSortBy] = useState<"relevant" | "recent" | "popular">("relevant");
   const [searchQuery, setSearchQuery] = useState(q ?? "");
+  const [inspectedPerson, setInspectedPerson] = useState<Profile | null>(null);
   const deferredQuery = useDeferredValue(searchQuery.trim().toLowerCase());
 
+  const { data: mutedUsers = [] } = useQuery(mutedUsersQuery(user?.id));
+  const { data: blockedUsers = [] } = useQuery(blockedUsersQuery(user?.id));
+  const { data: followedTopics = [] } = useQuery(followedTopicsQuery(user?.id));
+  const toggleFollowTopic = useToggleFollowTopic(user?.id);
+  const hiddenAuthorIds = new Set([
+    ...mutedUsers.map((m) => m.muted_id),
+    ...blockedUsers.map((b) => b.blocked_id),
+  ]);
+
   // Fetch real People & Communities for network discovery
-  const { data: people = [] } = useQuery({
+  const {
+    data: people = [],
+    isLoading: isPeopleLoading,
+    isError: isPeopleError,
+    error: peopleError,
+    refetch: refetchPeople,
+  } = useQuery({
     queryKey: ["explore-people", deferredQuery, user?.id],
     queryFn: async (): Promise<Profile[]> => {
       let query = supabase
@@ -213,15 +285,34 @@ function Explore() {
         }
       }
       const { data: rows, error } = await query;
-      if (error || !rows) return [];
-      return rows as Profile[];
+      if (error) throw error;
+      return (rows ?? []) as Profile[];
     },
   });
 
-  const { data: communities = [] } = useQuery(hubsQuery(deferredQuery, null, 0));
+  const { data: followedIds = new Set<string>(), refetch: refetchFollowed } = useQuery({
+    queryKey: ["explore-followed", user?.id],
+    enabled: Boolean(user?.id),
+    queryFn: async (): Promise<Set<string>> => {
+      if (!user?.id) return new Set();
+      const { data: rows, error } = await supabase
+        .from("follows")
+        .select("following_id")
+        .eq("follower_id", user.id);
+      if (error) throw error;
+      return new Set((rows ?? []).map((r) => r.following_id));
+    },
+  });
 
-  const allPings: Ping[] = data ?? [];
-  const filteredPings = deferredQuery
+  const {
+    data: communities = [],
+    isError: isCommunitiesError,
+    error: communitiesError,
+    refetch: refetchCommunities,
+  } = useQuery(hubsQuery(deferredQuery, null, 0));
+
+  const allPings: Ping[] = (data ?? []).filter((p) => !hiddenAuthorIds.has(p.user_id));
+  const matchedPings = deferredQuery
     ? allPings.filter((p) => {
         const text = p.content.toLowerCase();
         const username = p.author?.username?.toLowerCase() ?? "";
@@ -230,16 +321,34 @@ function Explore() {
         const headline = (meta.headline ?? "").toLowerCase();
         const needs = meta.needs.join(" ").toLowerCase();
         const offers = meta.offers.join(" ").toLowerCase();
+        const cleanQuery = deferredQuery.replace(/^[#.]/, "");
         return (
           text.includes(deferredQuery) ||
-          username.includes(deferredQuery) ||
-          displayName.includes(deferredQuery) ||
-          headline.includes(deferredQuery) ||
-          needs.includes(deferredQuery) ||
-          offers.includes(deferredQuery)
+          text.includes(cleanQuery) ||
+          username.includes(cleanQuery) ||
+          displayName.includes(cleanQuery) ||
+          headline.includes(cleanQuery) ||
+          needs.includes(cleanQuery) ||
+          offers.includes(cleanQuery)
         );
       })
     : allPings;
+
+  const filteredPings = [...matchedPings].sort((a, b) => {
+    if (sortBy === "popular") {
+      return likeCount(b) + replyCount(b) * 2 - (likeCount(a) + replyCount(a) * 2);
+    }
+    if (sortBy === "recent") {
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    }
+    // relevant: boost followed topics slightly while respecting recency
+    const aScore = followedTopics.some((t) => a.content.toLowerCase().includes(t)) ? 1 : 0;
+    const bScore = followedTopics.some((t) => b.content.toLowerCase().includes(t)) ? 1 : 0;
+    if (bScore !== aScore) return bScore - aScore;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+
+  const trendingTopics = extractTrendingTopics(allPings, 8);
 
   // Categorize Pings into discovery buckets
   const opportunityPings = filteredPings.filter((p) => {
@@ -311,31 +420,137 @@ function Explore() {
         )}
       </div>
 
-      {/* B. Horizontal Discovery Filters */}
-      <nav
-        className="mt-4 flex max-w-full min-w-0 gap-2 overflow-x-auto pb-2 scrollbar-none"
-        aria-label="Discovery filters"
-      >
-        {DISCOVERY_FILTERS.map((f) => {
-          const isSelected = activeFilter === f.id;
-          return (
-            <button
-              key={f.id}
-              type="button"
-              onClick={() => setActiveFilter(f.id)}
-              aria-pressed={isSelected}
-              className={cn(
-                "shrink-0 rounded-full border px-4 py-2 text-xs font-semibold transition-colors",
-                isSelected
-                  ? "border-foreground bg-foreground text-background shadow-sm"
-                  : "border-border bg-card text-foreground hover:bg-secondary",
-              )}
-            >
-              {f.label}
-            </button>
-          );
-        })}
-      </nav>
+      {/* B. Horizontal Discovery Filters + Sort Controls + Signals Opportunities Shortcut */}
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <nav
+          className="flex max-w-full min-w-0 gap-2 overflow-x-auto pb-1 scrollbar-none"
+          aria-label="Discovery filters"
+        >
+          {DISCOVERY_FILTERS.map((f) => {
+            const isSelected = activeFilter === f.id;
+            return (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setActiveFilter(f.id)}
+                aria-pressed={isSelected}
+                className={cn(
+                  "shrink-0 rounded-full border px-4 py-2 text-xs font-semibold transition-colors",
+                  isSelected
+                    ? "border-foreground bg-foreground text-background shadow-sm"
+                    : "border-border bg-card text-foreground hover:bg-secondary",
+                )}
+              >
+                {f.label}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <div
+            className="inline-flex items-center rounded-full border border-border bg-card p-0.5 text-[11px]"
+            role="group"
+            aria-label="Sort results"
+          >
+            {(["relevant", "recent", "popular"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setSortBy(mode)}
+                className={cn(
+                  "rounded-full px-2.5 py-1 font-semibold capitalize transition-colors",
+                  sortBy === mode
+                    ? "bg-foreground text-background"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
+          <Button asChild size="sm" variant="outline" className="rounded-full text-xs h-8">
+            <Link to="/clips">Ping Clips</Link>
+          </Button>
+          <Button asChild size="sm" variant="outline" className="rounded-full text-xs h-8">
+            <Link to="/spotlight">Spotlight</Link>
+          </Button>
+          <Button asChild size="sm" variant="outline" className="rounded-full text-xs h-8">
+            <Link to="/learn">Learn</Link>
+          </Button>
+          <Button asChild size="sm" variant="outline" className="rounded-full text-xs h-8">
+            <Link to="/media">Video &amp; Media</Link>
+          </Button>
+          <Button asChild size="sm" variant="outline" className="rounded-full text-xs h-8">
+            <Link to="/businesses">Businesses</Link>
+          </Button>
+          <Button asChild size="sm" variant="outline" className="rounded-full text-xs h-8">
+            <Link to="/signals/opportunities">Opportunities Hub</Link>
+          </Button>
+        </div>
+      </div>
+
+      {/* Live Ping Spotlight Explore Distribution Strip (renders only when published stories exist) */}
+      <SpotlightFeedStrip channel="explore" maxItems={2} />
+
+      {/* Trending DOT Tags & Legacy Hashtag-Compatible Discovery Chips */}
+      {(() => {
+        const mergedTagSlugs = Array.from(
+          new Set([
+            ...trendingTopics.map((t) => t.slug),
+            ...CURATED_DOT_TAGS.slice(0, 10).map((t) => t.slug),
+          ]),
+        ).slice(0, 10);
+        return (
+          <div className="mt-3 flex flex-wrap items-center gap-1.5" aria-label="Trending DOT Tags">
+            <span className="text-[11px] font-semibold text-muted-foreground mr-1">
+              Trending DOT Tags:
+            </span>
+            {mergedTagSlugs.map((slug) => {
+              const followed = followedTopics.includes(slug);
+              return (
+                <div
+                  key={slug}
+                  className="inline-flex items-center rounded-full border border-border/70 bg-card text-[11px] overflow-hidden"
+                >
+                  <Link
+                    to="/tag/$slug"
+                    params={{ slug }}
+                    className="px-2.5 py-1 font-semibold text-primary hover:bg-secondary"
+                  >
+                    .{slug}
+                  </Link>
+                  {user && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        toggleFollowTopic.mutate(
+                          { topicSlug: slug, currentlyFollowing: followed },
+                          {
+                            onSuccess: (now) =>
+                              toast.success(now ? `Following .${slug}` : `Unfollowed .${slug}`),
+                          },
+                        )
+                      }
+                      className={cn(
+                        "px-2 py-1 border-l border-border/60 font-semibold transition-colors",
+                        followed
+                          ? "bg-primary/15 text-primary"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                      aria-label={
+                        followed ? `Remove .${slug} from your feed` : `Add .${slug} to your feed`
+                      }
+                    >
+                      {followed ? "✓" : "+"}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* C. Moments Discovery Rail (Always accessible on All & Moments) */}
       {(activeFilter === "all" || activeFilter === "moments") && (
@@ -355,38 +570,85 @@ function Explore() {
       )}
 
       {/* D1. People You Should Know */}
-      {(activeFilter === "all" || activeFilter === "people") && people.length > 0 && (
-        <section className="mt-8" aria-labelledby="explore-people-heading">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2
-                id="explore-people-heading"
-                className="font-display text-xl font-bold tracking-tight flex items-center gap-2"
-              >
-                <Users className="size-5 text-primary" />
-                People you should know
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                Builders, operators, and collaborators active on PING.
-              </p>
+      {(activeFilter === "all" || activeFilter === "people") &&
+        (activeFilter === "people" || isPeopleError || people.length > 0) && (
+          <section className="mt-8" aria-labelledby="explore-people-heading">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2
+                  id="explore-people-heading"
+                  className="font-display text-xl font-bold tracking-tight flex items-center gap-2"
+                >
+                  <Users className="size-5 text-primary" />
+                  People you should know
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Creators, businesses, builders, investors, and community members across PING.
+                </p>
+              </div>
+              {activeFilter === "all" && people.length > 4 && (
+                <button
+                  type="button"
+                  onClick={() => setActiveFilter("people")}
+                  className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
+                >
+                  See all <ArrowRight className="size-3.5" />
+                </button>
+              )}
             </div>
-            {activeFilter === "all" && people.length > 4 && (
-              <button
-                type="button"
-                onClick={() => setActiveFilter("people")}
-                className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
-              >
-                See all <ArrowRight className="size-3.5" />
-              </button>
+            {isPeopleLoading ? (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="surface-card h-44 animate-pulse rounded-3xl p-5" />
+                ))}
+              </div>
+            ) : isPeopleError ? (
+              <QueryErrorCard
+                compact
+                title="Couldn't load people directory"
+                error={peopleError}
+                onRetry={() => void refetchPeople()}
+              />
+            ) : people.length === 0 ? (
+              <div className="surface-card rounded-3xl p-8 text-center">
+                <p className="font-display text-base font-bold">
+                  {deferredQuery
+                    ? `No people matching "${searchQuery.trim()}"`
+                    : "No other people to show yet"}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {deferredQuery
+                    ? "Try a different name, @handle, or clear your search filter."
+                    : "Explore public Pings or join a Hub to meet members across the network."}
+                </p>
+                {deferredQuery && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSearchQuery("")}
+                    className="mt-4 rounded-full"
+                  >
+                    Clear search
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {(activeFilter === "people" ? people : people.slice(0, 4)).map((person) => (
+                  <PeopleDiscoveryCard
+                    key={person.id}
+                    person={person}
+                    currentUserId={user?.id}
+                    followed={followedIds.has(person.id)}
+                    onFollowChanged={() => void refetchFollowed()}
+                    onInspect={setInspectedPerson}
+                  />
+                ))}
+              </div>
             )}
-          </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {(activeFilter === "people" ? people : people.slice(0, 4)).map((person) => (
-              <PeopleDiscoveryCard key={person.id} person={person} currentUserId={user?.id} />
-            ))}
-          </div>
-        </section>
-      )}
+          </section>
+        )}
 
       {/* D2. Open Opportunities & Intentions Matching Yours */}
       {(activeFilter === "all" || activeFilter === "opportunities") && (
@@ -455,23 +717,31 @@ function Explore() {
                 Recommended communities
               </h2>
               <p className="text-xs text-muted-foreground">
-                Organizational Hubs, universities, incubators, and topic Forums.
+                Collaborative group Hubs for teams, campuses, organizations, and communities.
               </p>
             </div>
             <Link
-              to="/hubs"
+              to="/inbox"
+              search={{ section: "hubs" }}
               className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
             >
-              Open Community Hub <ArrowRight className="size-3.5" />
+              Open Hubs in Inbox <ArrowRight className="size-3.5" />
             </Link>
           </div>
 
-          {communities.length === 0 ? (
+          {isCommunitiesError ? (
+            <QueryErrorCard
+              compact
+              title="Couldn't load Hubs"
+              error={communitiesError}
+              onRetry={() => void refetchCommunities()}
+            />
+          ) : communities.length === 0 ? (
             <div className="surface-card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-3xl p-6">
               <div>
-                <p className="font-display text-base font-bold">Launch the first Community Hub</p>
+                <p className="font-display text-base font-bold">Launch the first Hub</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Create a dedicated space with topic Forums and institutional broadcasts.
+                  Start a dedicated group Hub for real-time team and community conversations.
                 </p>
               </div>
               <Button asChild variant="hero" size="sm" className="rounded-full shrink-0">
@@ -557,7 +827,20 @@ function Explore() {
               </div>
             </div>
 
-            {filteredPings.length === 0 ? (
+            {isFeedLoading && allPings.length === 0 ? (
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="surface-card h-48 animate-pulse rounded-3xl p-5" />
+                ))}
+              </div>
+            ) : isFeedError ? (
+              <QueryErrorCard
+                title="Couldn't load Explore Pings"
+                description="A connection issue prevented loading public Pings. Try again below."
+                error={feedError}
+                onRetry={() => void refetchFeed()}
+              />
+            ) : filteredPings.length === 0 ? (
               <div className="surface-card mx-auto mt-4 max-w-lg rounded-3xl p-10 text-center">
                 <h3 className="font-display text-xl font-bold">
                   {deferredQuery
@@ -592,16 +875,16 @@ function Explore() {
       )}
 
       <nav aria-label="Feed pages" className="mt-8 flex justify-center gap-3">
-        {page > 0 && (
+        {pageNum > 0 && (
           <Button asChild variant="outline">
-            <Link to="/explore" search={{ c, page: page - 1 }}>
+            <Link to="/explore" search={{ c, page: pageNum - 1 }}>
               Newer Pings
             </Link>
           </Button>
         )}
         {allPings.length === 60 && (
           <Button asChild variant="outline">
-            <Link to="/explore" search={{ c, page: page + 1 }}>
+            <Link to="/explore" search={{ c, page: pageNum + 1 }}>
               Older Pings
             </Link>
           </Button>
@@ -611,6 +894,37 @@ function Explore() {
       <div className="mt-14">
         <AriseCallout />
       </div>
+
+      {/* Reusable Cascading Profile Inspection Drawer (Section 6 & 10) */}
+      {inspectedPerson && (
+        <div
+          className="fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-[2px]"
+          onClick={() => setInspectedPerson(null)}
+        >
+          <div
+            className="h-full w-full max-w-sm bg-card shadow-lift border-l border-border"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <CascadingProfilePanel
+              profile={inspectedPerson}
+              onClose={() => setInspectedPerson(null)}
+              onStartChat={async (targetUserId) => {
+                if (!user) {
+                  navigate({ to: "/login", search: { next: "/explore" } });
+                  return;
+                }
+                try {
+                  const convId = await startChat.mutateAsync(targetUserId);
+                  setInspectedPerson(null);
+                  navigate({ to: "/messages", search: { conversationId: convId } });
+                } catch {
+                  toast.error("Couldn't start conversation.");
+                }
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

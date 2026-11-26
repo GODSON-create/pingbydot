@@ -57,11 +57,18 @@ function Edit() {
     mutationFn: async (d: PingDraft) => {
       if (!user) throw new Error("Please log in again.");
       const draft = pingSchema.parse(d);
+      const imageUrl = d.image_url?.trim() || null;
       const { data: saved, error } = await supabase
         .from("pings")
         .update({
           category: draft.category,
           content: draft.content,
+          headline: d.headline?.trim() || null,
+          needs: d.needs && d.needs.length > 0 ? d.needs : null,
+          offers: d.offers && d.offers.length > 0 ? d.offers : null,
+          desired_outcome: d.desired_outcome?.trim() || null,
+          image_url: imageUrl,
+          media_urls: imageUrl ? [imageUrl] : null,
           cta_url: draft.cta_url || null,
           cta_label: draft.cta_label || null,
         })
@@ -77,7 +84,7 @@ function Edit() {
       toast.success("Ping updated");
       if (!ping?.hidden_at) navigate({ to: "/p/$id", params: { id } });
     },
-    onError: () => toast.error("Couldn't save changes."),
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Couldn't save changes."),
   });
 
   if (isLoading)

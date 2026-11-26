@@ -81,10 +81,17 @@ describe("Ping by DOT — Full V1 & V2 Features Acceptance Suite", () => {
   });
 
   it("verifies direct messaging components and routes exist and are wired correctly", () => {
+    const inboxRoute = fs.readFileSync(path.join(rootDir, "src/routes/inbox.tsx"), "utf-8");
     const messagesRoute = fs.readFileSync(path.join(rootDir, "src/routes/messages.tsx"), "utf-8");
-    expect(messagesRoute).toContain("DirectMessageChat");
-    expect(messagesRoute).toContain("ConversationList");
-    expect(messagesRoute).toContain("useGetOrCreateDirectConversation");
+    const workspace = fs.readFileSync(
+      path.join(rootDir, "src/components/messages/MessagesWorkspace.tsx"),
+      "utf-8",
+    );
+    expect(inboxRoute).toContain("MessagesWorkspace");
+    expect(messagesRoute).toContain("MessagesWorkspace");
+    expect(workspace).toContain("DirectMessageChat");
+    expect(workspace).toContain("ConversationList");
+    expect(workspace).toContain("useGetOrCreateDirectConversation");
 
     const messagesLib = fs.readFileSync(path.join(rootDir, "src/lib/messages.ts"), "utf-8");
     expect(messagesLib).toContain("useSendPrivateMessage");

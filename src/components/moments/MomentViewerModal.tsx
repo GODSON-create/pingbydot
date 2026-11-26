@@ -22,6 +22,10 @@ import {
   Play,
   ChevronUp,
   ChevronDown,
+  Clapperboard,
+  Megaphone,
+  Loader2,
+  RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNowStrict } from "date-fns";
@@ -35,6 +39,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { FounderAvatar } from "@/components/ping/Avatar";
+import { VerificationBadge } from "@/components/verification/VerificationBadge";
+import { BoostContentDialog, PromotedBadge } from "@/components/boost/BoostContentDialog";
+import { MomentToClipDialog } from "@/components/clips/MomentToClipDialog";
+import { activeBoostsMapQuery } from "@/lib/boosts";
 import {
   useViewMoment,
   useLikeMoment,
@@ -51,6 +59,7 @@ import {
 import { useAuth } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
 import { RePingModal } from "./RePingModal";
+import { useResolvedMediaUrl } from "@/components/media/ResolvedPrivateMedia";
 import { Link } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 
@@ -84,12 +93,15 @@ export function MomentViewerModal({
   const [repingModalOpen, setRepingModalOpen] = useState(false);
   const [highlightDialogOpen, setHighlightDialogOpen] = useState(false);
   const [activityDialogOpen, setActivityDialogOpen] = useState(false);
+  const [boostDialogOpen, setBoostDialogOpen] = useState(false);
+  const [clipDialogOpen, setClipDialogOpen] = useState(false);
   const [newHighlightTitle, setNewHighlightTitle] = useState("");
 
   const addHighlightItemMutation = useAddMomentToHighlight();
   const removeHighlightItemMutation = useRemoveMomentFromHighlight();
   const createHighlightMutation = useCreateHighlight();
   const { data: userHighlights = [] } = useQuery(userHighlightsQuery(user?.id ?? ""));
+  const { data: activeBoostsMap } = useQuery(activeBoostsMapQuery());
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const pointerDownAtRef = useRef<number>(0);
@@ -102,7 +114,16 @@ export function MomentViewerModal({
 
   const currentSequence = sequences[seqIdx];
   const currentMoment: Moment | undefined = currentSequence?.moments[momentIdx];
+  const {
+    resolvedUrl: resolvedMomentUrl,
+    loading: momentMediaLoading,
+    failed: momentMediaFailed,
+    handleMediaError: handleMomentMediaError,
+    retry: retryMomentMedia,
+  } = useResolvedMediaUrl(currentMoment?.media_url);
+  const [mediaLoaded, setMediaLoaded] = useState(false);
   const isOwner = Boolean(user?.id && currentMoment && user.id === currentMoment.author_id);
+  const activeBoost = currentMoment ? activeBoostsMap?.[`moment:${currentMoment.id}`] : undefined;
 
   const { data: activity } = useQuery(
     momentActivityQuery(currentMoment?.id, open && isOwner && activityDialogOpen),
@@ -119,21 +140,39 @@ export function MomentViewerModal({
     }
   }, [open, initialSequenceIndex, initialMomentIndex]);
 
-  // Reset video duration on slide change
+  // Reset video duration and loaded state on slide or resolved URL change
   useEffect(() => {
     setVideoDurationSec(null);
-  }, [currentMoment?.id]);
+    setMediaLoaded(false);
+  }, [currentMoment?.id, resolvedMomentUrl]);
 
-  // Sync HTML5 video play/pause with story pause state
+  // Sync HTML5 video play/pause with story pause state and async signed-URL resolution
   useEffect(() => {
     const vid = videoRef.current;
-    if (!vid) return;
-    if (isPaused || repingModalOpen || highlightDialogOpen || activityDialogOpen) {
+    if (!vid || !resolvedMomentUrl || momentMediaFailed) return;
+    if (
+      isPaused ||
+      repingModalOpen ||
+      highlightDialogOpen ||
+      activityDialogOpen ||
+      boostDialogOpen ||
+      clipDialogOpen
+    ) {
       vid.pause();
     } else {
       void vid.play().catch(() => {});
     }
-  }, [isPaused, repingModalOpen, highlightDialogOpen, activityDialogOpen, currentMoment?.id]);
+  }, [
+    isPaused,
+    repingModalOpen,
+    highlightDialogOpen,
+    activityDialogOpen,
+    boostDialogOpen,
+    clipDialogOpen,
+    currentMoment?.id,
+    resolvedMomentUrl,
+    momentMediaFailed,
+  ]);
 
   // Record view once per moment per session
   useEffect(() => {
@@ -175,15 +214,21 @@ export function MomentViewerModal({
     }
   }, [momentIdx, seqIdx, sequences]);
 
-  // Timer progression for stories
+  // Timer progression for stories (paused while signing, loading, or failed)
   useEffect(() => {
     if (
       !open ||
       !currentMoment ||
       isPaused ||
+      momentMediaLoading ||
+      momentMediaFailed ||
+      !resolvedMomentUrl ||
+      !mediaLoaded ||
       repingModalOpen ||
       highlightDialogOpen ||
-      activityDialogOpen
+      activityDialogOpen ||
+      boostDialogOpen ||
+      clipDialogOpen
     ) {
       return;
     }
@@ -210,9 +255,15 @@ export function MomentViewerModal({
     open,
     currentMoment,
     isPaused,
+    momentMediaLoading,
+    momentMediaFailed,
+    resolvedMomentUrl,
+    mediaLoaded,
     repingModalOpen,
     highlightDialogOpen,
     activityDialogOpen,
+    boostDialogOpen,
+    clipDialogOpen,
     videoDurationSec,
     advanceNext,
   ]);
@@ -387,21 +438,25 @@ export function MomentViewerModal({
                 size="sm"
               />
               <div className="text-xs min-w-0">
-                <Link
-                  to="/@{$username}"
-                  params={{ username: currentSequence.author.username }}
-                  onClick={() => onOpenChange(false)}
-                  className="font-bold text-white hover:underline flex items-center gap-1 truncate"
-                >
-                  <span className="truncate">
-                    {currentSequence.author.display_name || currentSequence.author.username}
-                  </span>
-                  <span className="font-normal text-white/70 shrink-0">
-                    @{currentSequence.author.username}
-                  </span>
-                </Link>
+                <div className="flex items-center gap-1 min-w-0">
+                  <Link
+                    to="/@{$username}"
+                    params={{ username: currentSequence.author.username }}
+                    onClick={() => onOpenChange(false)}
+                    className="font-bold text-white hover:underline flex items-center gap-1 truncate"
+                  >
+                    <span className="truncate">
+                      {currentSequence.author.display_name || currentSequence.author.username}
+                    </span>
+                    <span className="font-normal text-white/70 shrink-0">
+                      @{currentSequence.author.username}
+                    </span>
+                  </Link>
+                  <VerificationBadge userId={currentMoment.author_id} size="xs" />
+                </div>
 
                 <div className="flex items-center gap-1.5 text-[10px] text-white/70">
+                  {activeBoost && <PromotedBadge campaignId={activeBoost.id} />}
                   {currentMoment.audience === "hub" ? (
                     <span className="inline-flex items-center gap-0.5 rounded bg-white/20 px-1.5 py-0.5 text-white">
                       <Users className="size-2.5" />
@@ -476,6 +531,20 @@ export function MomentViewerModal({
                       >
                         <Sparkles className="size-4 mr-2 text-[#c7f36b]" /> Add to Highlights
                       </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => setBoostDialogOpen(true)}
+                        className="rounded-xl text-[#d8b66a]"
+                      >
+                        <Megaphone className="size-4 mr-2" /> Boost Moment with DOT
+                      </DropdownMenuItem>
+                      {currentMoment.media_type === "video" && (
+                        <DropdownMenuItem
+                          onClick={() => setClipDialogOpen(true)}
+                          className="rounded-xl text-[#c7f36b]"
+                        >
+                          <Clapperboard className="size-4 mr-2" /> Republish as Ping Clip
+                        </DropdownMenuItem>
+                      )}
                       {highlightId && (
                         <DropdownMenuItem
                           onClick={handleRemoveFromHighlight}
@@ -551,25 +620,63 @@ export function MomentViewerModal({
               onClick={() => handleZoneTap("next")}
             />
 
-            {currentMoment.media_type === "video" ? (
+            {momentMediaFailed ? (
+              <div
+                role="alert"
+                className="relative z-30 flex flex-col items-center justify-center gap-2.5 text-center text-white/85 px-6"
+              >
+                <Lock className="size-7 text-white/60" />
+                <p className="text-sm font-semibold">Moment media unavailable</p>
+                <p className="text-xs text-white/65 max-w-xs">
+                  This Moment may have expired, failed to load, or is restricted to an authorized
+                  audience.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void retryMomentMedia();
+                  }}
+                  className="mt-1 rounded-full gap-1.5"
+                >
+                  <RotateCcw className="size-3.5" /> Retry loading
+                </Button>
+              </div>
+            ) : momentMediaLoading || !resolvedMomentUrl ? (
+              <div className="flex flex-col items-center gap-2 text-xs text-white/75" role="status">
+                <Loader2 className="size-6 animate-spin text-white/70" />
+                <span>Loading Moment…</span>
+              </div>
+            ) : currentMoment.media_type === "video" ? (
               <video
+                key={currentMoment.id}
                 ref={videoRef}
-                src={currentMoment.media_url}
+                src={resolvedMomentUrl}
                 autoPlay
                 playsInline
+                preload="auto"
                 muted={isMuted}
                 loop={false}
+                onError={() => void handleMomentMediaError()}
+                onLoadedData={() => setMediaLoaded(true)}
+                onCanPlay={() => setMediaLoaded(true)}
                 onLoadedMetadata={(e) => {
                   const d = e.currentTarget.duration;
                   if (Number.isFinite(d) && d > 0) setVideoDurationSec(d);
+                  setMediaLoaded(true);
                 }}
                 onEnded={advanceNext}
                 className="h-full w-full object-contain"
               />
             ) : (
               <img
-                src={currentMoment.media_url}
-                alt="Moment content"
+                key={currentMoment.id}
+                src={resolvedMomentUrl}
+                alt={currentMoment.caption || "Moment content"}
+                onLoad={() => setMediaLoaded(true)}
+                onError={() => void handleMomentMediaError()}
                 className="h-full w-full object-contain"
               />
             )}
@@ -949,6 +1056,31 @@ export function MomentViewerModal({
           open={repingModalOpen}
           onOpenChange={setRepingModalOpen}
         />
+
+        {/* Boost Moment Dialog */}
+        {isOwner && (
+          <>
+            <BoostContentDialog
+              open={boostDialogOpen}
+              onOpenChange={setBoostDialogOpen}
+              target={{
+                contentType: "moment",
+                contentId: currentMoment.id,
+                previewText:
+                  currentMoment.caption ||
+                  currentMoment.overlay_text ||
+                  `Moment by @${currentSequence.author.username}`,
+                momentExpiresAt: currentMoment.expires_at,
+                momentAudience: currentMoment.audience,
+              }}
+            />
+            <MomentToClipDialog
+              moment={currentMoment}
+              open={clipDialogOpen}
+              onOpenChange={setClipDialogOpen}
+            />
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );

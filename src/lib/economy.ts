@@ -79,26 +79,27 @@ export const UPGRADE_TIERS: UpgradeTierInfo[] = [
     name: "Founder Pro",
     badge: "Pro",
     dotCost: 350,
-    tagline: "Champagne Gold creator identity with full network intelligence.",
+    tagline:
+      "Champagne Gold creator plan with extended network insights (optional, DOT credits only).",
     highlighted: true,
     perks: [
-      "Champagne Gold Founder Pro profile badge",
+      "Founder Pro plan badge (separate from verification)",
       "Full Ping, Moment, Hub & Signal performance telemetry",
-      "Priority placement in For You discovery",
+      "Priority placement options in personal feeds",
       "Higher daily Moment & Hub broadcast quotas",
     ],
   },
   {
     id: "institution",
     name: "Institution",
-    badge: "Verified Org",
+    badge: "Org Plan",
     dotCost: 600,
-    tagline: "Designed for accelerators, universities, startups, and collectives.",
+    tagline: "Designed for accelerators, universities, startups, businesses, and collectives.",
     perks: [
-      "Priority Signal channel verification review",
+      "Eligible for optional institutional Signal verification review",
       "Multi-publisher Signal & Hub team governance",
-      "Official institutional broadcast analytics",
-      "Dedicated verification badge across Hubs & Signals",
+      "Official organizational broadcast analytics",
+      "Organizational plan badge (distinct from verified credentials)",
     ],
   },
 ];
@@ -153,7 +154,17 @@ export function dotSummaryQuery(userId?: string) {
         };
       }
 
-      // Graceful read-only fallback computed from verified account Pings when migration 0016 is pending
+      if (error) {
+        const isMissingRpc =
+          error.code === "PGRST202" ||
+          error.code === "42883" ||
+          error.message?.toLowerCase().includes("does not exist");
+        if (!isMissingRpc) {
+          throw error;
+        }
+      }
+
+      // Graceful read-only fallback only when migration 0016 RPC is not yet deployed
       const { count: pingCount } = await supabase
         .from("pings")
         .select("id", { count: "exact", head: true })

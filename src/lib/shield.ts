@@ -74,9 +74,18 @@ export interface MediaValidationRules {
   maxSizeBytes: number;
 }
 
-export const MEDIA_RULES = {
+export type MediaKind = "image" | "video" | "audio" | "document";
+
+export const MEDIA_RULES: Record<MediaKind, MediaValidationRules> = {
   image: {
-    allowedMimeTypes: ["image/jpeg", "image/png", "image/webp", "image/gif"],
+    allowedMimeTypes: [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "image/gif",
+      "image/heic",
+      "image/heif",
+    ],
     maxSizeBytes: 10 * 1024 * 1024, // 10MB
   },
   video: {
@@ -90,22 +99,114 @@ export const MEDIA_RULES = {
       "audio/mpeg",
       "audio/ogg",
       "audio/wav",
-      "audio/x-m4a",
+      "audio/aac",
+    ],
+    maxSizeBytes: 25 * 1024 * 1024, // 25MB
+  },
+  document: {
+    allowedMimeTypes: [
+      "application/pdf",
+      "text/plain",
+      "text/csv",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.ms-powerpoint",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "application/zip",
     ],
     maxSizeBytes: 25 * 1024 * 1024, // 25MB
   },
 };
 
+const EXTENSION_MIME_MAP: Record<string, string> = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".webp": "image/webp",
+  ".gif": "image/gif",
+  ".heic": "image/heic",
+  ".heif": "image/heif",
+  ".mp4": "video/mp4",
+  ".m4v": "video/mp4",
+  ".webm": "video/webm",
+  ".mov": "video/quicktime",
+  ".mp3": "audio/mpeg",
+  ".m4a": "audio/mp4",
+  ".ogg": "audio/ogg",
+  ".wav": "audio/wav",
+  ".aac": "audio/aac",
+  ".pdf": "application/pdf",
+  ".txt": "text/plain",
+  ".csv": "text/csv",
+  ".doc": "application/msword",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".xls": "application/vnd.ms-excel",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ".ppt": "application/vnd.ms-powerpoint",
+  ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ".zip": "application/zip",
+};
+
+const DANGEROUS_EXTENSIONS = [
+  ".exe",
+  ".sh",
+  ".bat",
+  ".cmd",
+  ".msi",
+  ".ps1",
+  ".vbs",
+  ".js",
+  ".mjs",
+  ".html",
+  ".htm",
+  ".dll",
+  ".apk",
+];
+
+export function resolveNormalizedMime(file: { type: string; name: string }): string {
+  const rawType = (file.type || "").split(";")[0]?.trim().toLowerCase() ?? "";
+  if (rawType === "image/jpg") return "image/jpeg";
+  if (rawType === "video/x-m4v") return "video/mp4";
+  if (rawType === "audio/x-m4a" || rawType === "audio/m4a") return "audio/mp4";
+  if (rawType) return rawType;
+
+  const lowerName = (file.name || "").toLowerCase();
+  const dotIdx = lowerName.lastIndexOf(".");
+  if (dotIdx >= 0) {
+    const ext = lowerName.slice(dotIdx);
+    if (EXTENSION_MIME_MAP[ext]) return EXTENSION_MIME_MAP[ext];
+  }
+  return "";
+}
+
+export function detectMediaKind(file: { type: string; name: string }): MediaKind {
+  const mime = resolveNormalizedMime(file);
+  if (mime.startsWith("video/")) return "video";
+  if (mime.startsWith("audio/")) return "audio";
+  if (mime.startsWith("image/")) return "image";
+  return "document";
+}
+
 export function validateMediaUpload(
   file: { type: string; size: number; name: string },
-  kind: "image" | "video" | "audio" = "image",
+  kind: MediaKind = "image",
 ): { valid: boolean; error?: string } {
-  const rules = MEDIA_RULES[kind];
-
-  if (!rules.allowedMimeTypes.includes(file.type.toLowerCase())) {
+  if (file.size <= 0) {
     return {
       valid: false,
-      error: `Unsupported file format (${file.type}). Allowed: ${rules.allowedMimeTypes.join(", ")}`,
+      error: "Selected file is empty (0 bytes). Please choose another file.",
+    };
+  }
+
+  const rules = MEDIA_RULES[kind];
+  const resolvedMime = resolveNormalizedMime(file);
+
+  if (!resolvedMime || !rules.allowedMimeTypes.includes(resolvedMime)) {
+    return {
+      valid: false,
+      error: `Unsupported file format (${resolvedMime || "unknown"}). Allowed: ${rules.allowedMimeTypes.join(", ")}`,
     };
   }
 
@@ -113,21 +214,15 @@ export function validateMediaUpload(
     const maxMb = Math.round(rules.maxSizeBytes / (1024 * 1024));
     return {
       valid: false,
-      error: `File is too large (${Math.round(file.size / 1024 / 1024)}MB). Maximum allowed is ${maxMb}MB.`,
+      error: `File is too large (${Math.max(1, Math.round(file.size / 1024 / 1024))}MB). Maximum allowed is ${maxMb}MB.`,
     };
   }
 
-  // Prevent dangerous double-extensions or directory traversal
-  const name = file.name.toLowerCase();
-  if (
-    name.includes("..") ||
-    name.endsWith(".exe") ||
-    name.endsWith(".sh") ||
-    name.endsWith(".html")
-  ) {
+  const name = (file.name || "").toLowerCase();
+  if (name.includes("..") || DANGEROUS_EXTENSIONS.some((ext) => name.endsWith(ext))) {
     return {
       valid: false,
-      error: "Invalid file name.",
+      error: "Invalid or unsafe file name.",
     };
   }
 

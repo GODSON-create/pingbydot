@@ -31,7 +31,7 @@ describe("Visual System & Responsive Experience Audit (375px, 768px, 1024px, 144
     expect(indexTsx).toContain("bg-gold/15 text-gold border border-gold/30");
     // Hubs directory verified badge
     expect(hubsTsx).toContain("bg-gold/15 text-gold border border-gold/30");
-    // Signals directory verified badge
+    // Signals institutional directory verified badge
     expect(signalsTsx).toContain("bg-gold/15 text-gold border border-gold/30");
     // Signals slug verified badge
     expect(signalsSlugTsx).toContain("bg-gold/15 text-gold border border-gold/30");

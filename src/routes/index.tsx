@@ -1,12 +1,11 @@
 import { pageHead } from "@/lib/site";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import {
   Sparkles,
-  Radio,
   Building2,
   Users,
   Lock,
@@ -14,8 +13,6 @@ import {
   Plus,
   ArrowRight,
   CheckCircle,
-  Bell,
-  BellOff,
   Compass,
   Calendar,
   Check,
@@ -30,18 +27,27 @@ import { Button } from "@/components/ui/button";
 import { FounderAvatar } from "@/components/ping/Avatar";
 import { PingCard, PingCardSkeleton } from "@/components/ping/PingCard";
 import { MomentsTray } from "@/components/moments/MomentsTray";
+import { SpotlightFeedStrip } from "@/components/spotlight/SpotlightFeedStrip";
 import { AriseCallout } from "@/components/AriseCallout";
+import { PingMark } from "@/components/BrandLogo";
 import { useAuth } from "@/lib/auth";
 import { feedQuery, followingFeedQuery, type Ping } from "@/lib/pings";
+import { QueryErrorCard } from "@/components/QueryErrorCard";
+import { WelcomeCarousel } from "@/components/onboarding/WelcomeCarousel";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  ONBOARDING_INTERESTS,
+  formatInterestLabel,
+  hasSeenWelcome,
+  markWelcomeSeen,
+} from "@/lib/pathways";
 import { hubsQuery, myHubsQuery, myPendingHubsQuery, hubError } from "@/lib/hub-queries";
 import { HUB_CATEGORIES, type Hub, type HubCategory } from "@/lib/hubs";
-import {
-  signalsQuery,
-  recentSignalBroadcastsQuery,
-  myFollowedSignalsQuery,
-  useSignalFollow,
-  type Signal,
-} from "@/lib/signals";
+import { blockedUsersQuery, userConversationsQuery } from "@/lib/messages";
+import { mutedUsersQuery } from "@/lib/mutes";
+import { extractTrendingTopics, rankFeedPings, type FeedMode } from "@/lib/feed-engine";
+import { CURATED_DOT_TAGS } from "@/lib/dot-tags";
+import { followedTopicsQuery, useToggleFollowTopic } from "@/lib/social";
 import { INTENT_FORMATS, parseStructuredPing, type Category } from "@/lib/validation";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -49,7 +55,7 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/")({
   staticData: { sitemap: true },
   validateSearch: z.object({
-    tab: z.enum(["foryou", "following"]).optional().default("foryou"),
+    tab: z.enum(["foryou", "following", "latest", "trending", "opportunities"]).optional(),
     c: z
       .enum([
         "progress",
@@ -64,13 +70,16 @@ export const Route = createFileRoute("/")({
         "milestone",
       ])
       .optional(),
-    page: z.coerce.number().int().min(0).max(10000).catch(0).default(0),
+    page: z.coerce.number().int().min(0).max(10000).optional().catch(undefined),
   }),
+  loaderDeps: ({ search: { c, page } }) => ({ cat: c ?? null, page: page ?? 0 }),
+  loader: ({ context, deps }) =>
+    context.queryClient.ensureQueryData(feedQuery(deps.cat, deps.page)),
   head: () =>
     pageHead({
-      title: "Ping by DOT — Build in Public, Discover Hubs & Signals",
+      title: "Ping by DOT — Connect, Share, Discover Hubs & Signals",
       description:
-        "Real-time social discovery for founders and builders. Share Pings, publish Moments, collaborate in Hubs, and subscribe to official institutional Signals.",
+        "Social, communication, discovery, and economic network for everyone. Share Pings and Moments, and communicate via Chats, Hubs, and institutional Signals.",
       path: "/",
       card: "summary_large_image",
     }),
@@ -219,160 +228,122 @@ function HomeHubCard({
 }
 
 /* -------------------------------------------------------------------------- */
-/*                             SIGNAL CARD (HOME)                             */
-/* -------------------------------------------------------------------------- */
-function HomeSignalCard({
-  signal,
-  isFollowing,
-  latestPost,
-  currentUserId,
-}: {
-  signal: Signal;
-  isFollowing: boolean;
-  latestPost?: { id: string; title: string; content: string; created_at: string } | undefined;
-  currentUserId?: string | undefined;
-}) {
-  const followMutation = useSignalFollow(signal.id, currentUserId);
-
-  const handleToggle = () => {
-    if (!currentUserId) {
-      toast("Sign in to subscribe to official Signals", {
-        action: { label: "Log in", onClick: () => (window.location.href = "/login") },
-      });
-      return;
-    }
-    followMutation.mutate();
-  };
-
-  return (
-    <article className="surface-card group relative flex flex-col justify-between rounded-3xl p-5 border border-border/70 hover:border-border transition-all shadow-sm hover:shadow-md">
-      <div>
-        <div className="flex items-start gap-3">
-          {signal.avatar_url ? (
-            <img
-              src={signal.avatar_url}
-              alt={signal.name}
-              className="size-11 rounded-2xl object-cover shrink-0 border border-border/50"
-            />
-          ) : (
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary font-bold">
-              <Radio className="size-5" />
-            </div>
-          )}
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <Link
-                to="/signals/$slug"
-                params={{ slug: signal.slug }}
-                className="font-display text-base font-bold text-foreground hover:underline truncate"
-              >
-                {signal.name}
-              </Link>
-              {signal.verified && (
-                <span
-                  title="Verified Institution"
-                  className="inline-flex items-center gap-1 rounded-full bg-gold/15 text-gold border border-gold/30 px-2 py-0.5 text-[10px] font-bold"
-                >
-                  <CheckCircle className="size-3" />
-                  Verified
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground">
-              <span className="capitalize font-semibold text-secondary-foreground bg-secondary px-2 py-0.5 rounded-full">
-                {signal.institution_type}
-              </span>
-              <span>{(signal.follower_count ?? 0).toLocaleString()} subscribers</span>
-            </div>
-          </div>
-        </div>
-
-        {signal.description && (
-          <p className="mt-3 text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-            {signal.description}
-          </p>
-        )}
-
-        {/* Latest broadcast snippet preview */}
-        {latestPost ? (
-          <div className="mt-3 rounded-2xl bg-secondary/50 p-2.5 border border-border/40 text-xs">
-            <div className="flex items-center gap-1 text-[11px] font-semibold text-primary">
-              <Radio className="size-3 animate-pulse" />
-              <span className="truncate">Latest: {latestPost.title}</span>
-            </div>
-            <p className="mt-1 text-[11px] text-muted-foreground line-clamp-1">
-              {latestPost.content}
-            </p>
-          </div>
-        ) : (
-          <div className="mt-3 rounded-2xl bg-secondary/30 p-2 border border-border/30 text-[11px] text-muted-foreground text-center">
-            Standing by for upcoming institutional broadcasts.
-          </div>
-        )}
-      </div>
-
-      <div className="mt-4 pt-3 border-t border-border/50 flex items-center gap-2">
-        <Button asChild variant="outline" size="sm" className="w-1/2 rounded-xl text-xs h-8">
-          <Link to="/signals/$slug" params={{ slug: signal.slug }}>
-            Tune In
-          </Link>
-        </Button>
-
-        <Button
-          variant={isFollowing ? "outline" : "hero"}
-          size="sm"
-          onClick={handleToggle}
-          disabled={followMutation.isPending}
-          className="w-1/2 rounded-xl text-xs h-8 gap-1 shadow-sm"
-        >
-          {isFollowing ? (
-            <>
-              <BellOff className="size-3" /> Subscribed
-            </>
-          ) : (
-            <>
-              <Bell className="size-3" /> Subscribe
-            </>
-          )}
-        </Button>
-      </div>
-    </article>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
 /*                              HOMEPAGE COMPONENT                            */
 /* -------------------------------------------------------------------------- */
 function HomePage() {
+  const { user, ready } = useAuth();
+  const [hydrated, setHydrated] = useState(false);
+  const [welcomeDismissed, setWelcomeDismissed] = useState(false);
+
+  useEffect(() => {
+    setHydrated(true);
+    setWelcomeDismissed(hasSeenWelcome());
+  }, []);
+
+  if (!hydrated || !ready) {
+    return (
+      <div className="bg-hero flex min-h-[calc(100dvh-5rem)] items-center justify-center px-4 pb-24">
+        <div
+          role="status"
+          aria-live="polite"
+          className="surface-card flex flex-col items-center gap-3 rounded-3xl px-8 py-7 text-center shadow-lift"
+        >
+          <PingMark variant="lime" size="lg" alt="Ping by DOT" />
+          <p className="text-sm font-medium text-muted-foreground">Opening Ping…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user && !welcomeDismissed) {
+    return (
+      <div className="bg-hero min-h-[calc(100dvh-5rem)] px-3.5 sm:px-6 py-5 pb-24 sm:py-12">
+        <div className="mx-auto max-w-5xl">
+          <WelcomeCarousel
+            nextPath="/"
+            onCompleteOrSkip={() => {
+              markWelcomeSeen();
+              setWelcomeDismissed(true);
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return <HomeFeedContent />;
+}
+
+function HomeFeedContent() {
   const { user, profile } = useAuth();
   const search = Route.useSearch();
-  const activeTab = search.tab || "foryou";
+  const initialForYouPings = Route.useLoaderData();
+  const activeTab: FeedMode = search.tab || "foryou";
   const categoryFilter = search.c ?? null;
   const page = search.page || 0;
+  const [welcomeModalOpen, setWelcomeModalOpen] = useState(false);
 
   // Real Queries
-  const { data: forYouPings = [], isLoading: pingsLoading } = useQuery(
-    feedQuery(categoryFilter, page),
-  );
-  const { data: followingPings = [], isLoading: followingLoading } = useQuery(
-    followingFeedQuery(user?.id, page),
-  );
-  const { data: hubs = [], isLoading: hubsLoading } = useQuery(hubsQuery("", null, 0));
+  const {
+    data: forYouPings = [],
+    isLoading: pingsLoading,
+    isError: isForYouError,
+    error: forYouError,
+    refetch: refetchForYou,
+  } = useQuery({
+    ...feedQuery(categoryFilter, page),
+    initialData: initialForYouPings,
+    initialDataUpdatedAt: 0,
+  });
+  const {
+    data: followingPings = [],
+    isLoading: followingLoading,
+    isError: isFollowingError,
+    error: followingError,
+    refetch: refetchFollowing,
+  } = useQuery(followingFeedQuery(user?.id, page));
+  const { data: mutedUsers = [] } = useQuery(mutedUsersQuery(user?.id));
+  const { data: blockedUsers = [] } = useQuery(blockedUsersQuery(user?.id));
+  const { data: followedTopics = [] } = useQuery(followedTopicsQuery(user?.id));
+  const toggleFollowTopic = useToggleFollowTopic(user?.id);
+  const {
+    data: hubs = [],
+    isLoading: hubsLoading,
+    isError: isHubsError,
+    error: hubsError,
+    refetch: refetchHubs,
+  } = useQuery(hubsQuery("", null, 0));
   const { data: myHubs = [] } = useQuery(myHubsQuery(user?.id));
   const { data: myPendingHubs = new Set<string>() } = useQuery(myPendingHubsQuery(user?.id));
 
-  const { data: signals = [], isLoading: signalsLoading } = useQuery(signalsQuery());
-  const { data: followedSignals = new Set<string>() } = useQuery(myFollowedSignalsQuery(user?.id));
-  const { data: recentBroadcasts = {} } = useQuery(recentSignalBroadcastsQuery());
+  const { data: conversations = [] } = useQuery(userConversationsQuery(user?.id));
+  const unreadSignalCount = conversations.reduce((sum, c) => sum + (c.unread_count ?? 0), 0);
+
+  const mutedIds = new Set(mutedUsers.map((m) => m.muted_id));
+  const blockedIds = new Set(blockedUsers.map((b) => b.blocked_id));
+  const followedAuthorIds = new Set(followingPings.map((p) => p.user_id));
 
   const rawPings = activeTab === "following" ? followingPings : forYouPings;
-  const displayedPings = categoryFilter
+  const categoryMatched = categoryFilter
     ? rawPings.filter((p) => {
         const meta = parseStructuredPing(p);
         return meta.intentFormat === categoryFilter || p.category === categoryFilter;
       })
     : rawPings;
+  const displayedPings = rankFeedPings(categoryMatched, {
+    mode: activeTab,
+    viewerId: user?.id ?? null,
+    interests: profile?.interests ?? [],
+    followedTopics,
+    followedAuthorIds,
+    mutedUserIds: mutedIds,
+    blockedUserIds: blockedIds,
+  });
+  const trendingTopics = extractTrendingTopics(forYouPings, 6);
   const isPingsLoading = activeTab === "following" ? followingLoading : pingsLoading;
+  const isPingsError = activeTab === "following" ? isFollowingError : isForYouError;
+  const activeFeedError = activeTab === "following" ? followingError : forYouError;
+  const refetchActiveFeed = activeTab === "following" ? refetchFollowing : refetchForYou;
 
   // Set of joined hub IDs
   const myHubIds = new Set(myHubs.map((h) => h.hub.id));
@@ -385,11 +356,9 @@ function HomePage() {
           <div>
             <h1 className="font-display text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">
               {user ? (
-                <>
-                  Hey {profile?.display_name || profile?.username || "Builder"}, share your intent.
-                </>
+                <>Hey {profile?.display_name || profile?.username || "there"}, what&apos;s new?</>
               ) : (
-                <>Coordinate intentions, people, and opportunities.</>
+                <>Your world. Your people. Your possibilities.</>
               )}
             </h1>
           </div>
@@ -407,14 +376,19 @@ function HomePage() {
                 </Link>
               </Button>
             ) : (
-              <Button
-                asChild
-                variant="hero"
-                size="sm"
-                className="rounded-full shadow-lift h-9 px-5"
-              >
-                <Link to="/signup">Join PING</Link>
-              </Button>
+              <>
+                <Button asChild variant="outline" size="sm" className="rounded-full h-9 px-4">
+                  <Link to="/login">Sign in</Link>
+                </Button>
+                <Button
+                  asChild
+                  variant="hero"
+                  size="sm"
+                  className="rounded-full shadow-lift h-9 px-5"
+                >
+                  <Link to="/signup">Create account</Link>
+                </Button>
+              </>
             )}
           </div>
         </div>
@@ -425,46 +399,167 @@ function HomePage() {
         </div>
       </section>
 
+      {/* Signed-out prompt for returning guests who skipped the welcome slides */}
+      {!user && (
+        <section
+          aria-label="Sign in or join Ping"
+          className="surface-card mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-3xl border border-primary/25 bg-hero p-5"
+        >
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-primary">Ping by DOT</p>
+            <h2 className="mt-0.5 font-display text-lg font-extrabold text-foreground">
+              Connect, communicate, and make something happen
+            </h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Sign in with Google or email to post Pings, join Hubs, and message people 1-on-1.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <Button asChild variant="hero" size="sm" className="rounded-full gap-1.5">
+              <Link to="/login">Sign in</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm" className="rounded-full">
+              <Link to="/signup">Create account</Link>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setWelcomeModalOpen(true)}
+              className="rounded-full text-xs text-muted-foreground"
+            >
+              Intro slides
+            </Button>
+          </div>
+        </section>
+      )}
+
+      <Dialog
+        open={welcomeModalOpen}
+        onOpenChange={(open) => {
+          setWelcomeModalOpen(open);
+          if (!open) {
+            markWelcomeSeen();
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl max-h-[90dvh] overflow-y-auto border-none bg-transparent p-0 shadow-none">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Welcome to Ping by DOT</DialogTitle>
+          </DialogHeader>
+          <WelcomeCarousel
+            compact
+            nextPath="/"
+            onCompleteOrSkip={() => {
+              markWelcomeSeen();
+              setWelcomeModalOpen(false);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+
       {/* 2. MAIN 2-COLUMN DISCOVERY GRID */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] xl:grid-cols-[1fr_360px] gap-6 xl:gap-8 items-start min-w-0">
         {/* =================================================================== */}
         {/* LEFT COLUMN: PINGS FEED                                             */}
         {/* =================================================================== */}
         <div className="min-w-0 space-y-6">
-          {/* Feed Header Tabs: For You vs Following */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-border/60 pb-3">
-            <div className="flex items-center gap-2">
-              <Link
-                to="/"
-                search={{ tab: "foryou", c: categoryFilter ?? undefined, page: 0 }}
-                className={cn(
-                  "rounded-full px-4 py-1.5 text-sm font-semibold transition-all",
-                  activeTab === "foryou"
-                    ? "bg-foreground text-background shadow-sm"
-                    : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-                )}
-              >
-                For You
-              </Link>
-              <Link
-                to="/"
-                search={{ tab: "following", c: categoryFilter ?? undefined, page: 0 }}
-                className={cn(
-                  "rounded-full px-4 py-1.5 text-sm font-semibold transition-all flex items-center gap-1.5",
-                  activeTab === "following"
-                    ? "bg-foreground text-background shadow-sm"
-                    : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-                )}
-              >
-                Following
-                {!user && <Lock className="size-3 text-muted-foreground" />}
-              </Link>
+          {/* Feed Header Tabs: For You, Following, Latest, Trending, Opportunities */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-border/60 pb-3">
+            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-0.5">
+              {(
+                [
+                  { id: "foryou", label: "For You" },
+                  { id: "following", label: "Following", locked: !user },
+                  { id: "latest", label: "Latest" },
+                  { id: "trending", label: "Trending" },
+                  { id: "opportunities", label: "Opportunities" },
+                ] as Array<{ id: FeedMode; label: string; locked?: boolean }>
+              ).map((t) => (
+                <Link
+                  key={t.id}
+                  to="/"
+                  search={{ tab: t.id, c: categoryFilter ?? undefined, page: 0 }}
+                  className={cn(
+                    "shrink-0 rounded-full px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-all inline-flex items-center gap-1.5",
+                    activeTab === t.id
+                      ? "bg-foreground text-background shadow-sm"
+                      : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                  )}
+                >
+                  {t.label}
+                  {t.locked && <Lock className="size-3 text-muted-foreground" />}
+                </Link>
+              ))}
             </div>
 
-            <span className="text-xs text-muted-foreground font-medium">
-              {categoryFilter ? `Filtering by #${categoryFilter}` : "Showing all categories"}
-            </span>
+            <Link
+              to="/media"
+              className="shrink-0 rounded-full border border-primary/35 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary hover:bg-primary hover:text-primary-foreground transition-colors"
+            >
+              Video &amp; Media Feeds →
+            </Link>
           </div>
+
+          {(() => {
+            const mergedDotTags = Array.from(
+              new Set([
+                ...trendingTopics.map((t) => t.slug),
+                ...CURATED_DOT_TAGS.slice(0, 8).map((t) => t.slug),
+              ]),
+            ).slice(0, 8);
+            return (
+              <div className="flex flex-wrap items-center gap-1.5" aria-label="DOT Tags to explore">
+                <span className="text-[11px] font-semibold text-muted-foreground mr-1">
+                  DOT Tags:
+                </span>
+                {mergedDotTags.map((slug) => {
+                  const isFollowingTopic = followedTopics.includes(slug);
+                  return (
+                    <div
+                      key={slug}
+                      className={cn(
+                        "inline-flex items-center rounded-full border text-[11px] overflow-hidden transition-colors",
+                        isFollowingTopic
+                          ? "border-primary bg-primary/15 text-primary"
+                          : "border-border/70 bg-card text-foreground",
+                      )}
+                    >
+                      <Link
+                        to="/tag/$slug"
+                        params={{ slug }}
+                        className="px-2.5 py-0.5 font-semibold hover:bg-secondary/70"
+                      >
+                        .{slug}
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!user) {
+                            toast.info("Sign in to follow DOT Tags and personalise your feed");
+                            return;
+                          }
+                          toggleFollowTopic.mutate(
+                            { topicSlug: slug, currentlyFollowing: isFollowingTopic },
+                            {
+                              onSuccess: (nowFollowing) =>
+                                toast.success(
+                                  nowFollowing ? `Following .${slug}` : `Unfollowed .${slug}`,
+                                ),
+                            },
+                          );
+                        }}
+                        aria-label={isFollowingTopic ? `Unfollow .${slug}` : `Follow .${slug}`}
+                        className="border-l border-border/60 px-2 py-0.5 font-bold text-muted-foreground hover:text-primary transition-colors"
+                      >
+                        {isFollowingTopic ? "✓" : "+"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
 
           {/* Intent Category Filter Bar */}
           <nav
@@ -500,26 +595,61 @@ function HomePage() {
             ))}
           </nav>
 
-          {/* Quick Post Banner for Desktop Logged-In Users */}
+          {/* Recommended First Actions & Interest Shortcuts for Logged-In Users */}
           {user && (
-            <div className="surface-card hidden md:flex items-center justify-between gap-3 rounded-2xl p-3 sm:p-4 border border-border/80">
-              <Link
-                to="/@{$username}"
-                params={{ username: profile?.username || "" }}
-                className="flex items-center gap-2.5 min-w-0"
-              >
-                <FounderAvatar
-                  name={profile?.display_name || profile?.username || "You"}
-                  src={profile?.avatar_url}
+            <div className="surface-card space-y-3 rounded-2xl p-3.5 sm:p-4 border border-border/80">
+              <div className="flex items-center justify-between gap-3">
+                <Link
+                  to="/@{$username}"
+                  params={{ username: profile?.username || "" }}
+                  className="flex items-center gap-2.5 min-w-0"
+                >
+                  <FounderAvatar
+                    name={profile?.display_name || profile?.username || "You"}
+                    src={profile?.avatar_url}
+                    size="sm"
+                  />
+                  <span className="text-xs text-muted-foreground truncate font-medium">
+                    Share an update, question, or idea with Ping…
+                  </span>
+                </Link>
+                <Button
+                  asChild
+                  variant="hero"
                   size="sm"
-                />
-                <span className="text-xs text-muted-foreground truncate font-medium">
-                  Share an intention, need, or opportunity…
-                </span>
-              </Link>
-              <Button asChild variant="hero" size="sm" className="rounded-xl h-8 px-3 text-xs">
-                <Link to="/create">Create Ping</Link>
-              </Button>
+                  className="rounded-xl h-8 px-3 text-xs shrink-0"
+                >
+                  <Link to="/create">Create Ping</Link>
+                </Button>
+              </div>
+              {profile?.interests && profile.interests.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 border-t border-border/50 pt-2.5">
+                  <span className="text-[11px] font-semibold text-muted-foreground mr-1">
+                    Recommended:
+                  </span>
+                  {profile.interests.slice(0, 5).map((interestId) => {
+                    const mapped = ONBOARDING_INTERESTS.find((item) => item.id === interestId);
+                    const catTarget = mapped?.pingCategory ?? "progress";
+                    return (
+                      <Link
+                        key={interestId}
+                        to="/"
+                        search={{ tab: activeTab, c: catTarget as any, page: 0 }}
+                        className="rounded-full border border-border/80 bg-secondary/60 px-2.5 py-0.5 text-[11px] font-medium text-foreground hover:border-primary/50 hover:bg-primary/10 transition-colors"
+                      >
+                        {formatInterestLabel(interestId)}
+                      </Link>
+                    );
+                  })}
+                  <Link
+                    to="/explore"
+                    search={{ filter: "people" }}
+                    className="ml-auto text-[11px] font-semibold text-primary hover:underline"
+                  >
+                    Find people & Hubs &rarr;
+                  </Link>
+                </div>
+              )}
             </div>
           )}
 
@@ -538,7 +668,8 @@ function HomePage() {
                   See updates from people you follow
                 </h3>
                 <p className="mt-1 text-xs text-muted-foreground max-w-sm mx-auto">
-                  Log in to create a tailored timeline of founders and collaborators you care about.
+                  Sign in to build a tailored feed of people, creators, and communities you care
+                  about.
                 </p>
                 <Button asChild variant="hero" size="sm" className="mt-4 rounded-xl">
                   <Link to="/login" search={{ next: "/?tab=following" }}>
@@ -546,6 +677,13 @@ function HomePage() {
                   </Link>
                 </Button>
               </div>
+            ) : isPingsError ? (
+              <QueryErrorCard
+                title="Couldn't load Pings"
+                description="A connection issue prevented loading the feed. Your Pings are safe — try refreshing below."
+                error={activeFeedError}
+                onRetry={() => void refetchActiveFeed()}
+              />
             ) : displayedPings.length === 0 ? (
               <div className="surface-card rounded-3xl p-10 text-center border border-border/60">
                 <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-lime/20 dark:bg-lime/15 text-lime-foreground dark:text-lime font-bold">
@@ -651,6 +789,13 @@ function HomePage() {
                     <div key={i} className="h-36 rounded-3xl bg-muted/40 animate-pulse" />
                   ))}
                 </div>
+              ) : isHubsError ? (
+                <QueryErrorCard
+                  compact
+                  title="Couldn't load Hubs"
+                  error={hubsError}
+                  onRetry={() => void refetchHubs()}
+                />
               ) : hubs.length === 0 ? (
                 <div className="surface-card rounded-2xl p-6 text-center text-xs text-muted-foreground border border-border/60">
                   <Building2 className="mx-auto size-8 text-muted-foreground/40 mb-2" />
@@ -677,59 +822,159 @@ function HomePage() {
             </div>
           </section>
 
-          {/* 4. SIGNALS DISCOVERY SECTION */}
-          <section aria-labelledby="signals-discovery-heading">
+          {/* 3B. PING SPOTLIGHT, CLIPS & LEARN ECOSYSTEM DISCOVERY */}
+          <section aria-labelledby="ecosystem-discovery-heading" className="space-y-3">
+            <SpotlightFeedStrip channel="home_feed" maxItems={2} />
             <div className="flex items-center justify-between mb-3">
               <h2
-                id="signals-discovery-heading"
+                id="ecosystem-discovery-heading"
                 className="font-display text-lg font-bold flex items-center gap-2 text-foreground"
               >
-                <Radio className="size-5 text-primary" />
-                <span>Official Signals</span>
+                <Sparkles className="size-5 text-primary" />
+                <span>Spotlight, Clips &amp; Learn</span>
               </h2>
-              <div className="flex items-center gap-2">
-                <Button
-                  asChild
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-xs px-2 text-primary font-semibold"
-                >
-                  <Link to="/signals">Browse All</Link>
-                </Button>
-                <Button asChild variant="outline" size="sm" className="h-7 text-xs px-2 rounded-lg">
-                  <Link to="/signals/create">+ Register</Link>
-                </Button>
-              </div>
+            </div>
+            <div className="surface-card rounded-2xl p-4 border border-border/60 space-y-2.5 text-xs">
+              <Link
+                to="/spotlight"
+                className="flex items-center justify-between gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 hover:bg-amber-500/15 transition-colors"
+              >
+                <div>
+                  <p className="font-bold text-foreground">Ping Spotlight</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Merit-selected founder stories &amp; official distribution
+                  </p>
+                </div>
+                <ArrowUpRight className="size-4 text-amber-500 shrink-0" />
+              </Link>
+              <Link
+                to="/clips"
+                className="flex items-center justify-between gap-2 rounded-xl border border-border/70 bg-secondary/40 p-3 hover:bg-secondary/70 transition-colors"
+              >
+                <div>
+                  <p className="font-bold text-foreground">Ping Clips</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Short-form vertical videos from builders &amp; creators
+                  </p>
+                </div>
+                <ArrowUpRight className="size-4 text-primary shrink-0" />
+              </Link>
+              <Link
+                to="/learn"
+                className="flex items-center justify-between gap-2 rounded-xl border border-border/70 bg-secondary/40 p-3 hover:bg-secondary/70 transition-colors"
+              >
+                <div>
+                  <p className="font-bold text-foreground">Ping Learn</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    LEAPFROG (Builder Plus) &amp; 10-Course Library (Pro)
+                  </p>
+                </div>
+                <ArrowUpRight className="size-4 text-primary shrink-0" />
+              </Link>
+            </div>
+          </section>
+
+          {/* 4. INBOX — RECENT CHATS & SIGNALS QUICK ACCESS */}
+          <section aria-labelledby="inbox-discovery-heading">
+            <div className="flex items-center justify-between mb-3">
+              <h2
+                id="inbox-discovery-heading"
+                className="font-display text-lg font-bold flex items-center gap-2 text-foreground"
+              >
+                <MessageSquare className="size-5 text-primary" />
+                <span>Inbox · Chats</span>
+              </h2>
+              <Button
+                asChild
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs px-2 text-primary font-semibold"
+              >
+                <Link to="/inbox" search={{}}>
+                  Open Inbox
+                </Link>
+              </Button>
             </div>
 
-            <div className="space-y-3">
-              {signalsLoading ? (
+            <div className="surface-card rounded-2xl p-5 border border-border/60">
+              {user && conversations.length > 0 ? (
                 <div className="space-y-3">
-                  {[1, 2].map((i) => (
-                    <div key={i} className="h-36 rounded-3xl bg-muted/40 animate-pulse" />
-                  ))}
-                </div>
-              ) : signals.length === 0 ? (
-                <div className="surface-card rounded-2xl p-6 text-center text-xs text-muted-foreground border border-border/60">
-                  <Radio className="mx-auto size-8 text-muted-foreground/40 mb-2" />
-                  <p className="font-semibold text-foreground">No official Signals yet</p>
-                  <p className="mt-1">Register an official channel for your institution.</p>
-                  <Button asChild variant="hero" size="sm" className="mt-3 rounded-xl text-xs h-7">
-                    <Link to="/signals/create">Register Channel</Link>
-                  </Button>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>
+                      <strong className="text-foreground">{conversations.length}</strong>{" "}
+                      {conversations.length === 1 ? "conversation" : "conversations"}
+                    </span>
+                    {unreadSignalCount > 0 && (
+                      <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold text-primary">
+                        {unreadSignalCount} unread
+                      </span>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    {conversations.slice(0, 3).map((conv) => {
+                      const peer = conv.other_member;
+                      const peerName =
+                        conv.type === "group"
+                          ? conv.title || "Group Chat"
+                          : peer?.display_name || peer?.username || "Founder";
+                      return (
+                        <Link
+                          key={conv.id}
+                          to="/inbox"
+                          search={{ conversationId: conv.id }}
+                          className="flex items-center gap-2.5 rounded-xl border border-border/60 bg-secondary/35 p-2.5 hover:bg-secondary/70 transition-colors"
+                        >
+                          <FounderAvatar name={peerName} src={peer?.avatar_url} size="sm" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold text-foreground truncate">{peerName}</p>
+                            <p className="text-[11px] text-muted-foreground truncate">
+                              {conv.last_message_preview || "Open conversation"}
+                            </p>
+                          </div>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      asChild
+                      variant="hero"
+                      size="sm"
+                      className="w-full rounded-xl text-xs h-8"
+                    >
+                      <Link to="/inbox" search={{}}>
+                        Open Chats
+                      </Link>
+                    </Button>
+                    <Button
+                      asChild
+                      variant="outline"
+                      size="sm"
+                      className="w-full rounded-xl text-xs h-8"
+                    >
+                      <Link to="/signals">Signals</Link>
+                    </Button>
+                  </div>
                 </div>
               ) : (
-                signals
-                  .slice(0, 3)
-                  .map((signal) => (
-                    <HomeSignalCard
-                      key={signal.id}
-                      signal={signal}
-                      isFollowing={followedSignals.has(signal.id)}
-                      latestPost={recentBroadcasts[signal.id]}
-                      currentUserId={user?.id}
-                    />
-                  ))
+                <div className="text-center text-xs text-muted-foreground">
+                  <MessageSquare className="mx-auto size-8 text-muted-foreground/40 mb-2" />
+                  <p className="font-semibold text-foreground">Chats, Hubs &amp; Signals</p>
+                  <p className="mt-1">
+                    Message people directly, join group Hubs, or follow institutional Signals inside
+                    Inbox.
+                  </p>
+                  <div className="mt-3 flex items-center justify-center gap-2">
+                    <Button asChild variant="hero" size="sm" className="rounded-xl text-xs h-7">
+                      <Link to="/inbox" search={{}}>
+                        Open Inbox
+                      </Link>
+                    </Button>
+                    <Button asChild variant="outline" size="sm" className="rounded-xl text-xs h-7">
+                      <Link to="/signals">Signals</Link>
+                    </Button>
+                  </div>
+                </div>
               )}
             </div>
           </section>

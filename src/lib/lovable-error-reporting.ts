@@ -13,6 +13,8 @@ type LovableEvents = {
   ) => void;
 };
 
+import { sanitizeErrorContext, sanitizeErrorMessage } from "./error-diagnostics";
+
 declare global {
   interface Window {
     __lovableEvents?: LovableEvents;
@@ -26,12 +28,19 @@ declare global {
 
 export function reportLovableError(error: unknown, context: Record<string, unknown> = {}) {
   if (typeof window === "undefined") return;
+  const safeMessage = sanitizeErrorMessage(describeThrown(error));
+  const safeError = error instanceof Error ? new Error(safeMessage) : safeMessage;
+  if (error instanceof Error && safeError instanceof Error) {
+    safeError.name = error.name;
+  }
+  const safeContext = sanitizeErrorContext(context) ?? {};
+
   window.__lovableEvents?.captureException?.(
-    error,
+    safeError,
     {
       source: "react_error_boundary",
       route: window.location.pathname,
-      ...context,
+      ...safeContext,
     },
     {
       mechanism: "react_error_boundary",
@@ -42,10 +51,16 @@ export function reportLovableError(error: unknown, context: Record<string, unkno
   // Prod React does not rethrow boundary-caught errors to window.onerror, so the
   // editor's telemetry never sees them. Forward to lovable.js's reporting hook,
   // which is present only inside the editor preview.
-  const stack = error instanceof Error ? error.stack : undefined;
+  const rawStack = error instanceof Error ? error.stack : undefined;
+  const safeStack = rawStack
+    ? rawStack
+        .split("\n")
+        .map((line) => sanitizeErrorMessage(line))
+        .join("\n")
+    : undefined;
   window.__lovableReportRuntimeError?.({
-    message: describeThrown(error),
-    ...(stack !== undefined && { stack }),
+    message: safeMessage,
+    ...(safeStack !== undefined && { stack: safeStack }),
     filename: window.location.pathname,
   });
 }

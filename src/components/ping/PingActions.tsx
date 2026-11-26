@@ -57,6 +57,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { ShareCardDialog } from "./ShareCardDialog";
 import { shareMessage, shareExcerpt } from "@/lib/sharing/card";
+import { recordNetworkEvent } from "@/lib/economic-events";
 
 export function LikeButton({ ping }: { ping: Ping }) {
   const { user } = useAuth();
@@ -152,6 +153,7 @@ export function ShareMenu({
   ping: Ping;
   variant?: "ghost" | "outline";
 }) {
+  const { user } = useAuth();
   const [copied, setCopied] = useState(false);
   const [cardOpen, setCardOpen] = useState(false);
   const [hubOpen, setHubOpen] = useState(false);
@@ -159,10 +161,22 @@ export function ShareMenu({
   const url = pingUrl(ping.id);
   const text = shareExcerpt(ping.content);
 
+  const trackShare = (channel: string) => {
+    if (!user) return;
+    void recordNetworkEvent({
+      eventType: "ping_shared",
+      targetType: "ping",
+      targetId: ping.id,
+      source: "share_menu",
+      metadata: { channel, ping_category: ping.category },
+    });
+  };
+
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
+      trackShare("copy_link");
       toast.success("Link copied");
       setTimeout(() => setCopied(false), 1800);
     } catch {
@@ -172,6 +186,7 @@ export function ShareMenu({
   const native = async () => {
     try {
       await navigator.share({ title: "A Ping", text, url });
+      trackShare("native_share");
     } catch (e) {
       if (!(e instanceof DOMException && e.name === "AbortError"))
         toast.error("Couldn't share. Try copying the link.");
@@ -206,6 +221,7 @@ export function ShareMenu({
               href={`https://wa.me/?text=${encodeURIComponent(shareMessage(ping))}`}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => trackShare("whatsapp")}
             >
               <MessageCircle /> Share on WhatsApp
             </a>

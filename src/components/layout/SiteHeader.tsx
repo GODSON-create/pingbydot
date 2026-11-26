@@ -1,5 +1,5 @@
+import { useCallback, useEffect, useMemo } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
 import {
   Bell,
   Plus,
@@ -7,8 +7,9 @@ import {
   Settings,
   User,
   Users,
-  Radio,
+  Building2,
   Inbox,
+  Radio,
   MessageSquare,
   Sun,
   Moon,
@@ -16,22 +17,42 @@ import {
   BarChart3,
   Coins,
   Crown,
+  Clapperboard,
+  Flame,
+  GraduationCap,
+  Megaphone,
   Heart,
   MessageCircle,
   UserPlus,
+  Sparkles,
+  Code2,
 } from "lucide-react";
 import { formatDistanceToNowStrict } from "date-fns";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { checkAdminAccess } from "@/lib/admin.functions";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/lib/auth";
+import { QueryErrorCard } from "@/components/QueryErrorCard";
+import { markIntentionalSignOut, useAuth } from "@/lib/auth";
+import { useFocusedWorkspace } from "@/lib/draft-store";
+import { isNative } from "@/lib/native";
+import { markWelcomeSeen } from "@/lib/pathways";
+import { useNavOverlay } from "@/lib/nav-overlay";
 import { useTheme } from "@/lib/theme";
-import { userConversationsQuery } from "@/lib/messages";
+import { clearSessionRestoredFlag } from "@/lib/telemetry";
+import { useInboxRealtime, userConversationsQuery } from "@/lib/messages";
 import { dotSummaryQuery } from "@/lib/economy";
+import {
+  fetchUnifiedNotifications,
+  groupNotifications,
+  markCentralNotificationsRead,
+  type GroupedNotification,
+} from "@/lib/notifications";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 import { FounderAvatar } from "@/components/ping/Avatar";
 import { BrandLogo } from "@/components/BrandLogo";
+import { isInboxPath } from "./BottomNav";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,9 +67,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { isInboxPath } from "./BottomNav";
-import { CreateStackModal } from "./CreateStackModal";
-import { cn } from "@/lib/utils";
 
 export function Wordmark() {
   return (
@@ -62,88 +80,94 @@ export function useSignOut() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   return async () => {
+    markIntentionalSignOut();
+    markWelcomeSeen();
+    clearSessionRestoredFlag();
     await qc.cancelQueries();
     qc.clear();
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+    }
     navigate({ to: "/login", replace: true });
   };
 }
 
-interface NotificationItem {
-  id: string;
-  kind: "like" | "comment" | "follow";
-  text: string;
-  href: string;
-  created_at: string;
+const NOTIF_SEEN_PREFIX = "ping_notif_seen_at:";
+
+function readSeenTimestamp(userId?: string): string | null {
+  if (!userId || typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(`${NOTIF_SEEN_PREFIX}${userId}`);
+  } catch {
+    return null;
+  }
+}
+
+function writeSeenTimestamp(userId: string, iso: string) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(`${NOTIF_SEEN_PREFIX}${userId}`, iso);
+  } catch {
+    // Ignore storage errors in restricted environments
+  }
 }
 
 function useNotificationsQuery(userId?: string) {
   return useQuery({
     queryKey: ["header-notifications", userId],
     enabled: Boolean(userId),
-    queryFn: async (): Promise<NotificationItem[]> => {
+    queryFn: async () => {
       if (!userId) return [];
-      const { data: myPings } = await supabase
-        .from("pings")
-        .select("id, content")
-        .eq("user_id", userId)
-        .is("hidden_at", null)
-        .order("created_at", { ascending: false })
-        .limit(20);
-
-      const pingIds = (myPings ?? []).map((p) => p.id);
-      const pingExcerpt = new Map((myPings ?? []).map((p) => [p.id, p.content.slice(0, 48)]));
-
-      const [commentsRes, followsRes] = await Promise.all([
-        pingIds.length > 0
-          ? supabase
-              .from("comments")
-              .select(
-                "id, ping_id, user_id, content, created_at, author:profiles!comments_user_id_fkey(username, display_name)",
-              )
-              .in("ping_id", pingIds)
-              .neq("user_id", userId)
-              .order("created_at", { ascending: false })
-              .limit(10)
-          : Promise.resolve({ data: [] as any[] }),
-        supabase
-          .from("follows")
-          .select(
-            "follower_id, created_at, follower:profiles!follows_follower_id_fkey(username, display_name)",
-          )
-          .eq("following_id", userId)
-          .order("created_at", { ascending: false })
-          .limit(10),
-      ]);
-
-      const items: NotificationItem[] = [];
-      for (const c of (commentsRes.data ?? []) as any[]) {
-        const actor = c.author?.display_name || `@${c.author?.username || "builder"}`;
-        items.push({
-          id: `comment-${c.id}`,
-          kind: "comment",
-          text: `${actor} replied to "${pingExcerpt.get(c.ping_id) ?? "your Ping"}…"`,
-          href: `/p/${c.ping_id}`,
-          created_at: c.created_at,
-        });
-      }
-      for (const f of (followsRes.data ?? []) as any[]) {
-        const actor = f.follower?.display_name || `@${f.follower?.username || "builder"}`;
-        const uname = f.follower?.username;
-        items.push({
-          id: `follow-${f.follower_id}-${f.created_at}`,
-          kind: "follow",
-          text: `${actor} started following you`,
-          href: uname ? `/@${uname}` : "/explore",
-          created_at: f.created_at,
-        });
-      }
-
-      return items
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        .slice(0, 12);
+      return fetchUnifiedNotifications(userId);
     },
+    staleTime: 30_000,
   });
+}
+
+export function useNotificationsState(userId?: string) {
+  const qc = useQueryClient();
+  const query = useNotificationsQuery(userId);
+  const rawNotifications = useMemo(() => query.data ?? [], [query.data]);
+
+  const { data: seenAt = null } = useQuery<string | null>({
+    queryKey: ["notif-seen-at", userId],
+    enabled: Boolean(userId),
+    queryFn: () => readSeenTimestamp(userId),
+    initialData: () => readSeenTimestamp(userId),
+    staleTime: Infinity,
+  });
+
+  const notifications: GroupedNotification[] = useMemo(
+    () => groupNotifications(rawNotifications, seenAt),
+    [rawNotifications, seenAt],
+  );
+
+  const markSeen = useCallback(() => {
+    if (!userId) return;
+    const latestCreatedAt = rawNotifications[0]?.created_at ?? new Date().toISOString();
+    const nextSeen =
+      seenAt && new Date(seenAt).getTime() > new Date(latestCreatedAt).getTime()
+        ? seenAt
+        : latestCreatedAt;
+    if (nextSeen !== seenAt) {
+      writeSeenTimestamp(userId, nextSeen);
+      qc.setQueryData(["notif-seen-at", userId], nextSeen);
+    }
+    void markCentralNotificationsRead().catch(() => {});
+  }, [userId, rawNotifications, seenAt, qc]);
+
+  const unreadCount = notifications.filter((n) => n.unread).length;
+  const hasUnread = unreadCount > 0;
+
+  return {
+    ...query,
+    notifications,
+    unreadCount,
+    hasUnread,
+    markSeen,
+  };
 }
 
 const navLink =
@@ -153,14 +177,20 @@ export function SiteHeader() {
   const { user, profile, ready } = useAuth();
   const { theme, resolvedTheme, setTheme } = useTheme();
   const { pathname } = useLocation();
+  const { openOverlay, closeOverlays, isOpen, onOpenChangeFor } = useNavOverlay();
+  const focusedWorkspace = useFocusedWorkspace();
   const signOut = useSignOut();
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
+  const inInbox = isInboxPath(pathname);
+  const isProfileActive =
+    (Boolean(user && profile) && pathname === `/@${profile!.username}`) ||
+    (!user && pathname === "/login");
+
+  useInboxRealtime(user?.id);
 
   const verifyAdmin = useServerFn(checkAdminAccess);
   const admin = useQuery({
     queryKey: ["admin-access", user?.id],
-    queryFn: () => verifyAdmin(),
+    queryFn: async () => (isNative ? { isAdmin: false } : verifyAdmin()),
     enabled: ready && !!user,
     retry: false,
     staleTime: 0,
@@ -169,20 +199,37 @@ export function SiteHeader() {
   const { data: conversations = [] } = useQuery(userConversationsQuery(user?.id));
   const unreadMessages = conversations.reduce((sum, c) => sum + (c.unread_count ?? 0), 0);
   const { data: dotSummary } = useQuery(dotSummaryQuery(user?.id));
-  const { data: notifications = [] } = useNotificationsQuery(user?.id);
+  const {
+    notifications,
+    hasUnread: hasUnreadNotifications,
+    markSeen,
+    isLoading: isNotifLoading,
+    isError: isNotifError,
+    error: notifError,
+    refetch: refetchNotifications,
+  } = useNotificationsState(user?.id);
+
+  const notificationsOpen = isOpen("notifications");
+  useEffect(() => {
+    if (notificationsOpen && !isNotifLoading && !isNotifError) {
+      markSeen();
+    }
+  }, [notificationsOpen, isNotifLoading, isNotifError, markSeen]);
 
   const toggleTheme = () => {
     const nextTheme = theme === "system" ? "light" : theme === "light" ? "dark" : "system";
     setTheme(nextTheme);
   };
   const ThemeIcon = theme === "system" ? Laptop : resolvedTheme === "dark" ? Moon : Sun;
-  const inInbox = isInboxPath(pathname);
-  const isProfileActive =
-    (user && profile && pathname === `/@${profile.username}`) || (!user && pathname === "/login");
 
   return (
     <>
-      <header className="sticky top-0 z-50 px-3 pt-2.5 sm:px-5 lg:hidden">
+      <header
+        className={cn(
+          "sticky top-0 z-50 px-3 pt-[max(0.625rem,env(safe-area-inset-top))] sm:px-5 lg:hidden",
+          focusedWorkspace && "hidden md:block",
+        )}
+      >
         <div className="glass mx-auto flex h-14 max-w-6xl items-center justify-between rounded-full px-4 sm:px-6">
           <Wordmark />
 
@@ -204,9 +251,10 @@ export function SiteHeader() {
             </Link>
             <Link
               to="/inbox"
+              search={{}}
+              aria-current={inInbox ? "page" : undefined}
               className={cn(
-                navLink,
-                "relative inline-flex items-center gap-1.5",
+                `${navLink} relative inline-flex items-center gap-1.5`,
                 inInbox && "text-foreground bg-secondary",
               )}
             >
@@ -221,13 +269,15 @@ export function SiteHeader() {
               <Link
                 to="/@{$username}"
                 params={{ username: profile.username }}
+                aria-current={isProfileActive ? "page" : undefined}
                 className={cn(navLink, isProfileActive && "text-foreground bg-secondary")}
               >
                 Profile
               </Link>
             ) : (
               <Link
-                to="/login"
+                to={user ? "/settings" : "/login"}
+                aria-current={isProfileActive ? "page" : undefined}
                 className={cn(navLink, isProfileActive && "text-foreground bg-secondary")}
               >
                 Profile
@@ -239,14 +289,18 @@ export function SiteHeader() {
             {/* Notification Access */}
             <button
               type="button"
-              onClick={() => setNotificationsOpen(true)}
+              onClick={() => openOverlay("notifications")}
               className="relative flex size-9 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground transition-all"
               aria-label="Notifications"
               title="Notifications"
             >
               <Bell className="size-4" />
-              {notifications.length > 0 && (
-                <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-lime ring-2 ring-card" />
+              {hasUnreadNotifications && (
+                <span
+                  data-testid="notifications-unread-dot"
+                  className="absolute top-1.5 right-1.5 size-2 rounded-full bg-lime ring-2 ring-card"
+                  aria-hidden="true"
+                />
               )}
             </button>
 
@@ -261,6 +315,18 @@ export function SiteHeader() {
               <ThemeIcon className="size-4" />
             </button>
 
+            {/* Mobile compact Sign in CTA when signed out */}
+            {ready && !user && (
+              <Button
+                asChild
+                size="sm"
+                variant="hero"
+                className="h-8 rounded-full px-3 text-xs md:hidden"
+              >
+                <Link to="/login">Sign in</Link>
+              </Button>
+            )}
+
             <div className="hidden items-center gap-2 md:flex">
               {ready && user ? (
                 <>
@@ -268,11 +334,14 @@ export function SiteHeader() {
                     type="button"
                     size="sm"
                     variant="hero"
-                    onClick={() => setCreateOpen(true)}
+                    onClick={() => openOverlay("create")}
                   >
                     <Plus /> Create
                   </Button>
-                  <DropdownMenu>
+                  <DropdownMenu
+                    open={isOpen("header-account")}
+                    onOpenChange={onOpenChangeFor("header-account")}
+                  >
                     <DropdownMenuTrigger
                       className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       aria-label="Account menu"
@@ -286,13 +355,21 @@ export function SiteHeader() {
                     <DropdownMenuContent align="end" className="w-56 rounded-2xl p-1.5">
                       {profile && (
                         <DropdownMenuItem asChild className="rounded-xl">
-                          <Link to="/@{$username}" params={{ username: profile.username }}>
+                          <Link
+                            to="/@{$username}"
+                            params={{ username: profile.username }}
+                            onClick={closeOverlays}
+                          >
                             <User /> My profile
                           </Link>
                         </DropdownMenuItem>
                       )}
                       <DropdownMenuItem asChild className="rounded-xl">
-                        <Link to="/balance" className="flex items-center justify-between">
+                        <Link
+                          to="/balance"
+                          onClick={closeOverlays}
+                          className="flex items-center justify-between"
+                        >
                           <span className="flex items-center gap-2">
                             <Coins className="size-4 text-gold" /> DOT Balance
                           </span>
@@ -304,45 +381,91 @@ export function SiteHeader() {
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild className="rounded-xl">
-                        <Link to="/analytics">
+                        <Link to="/analytics" onClick={closeOverlays}>
                           <BarChart3 className="text-primary" /> Analytics
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild className="rounded-xl">
-                        <Link to="/upgrades">
-                          <Crown className="text-gold" /> Account Upgrades
+                        <Link to="/upgrades" onClick={closeOverlays}>
+                          <Crown className="text-gold" /> DOT Memberships
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild className="rounded-xl">
+                        <Link to="/learn" onClick={closeOverlays}>
+                          <GraduationCap className="text-primary" /> Ping Learn
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild className="rounded-xl">
+                        <Link to="/spotlight" onClick={closeOverlays}>
+                          <Flame className="text-amber-500" /> Ping Spotlight
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild className="rounded-xl">
+                        <Link to="/clips" onClick={closeOverlays}>
+                          <Clapperboard className="text-primary" /> Ping Clips
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild className="rounded-xl">
+                        <Link to="/boosts" onClick={closeOverlays}>
+                          <Megaphone className="text-gold" /> Boost Campaigns
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem asChild className="rounded-xl">
-                        <Link to="/inbox">
-                          <MessageSquare /> Inbox — Chats
+                        <Link to="/inbox" search={{}} onClick={closeOverlays}>
+                          <Inbox /> Inbox
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild className="rounded-xl">
-                        <Link to="/inbox" search={{ section: "hubs" }}>
-                          <Users /> Inbox — Hubs
+                        <Link to="/messages" onClick={closeOverlays}>
+                          <MessageSquare /> Chats
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild className="rounded-xl">
-                        <Link to="/inbox" search={{ section: "signals" }}>
-                          <Radio /> Inbox — Signals
+                        <Link to="/inbox" search={{ section: "hubs" }} onClick={closeOverlays}>
+                          <Users /> Hubs
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild className="rounded-xl">
-                        <Link to="/settings">
+                        <Link to="/inbox" search={{ section: "signals" }} onClick={closeOverlays}>
+                          <Radio /> Signals
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild className="rounded-xl">
+                        <Link to="/business" onClick={closeOverlays}>
+                          <Building2 /> Business Suite
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild className="rounded-xl">
+                        <Link to="/griot" onClick={closeOverlays}>
+                          <Sparkles className="text-primary" /> GRIOT AI
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild className="rounded-xl">
+                        <Link to="/developers" onClick={closeOverlays}>
+                          <Code2 /> Developer Platform
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild className="rounded-xl">
+                        <Link to="/settings" onClick={closeOverlays}>
                           <Settings /> Settings
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       {admin.data?.isAdmin && (
                         <DropdownMenuItem asChild className="rounded-xl">
-                          <Link to="/admin">
+                          <Link to="/admin" onClick={closeOverlays}>
                             <Settings /> Administration
                           </Link>
                         </DropdownMenuItem>
                       )}
-                      <DropdownMenuItem onSelect={signOut} className="rounded-xl text-destructive">
+                      <DropdownMenuItem
+                        onSelect={() => {
+                          closeOverlays();
+                          signOut();
+                        }}
+                        className="rounded-xl text-destructive"
+                      >
                         <LogOut /> Log out
                       </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -364,14 +487,36 @@ export function SiteHeader() {
       </header>
 
       {/* Notifications Sheet */}
-      <Sheet open={notificationsOpen} onOpenChange={setNotificationsOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-md rounded-l-3xl p-6">
+      <Sheet open={isOpen("notifications")} onOpenChange={onOpenChangeFor("notifications")}>
+        <SheetContent side="right" className="w-full sm:max-w-md rounded-l-3xl p-6 overflow-y-auto">
           <SheetHeader className="text-left">
-            <SheetTitle className="font-display text-xl font-bold flex items-center gap-2">
-              <Bell className="size-5 text-primary" /> Notifications
-            </SheetTitle>
+            <div className="flex items-center justify-between gap-2 pr-6">
+              <SheetTitle className="font-display text-xl font-bold flex items-center gap-2">
+                <Bell className="size-5 text-primary" /> Notifications
+              </SheetTitle>
+              {user && (
+                <div className="flex items-center gap-2">
+                  {notifications.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={markSeen}
+                      className="text-[11px] font-semibold text-primary hover:underline"
+                    >
+                      Mark all read
+                    </button>
+                  )}
+                  <Link
+                    to="/settings"
+                    onClick={closeOverlays}
+                    className="text-[11px] font-medium text-muted-foreground hover:text-foreground"
+                  >
+                    Preferences
+                  </Link>
+                </div>
+              )}
+            </div>
             <SheetDescription className="text-xs text-muted-foreground">
-              Replies, followers, and coordination activity on your Pings.
+              Grouped replies, reactions, followers, Hub activity, and opportunity updates.
             </SheetDescription>
           </SheetHeader>
 
@@ -380,24 +525,37 @@ export function SiteHeader() {
               <div className="rounded-2xl border border-border/70 p-6 text-center">
                 <p className="text-sm font-medium">Sign in to view your notifications</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Track responses to your intentions, new followers, and Signal broadcasts.
+                  Track responses to your intentions, new followers, and Hub updates.
                 </p>
                 <Button
                   asChild
                   variant="hero"
                   size="sm"
                   className="mt-4 rounded-full"
-                  onClick={() => setNotificationsOpen(false)}
+                  onClick={closeOverlays}
                 >
                   <Link to="/login">Sign in</Link>
                 </Button>
               </div>
+            ) : isNotifLoading ? (
+              <div className="space-y-2.5" aria-label="Loading notifications">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="h-16 rounded-2xl bg-muted/60 animate-pulse" />
+                ))}
+              </div>
+            ) : isNotifError ? (
+              <QueryErrorCard
+                compact
+                title="Couldn't load notifications"
+                error={notifError}
+                onRetry={() => void refetchNotifications()}
+              />
             ) : notifications.length === 0 ? (
               <div className="rounded-2xl border border-border/60 p-8 text-center">
                 <Bell className="mx-auto size-8 text-muted-foreground/40" />
                 <p className="mt-3 text-sm font-semibold">You're all caught up</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  New replies, connections, and institutional broadcasts will appear here.
+                  New replies, connections, and community broadcasts will appear here.
                 </p>
               </div>
             ) : (
@@ -405,7 +563,7 @@ export function SiteHeader() {
                 <Link
                   key={n.id}
                   to={n.href as any}
-                  onClick={() => setNotificationsOpen(false)}
+                  onClick={closeOverlays}
                   className="flex items-start gap-3 rounded-2xl border border-border/60 bg-card/60 p-3.5 transition-colors hover:bg-secondary/70"
                 >
                   <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
@@ -429,8 +587,6 @@ export function SiteHeader() {
           </div>
         </SheetContent>
       </Sheet>
-
-      <CreateStackModal open={createOpen} onOpenChange={setCreateOpen} />
     </>
   );
 }

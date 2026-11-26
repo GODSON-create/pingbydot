@@ -22,10 +22,11 @@ import {
   Clock,
   Shield,
   Settings,
-  Pencil,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { ImageUploadField } from "@/components/media/ImageUploadField";
+import { ResolvedMomentThumb } from "@/components/media/ResolvedPrivateMedia";
 import {
   signalBySlugQuery,
   signalPostsQuery,
@@ -57,6 +58,7 @@ import {
 } from "@/components/ui/dialog";
 import { pageHead } from "@/lib/site";
 import { cn } from "@/lib/utils";
+import { QueryErrorCard } from "@/components/QueryErrorCard";
 
 export const Route = createFileRoute("/signals/$slug")({
   staticData: { sitemap: true },
@@ -172,12 +174,12 @@ function SignalPostCard({
       {post.media_urls && post.media_urls.length > 0 && (
         <div className="mt-4 grid gap-2 overflow-hidden rounded-2xl">
           {post.media_urls.map((url, i) => (
-            <img
-              key={i}
-              src={url}
-              alt="Broadcast media attachment"
+            <ResolvedMomentThumb
+              key={`${post.id}-media-${i}`}
+              mediaUrl={url}
+              mediaType={/\.(mp4|webm|mov)(\?|$)/i.test(url) ? "video" : "image"}
+              alt={`${post.title} attachment`}
               className="max-h-96 w-full rounded-2xl object-cover border border-border/40"
-              loading="lazy"
             />
           ))}
         </div>
@@ -198,6 +200,7 @@ function NewBroadcastDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const { user } = useAuth();
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [category, setCategory] = useState("announcement");
@@ -288,15 +291,17 @@ function NewBroadcastDialog({
             />
           </div>
 
-          <div>
-            <Label className="text-xs font-semibold">Optional Attachment Image URL</Label>
-            <Input
-              value={mediaUrl}
-              onChange={(e) => setMediaUrl(e.target.value)}
-              placeholder="https://…/image.png"
-              className="mt-1 rounded-xl"
-            />
-          </div>
+          <ImageUploadField
+            folder="signals"
+            userId={user?.id}
+            value={mediaUrl}
+            onChange={setMediaUrl}
+            label="Optional Broadcast Attachment"
+            placeholder="Upload an image or graphic…"
+            fallbackName={title || "Signal"}
+            shape="rounded"
+            disabled={createPost.isPending}
+          />
 
           <div className="flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-secondary/40 px-4 py-3">
             <div>
@@ -623,6 +628,7 @@ function EditSignalDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const { user } = useAuth();
   const updateMutation = useUpdateSignal(signal.id);
   const [name, setName] = useState(signal.name || "");
   const [tagline, setTagline] = useState(signal.tagline || "");
@@ -726,15 +732,17 @@ function EditSignalDialog({
             />
           </div>
 
-          <div>
-            <Label className="text-xs font-semibold">Avatar / Seal Logo URL</Label>
-            <Input
-              value={avatarUrl}
-              onChange={(e) => setAvatarUrl(e.target.value)}
-              placeholder="https://…/logo.png"
-              className="mt-1 rounded-xl"
-            />
-          </div>
+          <ImageUploadField
+            folder="signals"
+            userId={user?.id}
+            value={avatarUrl}
+            onChange={setAvatarUrl}
+            label="Avatar / Seal Logo"
+            placeholder="https://…/logo.png"
+            fallbackName={name || "Signal"}
+            shape="rounded"
+            disabled={updateMutation.isPending}
+          />
 
           <div className="pt-2 flex justify-end gap-2">
             <Button
@@ -770,25 +778,35 @@ function SignalDetailPage() {
   const [verifyDialogOpen, setVerifyDialogOpen] = useState(false);
   const [selectedPostCategory, setSelectedPostCategory] = useState<string>("all");
 
-  const { data: signal, isLoading: signalLoading } = useQuery(signalBySlugQuery(slug));
+  const {
+    data: signal,
+    isLoading: signalLoading,
+    isError: isSignalError,
+    error: signalError,
+    refetch: refetchSignal,
+  } = useQuery(signalBySlugQuery(slug));
   const { data: isFollowing = false } = useQuery(signalFollowingQuery(signal?.id ?? "", user?.id));
   const { data: publisherData } = useQuery(signalPublisherQuery(signal?.id ?? "", user?.id));
   const isPublisher = publisherData?.isPublisher ?? false;
   const isSignalAdmin = publisherData?.role === "admin" || signal?.created_by === user?.id;
 
-  const { data: posts = [], isLoading: postsLoading } = useQuery(
-    signalPostsQuery(signal?.id ?? "", user?.id),
-  );
+  const {
+    data: posts = [],
+    isLoading: postsLoading,
+    isError: isPostsError,
+    error: postsError,
+    refetch: refetchPosts,
+  } = useQuery(signalPostsQuery(signal?.id ?? "", user?.id));
 
   const followMutation = useSignalFollow(signal?.id ?? "", user?.id);
   const deletePostMutation = useDeleteSignalPost(signal?.id ?? "");
 
-  // Real-time subscription for broadcasts
+  // Real-time subscription for official institutional broadcasts & subscriber count updates
   useEffect(() => {
     if (!signal?.id) return;
 
     const channel = supabase
-      .channel(`signal-broadcasts:${signal.id}`)
+      .channel(`signal-live:${signal.id}`)
       .on(
         "postgres_changes",
         {
@@ -810,10 +828,22 @@ function SignalDetailPage() {
           }
         },
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "signal_followers",
+          filter: `signal_id=eq.${signal.id}`,
+        },
+        () => {
+          qc.invalidateQueries({ queryKey: ["signal", slug] });
+        },
+      )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      void supabase.removeChannel(channel);
     };
   }, [signal?.id, slug, qc]);
 
@@ -841,6 +871,19 @@ function SignalDetailPage() {
     );
   }
 
+  if (isSignalError) {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-16">
+        <QueryErrorCard
+          title="Couldn't load Signal channel"
+          description="A connection issue prevented loading this Signal channel."
+          error={signalError}
+          onRetry={() => void refetchSignal()}
+        />
+      </div>
+    );
+  }
+
   if (!signal) {
     return (
       <div className="mx-auto max-w-lg px-4 py-16 text-center">
@@ -850,14 +893,19 @@ function SignalDetailPage() {
           The signal channel @{slug} does not exist or may have been unlisted.
         </p>
         <Button asChild variant="hero" className="mt-6 rounded-2xl">
-          <Link to="/signals">Explore All Signals</Link>
+          <Link to="/inbox" search={{ section: "signals" }}>
+            Explore All Signals
+          </Link>
         </Button>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12 pb-24">
+    <div
+      data-signal-channel-broadcast-only="true"
+      className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12 pb-24"
+    >
       <Link
         to="/inbox"
         search={{ section: "signals" }}
@@ -871,8 +919,9 @@ function SignalDetailPage() {
       <header className="surface-card mt-4 overflow-hidden rounded-3xl border border-border/60">
         {signal.cover_url && (
           <div className="h-36 sm:h-48 w-full overflow-hidden border-b border-border/50 bg-secondary/40">
-            <img
-              src={signal.cover_url}
+            <ResolvedMomentThumb
+              mediaUrl={signal.cover_url}
+              mediaType="image"
               alt={`${signal.name} cover`}
               className="h-full w-full object-cover"
             />
@@ -882,10 +931,16 @@ function SignalDetailPage() {
           <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex items-start gap-4">
               {signal.avatar_url ? (
-                <img
-                  src={signal.avatar_url}
+                <ResolvedMomentThumb
+                  mediaUrl={signal.avatar_url}
+                  mediaType="image"
                   alt={signal.name}
                   className="size-16 rounded-2xl object-cover border border-border/50 shrink-0"
+                  fallback={
+                    <div className="flex size-16 items-center justify-center rounded-2xl bg-primary/10 text-primary shrink-0">
+                      <Radio className="size-8" />
+                    </div>
+                  }
                 />
               ) : (
                 <div className="flex size-16 items-center justify-center rounded-2xl bg-primary/10 text-primary shrink-0">
@@ -929,11 +984,21 @@ function SignalDetailPage() {
 
                 <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
                   <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-3 py-1 font-semibold capitalize text-secondary-foreground">
-                    {signal.institution_type}
+                    {signal.institution_type.replace("_", " ")}
                   </span>
                   <span className="font-medium text-muted-foreground">
                     <strong>{signal.follower_count.toLocaleString()}</strong> subscribers
                   </span>
+                  <span className="font-medium text-muted-foreground">
+                    <strong>{posts.length.toLocaleString()}</strong>{" "}
+                    {posts.length === 1 ? "broadcast" : "broadcasts"}
+                  </span>
+                  {isFollowing && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 font-semibold text-primary">
+                      <Bell className="size-3" />
+                      Broadcast alerts on
+                    </span>
+                  )}
                   {signal.website_url && (
                     <a
                       href={signal.website_url}
@@ -945,18 +1010,16 @@ function SignalDetailPage() {
                       Website
                     </a>
                   )}
-                  {!signal.verified &&
-                    signal.verification_status !== "pending" &&
-                    isSignalAdmin && (
-                      <button
-                        type="button"
-                        onClick={() => setVerifyDialogOpen(true)}
-                        className="inline-flex items-center gap-1 text-primary hover:underline font-semibold"
-                      >
-                        <ShieldCheck className="size-3.5" />
-                        Request Verification
-                      </button>
-                    )}
+                  {!signal.verified && signal.verification_status !== "pending" && isSignalAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => setVerifyDialogOpen(true)}
+                      className="inline-flex items-center gap-1 text-primary hover:underline font-semibold"
+                    >
+                      <ShieldCheck className="size-3.5" />
+                      Request Verification
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -1044,8 +1107,8 @@ function SignalDetailPage() {
         </div>
       </header>
 
-      {/* Broadcast Feed */}
-      <section className="mt-8">
+      {/* Pure Institutional Broadcast Feed */}
+      <section className="mt-8" aria-label="Official Institutional Broadcasts">
         {(() => {
           const postCategories = [
             { value: "all", label: "All" },
@@ -1098,6 +1161,13 @@ function SignalDetailPage() {
                       <div key={i} className="h-40 rounded-3xl bg-muted/40 animate-pulse" />
                     ))}
                   </div>
+                ) : isPostsError ? (
+                  <QueryErrorCard
+                    title="Couldn't load broadcasts"
+                    description="A connection issue prevented loading broadcasts for this channel."
+                    error={postsError}
+                    onRetry={() => void refetchPosts()}
+                  />
                 ) : filteredPosts.length === 0 ? (
                   <div className="surface-card rounded-3xl p-10 text-center border border-border/60">
                     <Radio className="mx-auto size-10 text-muted-foreground/40" />

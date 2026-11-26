@@ -133,7 +133,7 @@ export function useHubPresence(hubId: string | undefined) {
       window.removeEventListener("blur", handleWindowBlur);
       window.removeEventListener("focus", handleWindowFocus);
       window.removeEventListener("beforeunload", untrackPresence);
-      channel.unsubscribe();
+      void supabase.removeChannel(channel);
     };
   }, [hubId, user, canBroadcastPresence, updatePresenceState]);
 

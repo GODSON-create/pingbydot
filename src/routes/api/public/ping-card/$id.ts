@@ -12,22 +12,9 @@ export const Route = createFileRoute("/api/public/ping-card/$id")({
             headers: { "Cache-Control": "no-store" },
           });
         try {
-          const { createClient } = await import("@supabase/supabase-js");
-          const url = process.env["SUPABASE_URL"];
-          const key = process.env["SUPABASE_PUBLISHABLE_KEY"];
-          if (!url || !key) throw new Error("Public reading unavailable");
-          const client = createClient(url, key, {
-            auth: { persistSession: false, autoRefreshToken: false },
-            global: {
-              fetch: (input, init) => {
-                const headers = new Headers(init?.headers);
-                if (key.startsWith("sb_") && headers.get("Authorization") === `Bearer ${key}`)
-                  headers.delete("Authorization");
-                headers.set("apikey", key);
-                return fetch(input, { ...init, headers });
-              },
-            },
-          });
+          const { createPublicSupabaseClient } = await import("@/lib/supabase-public-config");
+          const { sanitizeErrorMessage } = await import("@/lib/error-diagnostics");
+          const client = createPublicSupabaseClient();
           const { data, error } = await client
             .from("pings")
             .select(
@@ -61,10 +48,8 @@ export const Route = createFileRoute("/api/public/ping-card/$id")({
           const png = await renderSocialPng(ping);
           return new Response(new Uint8Array(png).buffer, { headers });
         } catch (error) {
-          console.error(
-            "Ping social image failed",
-            error instanceof Error ? error.message : "Unknown error",
-          );
+          const { sanitizeErrorMessage } = await import("@/lib/error-diagnostics");
+          console.error("Ping social image failed", sanitizeErrorMessage(error));
           return new Response("Card temporarily unavailable", {
             status: 503,
             headers: { "Cache-Control": "no-store", "Retry-After": "30" },

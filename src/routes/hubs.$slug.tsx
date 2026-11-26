@@ -1,8 +1,11 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, useDeferredValue } from "react";
+import { QueryErrorCard } from "@/components/QueryErrorCard";
+import { useState, useDeferredValue, useEffect } from "react";
 import { z } from "zod";
 import {
+  ArrowLeft,
+  Bell,
   Users,
   Pin,
   Lock,
@@ -10,21 +13,15 @@ import {
   Share2,
   ExternalLink,
   ShieldAlert,
-  UserCheck,
   UserPlus,
-  UserX,
   LogOut,
   MoreVertical,
   Check,
   Settings,
-  Pencil,
   Trash2,
   Plus,
   Clock,
   PinOff,
-  ArrowLeft,
-  Bell,
-  BellOff,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -81,6 +78,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { HubShareModal } from "@/components/hubs/HubShareModal";
 import { HubChat } from "@/components/hubs/HubChat";
+import { HubEventsSection } from "@/components/hubs/HubEventsSection";
+import { ResolvedMomentThumb } from "@/components/media/ResolvedPrivateMedia";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { pageHead } from "@/lib/site";
@@ -106,6 +105,7 @@ function MemberRow({
   hubId,
   isStaff,
   isOwner,
+  myRole,
   currentUserId,
   onRefetch,
 }: {
@@ -113,34 +113,36 @@ function MemberRow({
   hubId: string;
   isStaff: boolean;
   isOwner: boolean;
+  myRole?: HubRole | null | undefined;
   currentUserId?: string | undefined;
   onRefetch: () => void | Promise<any>;
 }) {
+  const qc = useQueryClient();
   const profile = member.profile;
-  const name = profile?.display_name || profile?.username || "Builder";
-  const [following, setFollowing] = useState(false);
+  const name = profile?.display_name || profile?.username || "Member";
   const [followLoading, setFollowLoading] = useState(false);
 
   // Check initial follow state
-  const { data: followData } = useQuery({
+  const { data: followData = false } = useQuery({
     queryKey: ["follow-status", profile?.id, currentUserId],
     enabled: !!currentUserId && !!profile?.id && profile?.id !== currentUserId,
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("follows")
         .select("follower_id")
         .eq("follower_id", currentUserId!)
         .eq("following_id", profile.id)
         .maybeSingle();
+      if (error) throw error;
       return !!data;
     },
   });
 
-  const isFollowing = following || !!followData;
+  const isFollowing = followData;
 
   const toggleFollow = async () => {
     if (!currentUserId || !profile?.id) {
-      toast("Sign in to follow founders", {
+      toast("Sign in to follow people", {
         action: { label: "Log in", onClick: () => (window.location.href = "/login") },
       });
       return;
@@ -148,20 +150,25 @@ function MemberRow({
     setFollowLoading(true);
     try {
       if (isFollowing) {
-        await supabase
+        const { error } = await supabase
           .from("follows")
           .delete()
           .eq("follower_id", currentUserId)
           .eq("following_id", profile.id);
-        setFollowing(false);
+        if (error) throw error;
         toast.success(`Unfollowed @${profile.username}`);
       } else {
-        await supabase
+        const { error } = await supabase
           .from("follows")
           .insert({ follower_id: currentUserId, following_id: profile.id });
-        setFollowing(true);
+        if (error && error.code !== "23505") throw error;
         toast.success(`Following @${profile.username}!`);
       }
+      qc.invalidateQueries({ queryKey: ["follow-status", profile.id, currentUserId] });
+      qc.invalidateQueries({ queryKey: ["follow", profile.id] });
+      qc.invalidateQueries({ queryKey: ["following-feed"] });
+      qc.invalidateQueries({ queryKey: ["explore-followed"] });
+      qc.invalidateQueries({ queryKey: ["header-notifications"] });
     } catch {
       toast.error("Couldn't update follow status.");
     } finally {
@@ -251,43 +258,54 @@ function MemberRow({
           </Button>
         )}
 
-        {isStaff && !isSelf && member.role !== "owner" && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="size-8 rounded-full">
-                <MoreVertical className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="rounded-2xl w-44">
-              {isOwner && member.role !== "admin" && (
-                <DropdownMenuItem onSelect={() => manageRole("role", "admin")}>
-                  Promote to Admin
-                </DropdownMenuItem>
-              )}
-              {isOwner && member.role === "admin" && (
-                <DropdownMenuItem onSelect={() => manageRole("role", "member")}>
-                  Demote to Member
-                </DropdownMenuItem>
-              )}
-              {member.role !== "moderator" && (
-                <DropdownMenuItem onSelect={() => manageRole("role", "moderator")}>
-                  Make Moderator
-                </DropdownMenuItem>
-              )}
-              {member.role === "moderator" && (
-                <DropdownMenuItem onSelect={() => manageRole("role", "member")}>
-                  Remove Moderator
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem
-                onSelect={() => manageRole("remove")}
-                className="text-destructive focus:text-destructive"
-              >
-                Remove from Hub
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+        {(() => {
+          if (!isStaff || isSelf || member.role === "owner") return null;
+          const canManageAdminRole = isOwner;
+          const canManageModRole = isOwner || (myRole === "admin" && member.role !== "admin");
+          const canRemoveTarget =
+            isOwner || (member.role !== "admin" && member.role !== "moderator");
+          if (!canManageAdminRole && !canManageModRole && !canRemoveTarget) return null;
+
+          return (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="size-8 rounded-full">
+                  <MoreVertical className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="rounded-2xl w-44">
+                {canManageAdminRole && member.role !== "admin" && (
+                  <DropdownMenuItem onSelect={() => manageRole("role", "admin")}>
+                    Promote to Admin
+                  </DropdownMenuItem>
+                )}
+                {canManageAdminRole && member.role === "admin" && (
+                  <DropdownMenuItem onSelect={() => manageRole("role", "member")}>
+                    Demote to Member
+                  </DropdownMenuItem>
+                )}
+                {canManageModRole && member.role !== "moderator" && (
+                  <DropdownMenuItem onSelect={() => manageRole("role", "moderator")}>
+                    Make Moderator
+                  </DropdownMenuItem>
+                )}
+                {canManageModRole && member.role === "moderator" && (
+                  <DropdownMenuItem onSelect={() => manageRole("role", "member")}>
+                    Remove Moderator
+                  </DropdownMenuItem>
+                )}
+                {canRemoveTarget && (
+                  <DropdownMenuItem
+                    onSelect={() => manageRole("remove")}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    Remove from Hub
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          );
+        })()}
       </div>
     </div>
   );
@@ -785,28 +803,39 @@ function HubDetail() {
   const activeIntent = HUB_INTENTS.some((i) => i.value === intentParam)
     ? (intentParam as HubIntent)
     : null;
-  const validTabs = ["chat", "feed", "members", "about"] as const;
+  const validTabs = ["chat", "feed", "events", "members", "about"] as const;
   const activeTab = validTabs.includes(tabParam as (typeof validTabs)[number])
     ? (tabParam as (typeof validTabs)[number])
     : "chat";
-  const hubNotifStorageKey = `ping_hub_notifications_${slug}_${user?.id ?? "guest"}`;
-  const [hubNotificationsEnabled, setHubNotificationsEnabled] = useState<boolean>(() => {
-    if (typeof window === "undefined") return true;
-    try {
-      return window.localStorage.getItem(hubNotifStorageKey) !== "muted";
-    } catch {
-      return true;
-    }
-  });
 
-  const handleToggleHubNotifications = (enabled: boolean) => {
-    setHubNotificationsEnabled(enabled);
+  const hubNotifStorageKey = `ping_hub_notifications_${slug}_${user?.id ?? "guest"}`;
+  const [hubNotificationsEnabled, setHubNotificationsEnabled] = useState(true);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
     try {
-      window.localStorage.setItem(hubNotifStorageKey, enabled ? "active" : "muted");
+      const saved = window.localStorage.getItem(hubNotifStorageKey);
+      if (saved === "0") setHubNotificationsEnabled(false);
+      else setHubNotificationsEnabled(true);
     } catch {
-      // Ignore storage quota errors
+      // Ignore storage access errors
     }
-    toast.success(enabled ? "Hub group notifications enabled." : "Hub group notifications muted.");
+  }, [hubNotifStorageKey]);
+
+  const toggleHubNotifications = (checked: boolean) => {
+    setHubNotificationsEnabled(checked);
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem(hubNotifStorageKey, checked ? "1" : "0");
+      } catch {
+        // Ignore storage access errors
+      }
+    }
+    toast.success(
+      checked
+        ? `Hub alerts enabled for ${hub?.name ?? "this Hub"} on this device.`
+        : `Hub alerts muted for ${hub?.name ?? "this Hub"} on this device.`,
+    );
   };
 
   // Hub data query
@@ -814,6 +843,7 @@ function HubDetail() {
     data: hubData,
     isLoading: hubLoading,
     error: hubErrorData,
+    refetch: refetchHub,
   } = useQuery(hubQuery(slug, activeIntent));
   const hub = hubData?.hub;
 
@@ -827,13 +857,17 @@ function HubDetail() {
 
   // Private hub feed query (viewer-scoped)
   const isPrivate = hub?.access === "private";
-  const { data: privateFeed, isLoading: privateFeedLoading } = useQuery(
-    memberFeedQuery(hub?.id ?? "", activeIntent, isPrivate && isMember),
-  );
+  const {
+    data: privateFeed,
+    isLoading: privateFeedLoading,
+    error: privateFeedError,
+    refetch: refetchPrivateFeed,
+  } = useQuery(memberFeedQuery(hub?.id ?? "", activeIntent, isPrivate && isMember));
 
-  // Members list query
+  // Members list query (private hub members only fetched for active members)
+  const canViewMembers = !isPrivate || isMember;
   const { data: members, refetch: refetchMembers } = useQuery(
-    hubMembersQuery(hub?.id ?? "", deferredMemberSearch, 0, "active"),
+    hubMembersQuery(hub?.id ?? "", deferredMemberSearch, 0, "active", canViewMembers),
   );
 
   // Join mutation
@@ -851,6 +885,7 @@ function HubDetail() {
       qc.invalidateQueries({ queryKey: ["hub-membership", hub?.id] });
       qc.invalidateQueries({ queryKey: ["hub", slug] });
       qc.invalidateQueries({ queryKey: ["my-hubs"] });
+      qc.invalidateQueries({ queryKey: ["my-pending-hubs"] });
       if (status === "active") {
         toast.success(`You joined ${hub?.name}! 🎉`);
       } else {
@@ -873,6 +908,7 @@ function HubDetail() {
       qc.invalidateQueries({ queryKey: ["hub-membership", hub?.id] });
       qc.invalidateQueries({ queryKey: ["hub", slug] });
       qc.invalidateQueries({ queryKey: ["my-hubs"] });
+      qc.invalidateQueries({ queryKey: ["my-pending-hubs"] });
       toast.success("You left the hub.");
     },
     onError: (e) => {
@@ -892,7 +928,20 @@ function HubDetail() {
     );
   }
 
-  if (!hub || hubErrorData) {
+  if (hubErrorData) {
+    return (
+      <div className="mx-auto max-w-md px-5 py-20">
+        <QueryErrorCard
+          title="Couldn't load Hub"
+          description="A connection issue prevented loading this Hub. Try again in a moment."
+          error={hubErrorData}
+          onRetry={() => void refetchHub()}
+        />
+      </div>
+    );
+  }
+
+  if (!hub) {
     return (
       <div className="mx-auto max-w-md px-5 py-20 text-center">
         <ShieldAlert className="mx-auto size-14 text-muted-foreground" />
@@ -915,23 +964,21 @@ function HubDetail() {
     feedItems.map((i) => i.ping).filter((p): p is NonNullable<typeof p> => Boolean(p)),
     5,
   );
-  const canViewFeed = canSeeHubContent(hub.access, membership?.role);
+  const canViewFeed = canSeeHubContent(hub.access, isMember ? membership?.role : null);
 
   return (
     <div className="pb-24">
       {/* Cover Banner */}
       <section className="bg-hero">
-        <div className="mx-auto max-w-5xl px-5 pb-8 pt-6">
-          <div className="mb-4">
-            <Link
-              to="/inbox"
-              search={{ section: "hubs" }}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ArrowLeft className="size-3.5" />
-              Back to Hubs
-            </Link>
-          </div>
+        <div className="mx-auto max-w-5xl px-5 pb-8 pt-6 sm:pt-10">
+          <Link
+            to="/inbox"
+            search={{ section: "hubs" }}
+            className="mb-4 inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="size-3.5" />
+            Back to Hubs
+          </Link>
           {/* Invitation Acceptance Banner */}
           {inviteTokenParam && (
             <div className="mb-6 rounded-3xl border border-primary/30 bg-primary/10 p-5 sm:p-6 shadow-sm">
@@ -990,8 +1037,18 @@ function HubDetail() {
           <div className="surface-card relative overflow-hidden rounded-[2.5rem] p-6 sm:p-10 border border-border shadow-lift">
             <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-start gap-4 sm:gap-5 min-w-0">
-                <div className="flex size-16 sm:size-20 shrink-0 items-center justify-center rounded-3xl bg-secondary text-3xl sm:text-4xl shadow-soft">
-                  {categoryInfo?.emoji ?? "🏢"}
+                <div className="flex size-16 sm:size-20 shrink-0 items-center justify-center overflow-hidden rounded-3xl bg-secondary text-3xl sm:text-4xl shadow-soft">
+                  {hub.avatar_url ? (
+                    <ResolvedMomentThumb
+                      mediaUrl={hub.avatar_url}
+                      mediaType="image"
+                      alt={hub.name}
+                      className="size-full object-cover"
+                      fallback={<span>{categoryInfo?.emoji ?? "🏢"}</span>}
+                    />
+                  ) : (
+                    (categoryInfo?.emoji ?? "🏢")
+                  )}
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -1112,8 +1169,8 @@ function HubDetail() {
         </div>
       </section>
 
-      {/* Tabs Layout — Group Communication Only */}
-      <section className="mx-auto max-w-5xl px-5 mt-6">
+      {/* Tabs Layout — Pure Group Communication */}
+      <section className="mx-auto max-w-5xl px-5 mt-6" data-hub-group-only="true">
         <Tabs
           value={activeTab}
           onValueChange={(v) =>
@@ -1135,6 +1192,9 @@ function HubDetail() {
             <TabsTrigger value="feed" className="rounded-full px-5 text-sm font-semibold">
               Shared Pings ({hub.ping_count ?? 0})
             </TabsTrigger>
+            <TabsTrigger value="events" className="rounded-full px-5 text-sm font-semibold">
+              Events
+            </TabsTrigger>
             <TabsTrigger value="members" className="rounded-full px-5 text-sm font-semibold">
               Members ({(hub.member_count ?? 0).toLocaleString()})
             </TabsTrigger>
@@ -1146,6 +1206,16 @@ function HubDetail() {
           {/* TAB 1: GROUP CHAT */}
           <TabsContent value="chat" className="mt-6">
             <HubChat hubId={hub.id} isMember={isMember} isPrivate={isPrivate} isStaff={isStaff} />
+          </TabsContent>
+
+          {/* TAB: EVENTS */}
+          <TabsContent value="events" className="mt-6">
+            <HubEventsSection
+              hubId={hub.id}
+              hubName={hub.name}
+              userId={user?.id}
+              canManage={isStaff || isOwner}
+            />
           </TabsContent>
 
           {/* TAB 1: FEED */}
@@ -1303,7 +1373,13 @@ function HubDetail() {
                   </div>
                 )}
 
-                {feedItems.length === 0 && (
+                {privateFeedError && !feedItems.length ? (
+                  <QueryErrorCard
+                    title="Couldn't load Hub updates"
+                    error={privateFeedError}
+                    onRetry={() => void refetchPrivateFeed()}
+                  />
+                ) : feedItems.length === 0 ? (
                   <div className="surface-card rounded-3xl p-10 text-center">
                     <p className="font-semibold text-lg">No updates here yet</p>
                     <p className="mt-1 text-sm text-muted-foreground">
@@ -1319,7 +1395,7 @@ function HubDetail() {
                       </Button>
                     )}
                   </div>
-                )}
+                ) : null}
               </>
             )}
           </TabsContent>
@@ -1355,6 +1431,7 @@ function HubDetail() {
                     hubId={hub.id}
                     isStaff={isStaff}
                     isOwner={isOwner}
+                    myRole={membership?.role}
                     currentUserId={user?.id}
                     onRefetch={() => refetchMembers()}
                   />
@@ -1367,37 +1444,43 @@ function HubDetail() {
             </div>
           </TabsContent>
 
-          {/* TAB 4: HUB INFO, MEMBERSHIP & NOTIFICATIONS */}
+          {/* TAB 5: HUB INFO, MEMBERSHIP & NOTIFICATIONS */}
           <TabsContent value="about" className="mt-6 space-y-6">
             {user && isMember && (
-              <div className="surface-card rounded-3xl p-6 sm:p-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-start gap-3">
-                  <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary">
-                    {hubNotificationsEnabled ? (
-                      <Bell className="size-5" />
-                    ) : (
-                      <BellOff className="size-5" />
-                    )}
-                  </div>
-                  <div>
-                    <h2 className="font-display text-base font-bold">
-                      Group Notifications & Membership
-                    </h2>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      You are an active <strong className="capitalize">{membership?.role}</strong>{" "}
-                      in {hub.name}. Control real-time message alerts for this group.
-                    </p>
-                  </div>
+              <div className="surface-card rounded-3xl p-6 sm:p-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border border-border/70">
+                <div>
+                  <h2 className="font-display text-lg font-bold flex items-center gap-2">
+                    <Bell className="size-4 text-primary" /> Membership &amp; Notifications
+                  </h2>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Role: <strong className="capitalize text-foreground">{membership?.role}</strong>{" "}
+                    · Device-local alert preference for this Hub.
+                  </p>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-semibold text-muted-foreground">
-                    {hubNotificationsEnabled ? "Alerts On" : "Muted"}
-                  </span>
-                  <Switch
-                    checked={hubNotificationsEnabled}
-                    onCheckedChange={handleToggleHubNotifications}
-                    aria-label="Toggle Hub notifications"
-                  />
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="hub-notif-toggle" className="text-xs font-semibold cursor-pointer">
+                      Hub Alerts
+                    </Label>
+                    <Switch
+                      id="hub-notif-toggle"
+                      checked={hubNotificationsEnabled}
+                      onCheckedChange={toggleHubNotifications}
+                      aria-label="Toggle Hub notifications on this device"
+                    />
+                  </div>
+                  {!isOwner && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => leaveMutation.mutate()}
+                      disabled={leaveMutation.isPending}
+                      className="rounded-full text-xs hover:border-destructive hover:text-destructive"
+                    >
+                      <LogOut className="size-3.5" /> Leave Hub
+                    </Button>
+                  )}
                 </div>
               </div>
             )}

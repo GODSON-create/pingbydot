@@ -13,16 +13,24 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { sanitizeErrorMessage } from "../lib/error-diagnostics";
+import { applyDocumentLocale, useLocale } from "@/lib/i18n";
 import { initializeNativeApp } from "@/lib/native";
+import { captureInboundReferral, recordShareEvent } from "@/lib/sharing/universal";
 import { useNavigate } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth";
+import { useFocusedWorkspace } from "@/lib/draft-store";
+import { NavOverlayProvider, useNavOverlay } from "@/lib/nav-overlay";
 import { ThemeProvider } from "@/lib/theme";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { DesktopSidebar } from "@/components/layout/DesktopSidebar";
 import { SiteFooter } from "@/components/layout/SiteFooter";
-import { BottomNav } from "@/components/layout/BottomNav";
+import { BottomNav, shouldHideBottomNav } from "@/components/layout/BottomNav";
+import { CreateStackModal } from "@/components/layout/CreateStackModal";
 import { BootSplashScreen } from "@/components/layout/BootSplashScreen";
 import { GestureLayer } from "@/components/layout/GestureLayer";
+import { OfflineQueueBanner } from "@/components/layout/OfflineQueueBanner";
+import { PwaInstallAndUpdateBanner } from "@/components/pwa/PwaInstallAndUpdateBanner";
 import { PingMark } from "@/components/BrandLogo";
 import { Toaster } from "@/components/ui/sonner";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
@@ -52,10 +60,14 @@ function NotFoundComponent() {
 }
 
 export function ErrorComponent({ error, reset }: ErrorComponentProps) {
-  console.error(error);
+  const sanitizedDetail = sanitizeErrorMessage(error);
+  console.error("[RouteError]", sanitizedDetail);
   const router = useRouter();
   useEffect(() => {
-    reportLovableError(error, { boundary: "tanstack_root_error_component" });
+    reportLovableError(error, {
+      boundary: "tanstack_root_error_component",
+      pathname: typeof window !== "undefined" ? window.location.pathname : undefined,
+    });
   }, [error]);
   return (
     <div className="flex min-h-[60vh] items-center justify-center px-4">
@@ -64,6 +76,14 @@ export function ErrorComponent({ error, reset }: ErrorComponentProps) {
         <p className="mt-2 text-sm text-muted-foreground">
           Something went wrong on our end. Try again or head back home.
         </p>
+        {import.meta.env.DEV && sanitizedDetail && (
+          <p
+            data-testid="dev-error-detail"
+            className="mt-3 rounded-xl border border-destructive/20 bg-secondary/70 px-3 py-2 font-mono text-xs text-destructive break-words text-left"
+          >
+            {sanitizedDetail}
+          </p>
+        )}
         <div className="mt-6 flex justify-center gap-2">
           <Button
             onClick={() => {
@@ -87,12 +107,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      {
+        name: "viewport",
+        content:
+          "width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content",
+      },
       { title: "Ping — Build in public. Share your story." },
       {
         name: "description",
         content:
-          "Ping is where founders share progress, ideas, launches and milestones with a public link anyone can open.",
+          "Social, communication, discovery, and economic network for everyone. Share Pings and Moments, and communicate across Chats, Hubs, and institutional Signals in Inbox.",
       },
       { property: "og:title", content: "Ping — Build in public. Share your story." },
       {
@@ -105,6 +129,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:image", content: siteUrl("/brand/ping-logo.svg") },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "theme-color", content: "#173C32" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
+      { name: "apple-mobile-web-app-title", content: "Ping" },
     ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -114,9 +141,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         href: "https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap",
       },
       { rel: "stylesheet", href: appCss },
+      { rel: "manifest", href: "/manifest.webmanifest" },
+      { rel: "icon", href: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
       { rel: "icon", href: "/brand/ping-mark-lime.png", type: "image/png" },
       { rel: "icon", href: "/brand/ping-icon.svg", type: "image/svg+xml" },
-      { rel: "apple-touch-icon", href: "/brand/ping-mark-lime.png" },
+      { rel: "apple-touch-icon", href: "/icons/apple-touch-icon-180.png", sizes: "180x180" },
     ],
     scripts: [{ type: "application/ld+json", children: JSON.stringify(siteJsonLd()) }],
   }),
@@ -128,7 +157,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
         <script
@@ -146,110 +175,173 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
-function RootComponent() {
+function RootShellContent() {
+  const { pathname, searchStr } = useLocation();
   const navigate = useNavigate();
-  useEffect(() => {
-    initializeNativeApp((path) => navigate({ to: path as any }));
-  }, [navigate]);
-  const { queryClient } = Route.useRouteContext();
-  const { pathname, href = "" } = useLocation();
+  const { locale } = useLocale();
   const { helpOpen, setHelpOpen } = useKeyboardShortcuts();
+  const { activeOverlay, isOpen, onOpenChangeFor, closeOverlays } = useNavOverlay();
+
+  useEffect(() => {
+    applyDocumentLocale(locale);
+  }, [locale]);
+
+  useEffect(() => {
+    const refCode = captureInboundReferral(searchStr, pathname);
+    if (refCode) {
+      const targetType = pathname.startsWith("/p/")
+        ? "ping"
+        : pathname.startsWith("/hubs/")
+          ? "hub"
+          : pathname.startsWith("/signals")
+            ? "signal"
+            : pathname.startsWith("/@")
+              ? "profile"
+              : "ping";
+      void recordShareEvent({
+        targetType,
+        targetId: pathname,
+        eventKind: "link_clicked",
+        shareCode: refCode,
+      }).catch(() => {});
+    }
+  }, [pathname, searchStr]);
+
+  useEffect(() => {
+    void initializeNativeApp(
+      (path) => navigate({ to: path as any }),
+      () => {
+        if (helpOpen) {
+          setHelpOpen(false);
+          return true;
+        }
+        if (activeOverlay !== "none") {
+          closeOverlays();
+          return true;
+        }
+        return false;
+      },
+    );
+  }, [navigate, helpOpen, setHelpOpen, activeOverlay, closeOverlays]);
+
+  useEffect(() => {
+    if (helpOpen) closeOverlays();
+  }, [helpOpen, closeOverlays]);
+
+  const focusedWorkspace = useFocusedWorkspace();
+  const hideBottomBar = shouldHideBottomNav(pathname) || focusedWorkspace;
+  const inInboxChats =
+    pathname === "/inbox" &&
+    !searchStr.includes("section=hubs") &&
+    !searchStr.includes("section=signals");
+  const hideFooter =
+    pathname.startsWith("/messages") || inInboxChats || shouldHideBottomNav(pathname);
+
+  return (
+    <>
+      <BootSplashScreen />
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-full focus:bg-lime focus:px-4 focus:py-2"
+      >
+        Skip to content
+      </a>
+      <SiteHeader />
+      <PwaInstallAndUpdateBanner />
+      <OfflineQueueBanner />
+      <div className="mx-auto w-full max-w-7xl flex flex-col lg:flex-row items-start min-h-screen overflow-x-clip">
+        <DesktopSidebar />
+        <div
+          className={`flex-1 min-w-0 w-full flex flex-col min-h-screen${
+            !hideBottomBar ? " pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-0" : ""
+          }`}
+        >
+          <main
+            id="main"
+            key={pathname}
+            className="animate-page-in flex-1 w-full min-w-0 overflow-x-clip"
+          >
+            <Outlet />
+          </main>
+          {!hideFooter && <SiteFooter />}
+        </div>
+      </div>
+      <BottomNav />
+      <CreateStackModal open={isOpen("create")} onOpenChange={onOpenChangeFor("create")} />
+      <GestureLayer />
+
+      {/* Keyboard Shortcuts Overlay */}
+      <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
+        <DialogContent className="max-w-sm rounded-3xl p-6 bg-card text-card-foreground">
+          <DialogHeader>
+            <div className="flex items-center gap-2 text-primary font-bold text-sm">
+              <Keyboard className="size-4" />
+              <span>Keyboard Navigation</span>
+            </div>
+            <DialogTitle className="font-display text-lg">Shortcuts</DialogTitle>
+          </DialogHeader>
+
+          <div className="mt-4 space-y-2.5 text-xs">
+            <div className="flex items-center justify-between py-1 border-b border-border/40">
+              <span className="text-muted-foreground">Post a new Ping</span>
+              <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
+                C
+              </kbd>
+            </div>
+            <div className="flex items-center justify-between py-1 border-b border-border/40">
+              <span className="text-muted-foreground">Explore directory</span>
+              <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
+                /
+              </kbd>
+            </div>
+            <div className="flex items-center justify-between py-1 border-b border-border/40">
+              <span className="text-muted-foreground">Go to Home</span>
+              <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
+                G H
+              </kbd>
+            </div>
+            <div className="flex items-center justify-between py-1 border-b border-border/40">
+              <span className="text-muted-foreground">Go to Inbox (Chats)</span>
+              <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
+                G I
+              </kbd>
+            </div>
+            <div className="flex items-center justify-between py-1 border-b border-border/40">
+              <span className="text-muted-foreground">Go to Hubs</span>
+              <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
+                G B
+              </kbd>
+            </div>
+            <div className="flex items-center justify-between py-1 border-b border-border/40">
+              <span className="text-muted-foreground">Go to Signals</span>
+              <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
+                G S
+              </kbd>
+            </div>
+            <div className="flex items-center justify-between py-1">
+              <span className="text-muted-foreground">Toggle this help</span>
+              <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
+                ?
+              </kbd>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Toaster />
+    </>
+  );
+}
+
+function RootComponent() {
+  const { queryClient } = Route.useRouteContext();
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <AuthProvider>
-          <BootSplashScreen />
-          <a
-            href="#main"
-            className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-full focus:bg-lime focus:px-4 focus:py-2"
-          >
-            Skip to content
-          </a>
-          <SiteHeader />
-          <div className="mx-auto w-full max-w-7xl flex flex-col lg:flex-row items-start min-h-screen">
-            <DesktopSidebar />
-            <div className="flex-1 min-w-0 w-full flex flex-col min-h-screen">
-              <main
-                id="main"
-                key={pathname}
-                className="animate-page-in flex-1 w-full min-w-0 overflow-x-clip"
-              >
-                <Outlet />
-              </main>
-              {!(
-                pathname.startsWith("/messages") ||
-                (pathname.startsWith("/inbox") &&
-                  !href.includes("section=hubs") &&
-                  !href.includes("section=signals"))
-              ) && (
-                <div className="pb-24 lg:pb-0">
-                  <SiteFooter />
-                </div>
-              )}
-            </div>
-          </div>
-          <BottomNav />
-          <GestureLayer />
-
-          {/* Keyboard Shortcuts Overlay */}
-          <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
-            <DialogContent className="max-w-sm rounded-3xl p-6 bg-card text-card-foreground">
-              <DialogHeader>
-                <div className="flex items-center gap-2 text-primary font-bold text-sm">
-                  <Keyboard className="size-4" />
-                  <span>Keyboard Navigation</span>
-                </div>
-                <DialogTitle className="font-display text-lg">Shortcuts</DialogTitle>
-              </DialogHeader>
-
-              <div className="mt-4 space-y-2.5 text-xs">
-                <div className="flex items-center justify-between py-1 border-b border-border/40">
-                  <span className="text-muted-foreground">Post a new Ping</span>
-                  <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
-                    C
-                  </kbd>
-                </div>
-                <div className="flex items-center justify-between py-1 border-b border-border/40">
-                  <span className="text-muted-foreground">Explore directory</span>
-                  <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
-                    /
-                  </kbd>
-                </div>
-                <div className="flex items-center justify-between py-1 border-b border-border/40">
-                  <span className="text-muted-foreground">Go to Home</span>
-                  <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
-                    G H
-                  </kbd>
-                </div>
-                <div className="flex items-center justify-between py-1 border-b border-border/40">
-                  <span className="text-muted-foreground">Go to Inbox</span>
-                  <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
-                    G I
-                  </kbd>
-                </div>
-                <div className="flex items-center justify-between py-1 border-b border-border/40">
-                  <span className="text-muted-foreground">Go to Hubs</span>
-                  <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
-                    G B
-                  </kbd>
-                </div>
-                <div className="flex items-center justify-between py-1 border-b border-border/40">
-                  <span className="text-muted-foreground">Go to Signals</span>
-                  <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
-                    G S
-                  </kbd>
-                </div>
-                <div className="flex items-center justify-between py-1">
-                  <span className="text-muted-foreground">Toggle this help</span>
-                  <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
-                    ?
-                  </kbd>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-
-          <Toaster position="bottom-center" />
+          <NavOverlayProvider>
+            <RootShellContent />
+          </NavOverlayProvider>
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -5,10 +6,14 @@ import {
   ArrowLeft,
   ArrowUpRight,
   Coins,
+  CreditCard,
   Crown,
   Flame,
   History,
   Info,
+  Megaphone,
+  Receipt,
+  ShieldCheck,
   Sparkles,
   TrendingUp,
 } from "lucide-react";
@@ -20,7 +25,18 @@ import {
   dotSummaryQuery,
   useClaimDailyDot,
 } from "@/lib/economy";
+import {
+  DOT_TOPUP_LIMITS,
+  calculateDotTopupQuote,
+  dotTopupIntentsQuery,
+  getCryptoRailStatus,
+  getPaystackConfigStatus,
+  useCreateDotTopupIntent,
+  type DotTopupCurrency,
+} from "@/lib/payments/paystack";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { PingMark } from "@/components/BrandLogo";
 import { cn } from "@/lib/utils";
 
@@ -42,7 +58,16 @@ export const Route = createFileRoute("/_authenticated/balance")({
 function BalancePage() {
   const { user, profile } = useAuth();
   const { data: summary, isLoading } = useQuery(dotSummaryQuery(user?.id));
+  const { data: topupIntents = [] } = useQuery(dotTopupIntentsQuery(user?.id));
   const claimDaily = useClaimDailyDot();
+  const createTopup = useCreateDotTopupIntent(user?.id);
+
+  const [customDotAmount, setCustomDotAmount] = useState("250");
+  const [topupCurrency, setTopupCurrency] = useState<DotTopupCurrency>("NGN");
+  const parsedDot = Number(customDotAmount) || DOT_TOPUP_LIMITS.minDot;
+  const quote = calculateDotTopupQuote(parsedDot, topupCurrency);
+  const paystackStatus = getPaystackConfigStatus();
+  const cryptoRail = getCryptoRailStatus();
 
   const wallet = summary?.wallet;
   const subscription = summary?.subscription;
@@ -95,7 +120,13 @@ function BalancePage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button asChild variant="outline" size="sm" className="rounded-full">
+            <Link to="/boosts">
+              <Megaphone className="size-4 text-gold" />
+              Boosts
+            </Link>
+          </Button>
           <Button asChild variant="outline" size="sm" className="rounded-full">
             <Link to="/analytics">
               <TrendingUp className="size-4" />
@@ -105,7 +136,7 @@ function BalancePage() {
           <Button asChild variant="hero" size="sm" className="rounded-full">
             <Link to="/upgrades">
               <Crown className="size-4" />
-              Upgrades
+              Memberships
             </Link>
           </Button>
         </div>
@@ -175,9 +206,9 @@ function BalancePage() {
               {claimDaily.isPending
                 ? "Claiming…"
                 : !summary?.migrated
-                  ? "Daily +5 DOT (Migration Pending)"
+                  ? "Daily +10 DOT (Migration Pending)"
                   : canClaim
-                    ? "Claim Daily +5 DOT"
+                    ? "Claim Daily +10 DOT (+Streak)"
                     : "Checked In Today"}
             </Button>
           </div>
@@ -192,7 +223,7 @@ function BalancePage() {
             <li className="flex items-center justify-between gap-2">
               <span className="text-muted-foreground">Daily check-in reward</span>
               <span className="rounded-full bg-lime/20 dark:bg-lime/15 px-2.5 py-0.5 text-xs font-bold text-lime-foreground dark:text-lime">
-                +5 DOT / day
+                +10–25 DOT / day
               </span>
             </li>
             <li className="flex items-center justify-between gap-2">
@@ -226,6 +257,120 @@ function BalancePage() {
           </Button>
         </section>
       </div>
+
+      {/* Custom DOT Top-Up Infrastructure (Server-Verified Webhook Only — Phase 4.9) */}
+      <section className="surface-card mt-6 rounded-3xl p-6 sm:p-7 space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="font-display text-lg font-bold flex items-center gap-2">
+              <CreditCard className="size-5 text-primary" /> Custom DOT Top-Up (Paystack)
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Choose any custom DOT credit amount ({DOT_TOPUP_LIMITS.minDot}–
+              {DOT_TOPUP_LIMITS.maxDotPerTransaction.toLocaleString()} DOT). Credits are issued
+              exclusively after signed server-side webhook verification — never from client
+              callbacks.
+            </p>
+          </div>
+          <span className="rounded-full border border-border bg-secondary px-3 py-1 text-[11px] font-semibold text-muted-foreground">
+            {paystackStatus.label}
+          </span>
+        </div>
+
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            try {
+              const intent = await createTopup.mutateAsync({
+                dotAmount: parsedDot,
+                currency: topupCurrency,
+                rail: "paystack",
+              });
+              toast.success(
+                `Top-up intent ${intent.provider_reference} created (pending signed Paystack webhook verification).`,
+              );
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : "Could not create top-up intent.");
+            }
+          }}
+          className="grid gap-3 sm:grid-cols-[1fr_130px_auto] items-end"
+        >
+          <div>
+            <Label htmlFor="custom-dot-amount" className="text-xs">
+              Custom DOT amount
+            </Label>
+            <Input
+              id="custom-dot-amount"
+              type="number"
+              min={DOT_TOPUP_LIMITS.minDot}
+              max={DOT_TOPUP_LIMITS.maxDotPerTransaction}
+              value={customDotAmount}
+              onChange={(e) => setCustomDotAmount(e.target.value)}
+              className="mt-1 rounded-xl"
+            />
+          </div>
+          <div>
+            <Label htmlFor="topup-currency" className="text-xs">
+              Currency
+            </Label>
+            <select
+              id="topup-currency"
+              value={topupCurrency}
+              onChange={(e) => setTopupCurrency(e.target.value as DotTopupCurrency)}
+              className="mt-1 h-10 w-full rounded-xl border border-input bg-card px-3 text-xs font-semibold"
+            >
+              <option value="NGN">NGN (₦)</option>
+              <option value="USD">USD ($)</option>
+            </select>
+          </div>
+          <Button
+            type="submit"
+            variant="hero"
+            disabled={createTopup.isPending}
+            className="h-10 rounded-full px-5 text-xs font-bold"
+          >
+            {createTopup.isPending ? "Creating…" : `Create Intent · ${quote.formattedTotal}`}
+          </Button>
+        </form>
+
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border/60 bg-secondary/35 px-4 py-2.5 text-[11px] text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <ShieldCheck className="size-3.5 text-primary shrink-0" />
+            <strong>Ledger Separation:</strong> DOT credits are non-cash platform activity credits —
+            strictly separate from fiat cash balances, business revenue, or refund liabilities.
+          </span>
+          <span>Crypto rail: {cryptoRail.statusLabel}</span>
+        </div>
+
+        {topupIntents.length > 0 && (
+          <div className="pt-2 space-y-2">
+            <p className="text-xs font-bold flex items-center gap-1.5">
+              <Receipt className="size-3.5 text-primary" /> Top-Up Requests &amp; Receipts
+            </p>
+            <div className="divide-y divide-border/50 rounded-2xl border border-border/60 px-4">
+              {topupIntents.slice(0, 6).map((intent) => (
+                <div
+                  key={intent.id}
+                  className="py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs"
+                >
+                  <div>
+                    <p className="font-semibold text-foreground">
+                      {intent.dot_amount.toLocaleString()} DOT ·{" "}
+                      {intent.receipt_number || intent.provider_reference}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {intent.rail} · {format(new Date(intent.created_at), "MMM d, yyyy · h:mm a")}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-secondary px-2.5 py-0.5 text-[10px] font-bold uppercase">
+                    {intent.status.replace(/_/g, " ")}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
 
       {/* Transaction Ledger */}
       <section className="surface-card mt-6 rounded-3xl p-6 sm:p-7">

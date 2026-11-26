@@ -13,30 +13,60 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AtChar123usernameChar125RouteImport } from './routes/@{$username}'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AdminRouteImport } from './routes/admin'
+import { Route as BusinessesRouteImport } from './routes/businesses'
+import { Route as ClipsRouteImport } from './routes/clips'
+import { Route as DevelopersRouteImport } from './routes/developers'
+import { Route as DownloadRouteImport } from './routes/download'
 import { Route as ExploreRouteImport } from './routes/explore'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as HubsRouteImport } from './routes/hubs'
 import { Route as InboxRouteImport } from './routes/inbox'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as MediaRouteImport } from './routes/media'
 import { Route as MessagesRouteImport } from './routes/messages'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as ShareTargetRouteImport } from './routes/share-target'
 import { Route as SignalsRouteImport } from './routes/signals'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as SpotlightRouteImport } from './routes/spotlight'
 import { Route as TermsRouteImport } from './routes/terms'
+import { Route as WelcomeRouteImport } from './routes/welcome'
 import { Route as AuthenticatedAnalyticsRouteImport } from './routes/_authenticated/analytics'
 import { Route as AuthenticatedBalanceRouteImport } from './routes/_authenticated/balance'
+import { Route as AuthenticatedBoostsRouteImport } from './routes/_authenticated/boosts'
+import { Route as AuthenticatedBusinessRouteImport } from './routes/_authenticated/business'
 import { Route as AuthenticatedCreateRouteImport } from './routes/_authenticated/create'
+import { Route as AuthenticatedGriotRouteImport } from './routes/_authenticated/griot'
+import { Route as AuthenticatedLearnRouteImport } from './routes/_authenticated/learn'
+import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedUpgradesRouteImport } from './routes/_authenticated/upgrades'
+import { Route as BSlugRouteImport } from './routes/b.$slug'
 import { Route as HubsSlugRouteImport } from './routes/hubs.$slug'
 import { Route as HubsCreateRouteImport } from './routes/hubs.create'
+import { Route as OauthAuthorizeRouteImport } from './routes/oauth.authorize'
 import { Route as PIdRouteImport } from './routes/p.$id'
 import { Route as SignalsSlugRouteImport } from './routes/signals.$slug'
+import { Route as SignalsChannelsRouteImport } from './routes/signals.channels'
 import { Route as SignalsCreateRouteImport } from './routes/signals.create'
+import { Route as SignalsOpportunitiesRouteImport } from './routes/signals.opportunities'
+import { Route as SpotlightSlugRouteImport } from './routes/spotlight.$slug'
+import { Route as TagSlugRouteImport } from './routes/tag.$slug'
 import { Route as AuthenticatedEditIdRouteImport } from './routes/_authenticated/edit.$id'
+import { Route as AuthenticatedSpotlightEditorialRouteImport } from './routes/_authenticated/spotlight.editorial'
+import { Route as ApiCronChatRetentionRouteImport } from './routes/api/cron/chat-retention'
+import { Route as ApiGriotAssistRouteImport } from './routes/api/griot/assist'
+import { Route as ApiMediaDeleteRouteImport } from './routes/api/media/delete'
+import { Route as ApiMediaPresignUploadRouteImport } from './routes/api/media/presign-upload'
+import { Route as ApiMediaSignReadRouteImport } from './routes/api/media/sign-read'
+import { Route as ApiV1HealthRouteImport } from './routes/api/v1/health'
+import { Route as ApiV1OpenapiDotjsonRouteImport } from './routes/api/v1/openapi[.]json'
+import { Route as ApiV1PingsRouteImport } from './routes/api/v1/pings'
+import { Route as ApiWebhooksPaystackRouteImport } from './routes/api/webhooks/paystack'
 import { Route as ApiPublicPingCardIdRouteImport } from './routes/api/public/ping-card/$id'
+import { Route as ApiV1BusinessMessagesRouteImport } from './routes/api/v1/business/messages'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -56,6 +86,26 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BusinessesRoute = BusinessesRouteImport.update({
+  id: '/businesses',
+  path: '/businesses',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClipsRoute = ClipsRouteImport.update({
+  id: '/clips',
+  path: '/clips',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevelopersRoute = DevelopersRouteImport.update({
+  id: '/developers',
+  path: '/developers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DownloadRoute = DownloadRouteImport.update({
+  id: '/download',
+  path: '/download',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ExploreRoute = ExploreRouteImport.update({
@@ -83,6 +133,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MediaRoute = MediaRouteImport.update({
+  id: '/media',
+  path: '/media',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MessagesRoute = MessagesRouteImport.update({
   id: '/messages',
   path: '/messages',
@@ -96,6 +151,11 @@ const PrivacyRoute = PrivacyRouteImport.update({
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShareTargetRoute = ShareTargetRouteImport.update({
+  id: '/share-target',
+  path: '/share-target',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SignalsRoute = SignalsRouteImport.update({
@@ -113,9 +173,19 @@ const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SpotlightRoute = SpotlightRouteImport.update({
+  id: '/spotlight',
+  path: '/spotlight',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TermsRoute = TermsRouteImport.update({
   id: '/terms',
   path: '/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WelcomeRoute = WelcomeRouteImport.update({
+  id: '/welcome',
+  path: '/welcome',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedAnalyticsRoute = AuthenticatedAnalyticsRouteImport.update({
@@ -128,9 +198,34 @@ const AuthenticatedBalanceRoute = AuthenticatedBalanceRouteImport.update({
   path: '/balance',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedBoostsRoute = AuthenticatedBoostsRouteImport.update({
+  id: '/boosts',
+  path: '/boosts',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedBusinessRoute = AuthenticatedBusinessRouteImport.update({
+  id: '/business',
+  path: '/business',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedCreateRoute = AuthenticatedCreateRouteImport.update({
   id: '/create',
   path: '/create',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedGriotRoute = AuthenticatedGriotRouteImport.update({
+  id: '/griot',
+  path: '/griot',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedLearnRoute = AuthenticatedLearnRouteImport.update({
+  id: '/learn',
+  path: '/learn',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedOnboardingRoute = AuthenticatedOnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
@@ -143,6 +238,11 @@ const AuthenticatedUpgradesRoute = AuthenticatedUpgradesRouteImport.update({
   path: '/upgrades',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const BSlugRoute = BSlugRouteImport.update({
+  id: '/b/$slug',
+  path: '/b/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const HubsSlugRoute = HubsSlugRouteImport.update({
   id: '/$slug',
   path: '/$slug',
@@ -152,6 +252,11 @@ const HubsCreateRoute = HubsCreateRouteImport.update({
   id: '/create',
   path: '/create',
   getParentRoute: () => HubsRoute,
+} as any)
+const OauthAuthorizeRoute = OauthAuthorizeRouteImport.update({
+  id: '/oauth/authorize',
+  path: '/oauth/authorize',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const PIdRoute = PIdRouteImport.update({
   id: '/p/$id',
@@ -163,19 +268,95 @@ const SignalsSlugRoute = SignalsSlugRouteImport.update({
   path: '/$slug',
   getParentRoute: () => SignalsRoute,
 } as any)
+const SignalsChannelsRoute = SignalsChannelsRouteImport.update({
+  id: '/channels',
+  path: '/channels',
+  getParentRoute: () => SignalsRoute,
+} as any)
 const SignalsCreateRoute = SignalsCreateRouteImport.update({
   id: '/create',
   path: '/create',
   getParentRoute: () => SignalsRoute,
+} as any)
+const SignalsOpportunitiesRoute = SignalsOpportunitiesRouteImport.update({
+  id: '/opportunities',
+  path: '/opportunities',
+  getParentRoute: () => SignalsRoute,
+} as any)
+const SpotlightSlugRoute = SpotlightSlugRouteImport.update({
+  id: '/$slug',
+  path: '/$slug',
+  getParentRoute: () => SpotlightRoute,
+} as any)
+const TagSlugRoute = TagSlugRouteImport.update({
+  id: '/tag/$slug',
+  path: '/tag/$slug',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedEditIdRoute = AuthenticatedEditIdRouteImport.update({
   id: '/edit/$id',
   path: '/edit/$id',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedSpotlightEditorialRoute =
+  AuthenticatedSpotlightEditorialRouteImport.update({
+    id: '/spotlight/editorial',
+    path: '/spotlight/editorial',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const ApiCronChatRetentionRoute = ApiCronChatRetentionRouteImport.update({
+  id: '/api/cron/chat-retention',
+  path: '/api/cron/chat-retention',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiGriotAssistRoute = ApiGriotAssistRouteImport.update({
+  id: '/api/griot/assist',
+  path: '/api/griot/assist',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMediaDeleteRoute = ApiMediaDeleteRouteImport.update({
+  id: '/api/media/delete',
+  path: '/api/media/delete',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMediaPresignUploadRoute = ApiMediaPresignUploadRouteImport.update({
+  id: '/api/media/presign-upload',
+  path: '/api/media/presign-upload',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMediaSignReadRoute = ApiMediaSignReadRouteImport.update({
+  id: '/api/media/sign-read',
+  path: '/api/media/sign-read',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiV1HealthRoute = ApiV1HealthRouteImport.update({
+  id: '/api/v1/health',
+  path: '/api/v1/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiV1OpenapiDotjsonRoute = ApiV1OpenapiDotjsonRouteImport.update({
+  id: '/api/v1/openapi.json',
+  path: '/api/v1/openapi.json',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiV1PingsRoute = ApiV1PingsRouteImport.update({
+  id: '/api/v1/pings',
+  path: '/api/v1/pings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiWebhooksPaystackRoute = ApiWebhooksPaystackRouteImport.update({
+  id: '/api/webhooks/paystack',
+  path: '/api/webhooks/paystack',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicPingCardIdRoute = ApiPublicPingCardIdRouteImport.update({
   id: '/api/public/ping-card/$id',
   path: '/api/public/ping-card/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiV1BusinessMessagesRoute = ApiV1BusinessMessagesRouteImport.update({
+  id: '/api/v1/business/messages',
+  path: '/api/v1/business/messages',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -183,59 +364,119 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/@{$username}': typeof AtChar123usernameChar125Route
   '/admin': typeof AdminRoute
+  '/businesses': typeof BusinessesRoute
+  '/clips': typeof ClipsRoute
+  '/developers': typeof DevelopersRoute
+  '/download': typeof DownloadRoute
   '/explore': typeof ExploreRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/hubs': typeof HubsRouteWithChildren
   '/inbox': typeof InboxRoute
   '/login': typeof LoginRoute
+  '/media': typeof MediaRoute
   '/messages': typeof MessagesRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/share-target': typeof ShareTargetRoute
   '/signals': typeof SignalsRouteWithChildren
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/spotlight': typeof SpotlightRouteWithChildren
   '/terms': typeof TermsRoute
+  '/welcome': typeof WelcomeRoute
   '/analytics': typeof AuthenticatedAnalyticsRoute
   '/balance': typeof AuthenticatedBalanceRoute
+  '/boosts': typeof AuthenticatedBoostsRoute
+  '/business': typeof AuthenticatedBusinessRoute
   '/create': typeof AuthenticatedCreateRoute
+  '/griot': typeof AuthenticatedGriotRoute
+  '/learn': typeof AuthenticatedLearnRoute
+  '/onboarding': typeof AuthenticatedOnboardingRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/upgrades': typeof AuthenticatedUpgradesRoute
+  '/b/$slug': typeof BSlugRoute
   '/hubs/$slug': typeof HubsSlugRoute
   '/hubs/create': typeof HubsCreateRoute
+  '/oauth/authorize': typeof OauthAuthorizeRoute
   '/p/$id': typeof PIdRoute
   '/signals/$slug': typeof SignalsSlugRoute
+  '/signals/channels': typeof SignalsChannelsRoute
   '/signals/create': typeof SignalsCreateRoute
+  '/signals/opportunities': typeof SignalsOpportunitiesRoute
+  '/spotlight/$slug': typeof SpotlightSlugRoute
+  '/tag/$slug': typeof TagSlugRoute
   '/edit/$id': typeof AuthenticatedEditIdRoute
+  '/spotlight/editorial': typeof AuthenticatedSpotlightEditorialRoute
+  '/api/cron/chat-retention': typeof ApiCronChatRetentionRoute
+  '/api/griot/assist': typeof ApiGriotAssistRoute
+  '/api/media/delete': typeof ApiMediaDeleteRoute
+  '/api/media/presign-upload': typeof ApiMediaPresignUploadRoute
+  '/api/media/sign-read': typeof ApiMediaSignReadRoute
+  '/api/v1/health': typeof ApiV1HealthRoute
+  '/api/v1/openapi.json': typeof ApiV1OpenapiDotjsonRoute
+  '/api/v1/pings': typeof ApiV1PingsRoute
+  '/api/webhooks/paystack': typeof ApiWebhooksPaystackRoute
   '/api/public/ping-card/$id': typeof ApiPublicPingCardIdRoute
+  '/api/v1/business/messages': typeof ApiV1BusinessMessagesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/@{$username}': typeof AtChar123usernameChar125Route
   '/admin': typeof AdminRoute
+  '/businesses': typeof BusinessesRoute
+  '/clips': typeof ClipsRoute
+  '/developers': typeof DevelopersRoute
+  '/download': typeof DownloadRoute
   '/explore': typeof ExploreRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/hubs': typeof HubsRouteWithChildren
   '/inbox': typeof InboxRoute
   '/login': typeof LoginRoute
+  '/media': typeof MediaRoute
   '/messages': typeof MessagesRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/share-target': typeof ShareTargetRoute
   '/signals': typeof SignalsRouteWithChildren
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/spotlight': typeof SpotlightRouteWithChildren
   '/terms': typeof TermsRoute
+  '/welcome': typeof WelcomeRoute
   '/analytics': typeof AuthenticatedAnalyticsRoute
   '/balance': typeof AuthenticatedBalanceRoute
+  '/boosts': typeof AuthenticatedBoostsRoute
+  '/business': typeof AuthenticatedBusinessRoute
   '/create': typeof AuthenticatedCreateRoute
+  '/griot': typeof AuthenticatedGriotRoute
+  '/learn': typeof AuthenticatedLearnRoute
+  '/onboarding': typeof AuthenticatedOnboardingRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/upgrades': typeof AuthenticatedUpgradesRoute
+  '/b/$slug': typeof BSlugRoute
   '/hubs/$slug': typeof HubsSlugRoute
   '/hubs/create': typeof HubsCreateRoute
+  '/oauth/authorize': typeof OauthAuthorizeRoute
   '/p/$id': typeof PIdRoute
   '/signals/$slug': typeof SignalsSlugRoute
+  '/signals/channels': typeof SignalsChannelsRoute
   '/signals/create': typeof SignalsCreateRoute
+  '/signals/opportunities': typeof SignalsOpportunitiesRoute
+  '/spotlight/$slug': typeof SpotlightSlugRoute
+  '/tag/$slug': typeof TagSlugRoute
   '/edit/$id': typeof AuthenticatedEditIdRoute
+  '/spotlight/editorial': typeof AuthenticatedSpotlightEditorialRoute
+  '/api/cron/chat-retention': typeof ApiCronChatRetentionRoute
+  '/api/griot/assist': typeof ApiGriotAssistRoute
+  '/api/media/delete': typeof ApiMediaDeleteRoute
+  '/api/media/presign-upload': typeof ApiMediaPresignUploadRoute
+  '/api/media/sign-read': typeof ApiMediaSignReadRoute
+  '/api/v1/health': typeof ApiV1HealthRoute
+  '/api/v1/openapi.json': typeof ApiV1OpenapiDotjsonRoute
+  '/api/v1/pings': typeof ApiV1PingsRoute
+  '/api/webhooks/paystack': typeof ApiWebhooksPaystackRoute
   '/api/public/ping-card/$id': typeof ApiPublicPingCardIdRoute
+  '/api/v1/business/messages': typeof ApiV1BusinessMessagesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -243,30 +484,60 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/@{$username}': typeof AtChar123usernameChar125Route
   '/admin': typeof AdminRoute
+  '/businesses': typeof BusinessesRoute
+  '/clips': typeof ClipsRoute
+  '/developers': typeof DevelopersRoute
+  '/download': typeof DownloadRoute
   '/explore': typeof ExploreRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/hubs': typeof HubsRouteWithChildren
   '/inbox': typeof InboxRoute
   '/login': typeof LoginRoute
+  '/media': typeof MediaRoute
   '/messages': typeof MessagesRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/share-target': typeof ShareTargetRoute
   '/signals': typeof SignalsRouteWithChildren
   '/signup': typeof SignupRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/spotlight': typeof SpotlightRouteWithChildren
   '/terms': typeof TermsRoute
+  '/welcome': typeof WelcomeRoute
   '/_authenticated/analytics': typeof AuthenticatedAnalyticsRoute
   '/_authenticated/balance': typeof AuthenticatedBalanceRoute
+  '/_authenticated/boosts': typeof AuthenticatedBoostsRoute
+  '/_authenticated/business': typeof AuthenticatedBusinessRoute
   '/_authenticated/create': typeof AuthenticatedCreateRoute
+  '/_authenticated/griot': typeof AuthenticatedGriotRoute
+  '/_authenticated/learn': typeof AuthenticatedLearnRoute
+  '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/upgrades': typeof AuthenticatedUpgradesRoute
+  '/b/$slug': typeof BSlugRoute
   '/hubs/$slug': typeof HubsSlugRoute
   '/hubs/create': typeof HubsCreateRoute
+  '/oauth/authorize': typeof OauthAuthorizeRoute
   '/p/$id': typeof PIdRoute
   '/signals/$slug': typeof SignalsSlugRoute
+  '/signals/channels': typeof SignalsChannelsRoute
   '/signals/create': typeof SignalsCreateRoute
+  '/signals/opportunities': typeof SignalsOpportunitiesRoute
+  '/spotlight/$slug': typeof SpotlightSlugRoute
+  '/tag/$slug': typeof TagSlugRoute
   '/_authenticated/edit/$id': typeof AuthenticatedEditIdRoute
+  '/_authenticated/spotlight/editorial': typeof AuthenticatedSpotlightEditorialRoute
+  '/api/cron/chat-retention': typeof ApiCronChatRetentionRoute
+  '/api/griot/assist': typeof ApiGriotAssistRoute
+  '/api/media/delete': typeof ApiMediaDeleteRoute
+  '/api/media/presign-upload': typeof ApiMediaPresignUploadRoute
+  '/api/media/sign-read': typeof ApiMediaSignReadRoute
+  '/api/v1/health': typeof ApiV1HealthRoute
+  '/api/v1/openapi.json': typeof ApiV1OpenapiDotjsonRoute
+  '/api/v1/pings': typeof ApiV1PingsRoute
+  '/api/webhooks/paystack': typeof ApiWebhooksPaystackRoute
   '/api/public/ping-card/$id': typeof ApiPublicPingCardIdRoute
+  '/api/v1/business/messages': typeof ApiV1BusinessMessagesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -274,89 +545,179 @@ export interface FileRouteTypes {
     | '/'
     | '/@{$username}'
     | '/admin'
+    | '/businesses'
+    | '/clips'
+    | '/developers'
+    | '/download'
     | '/explore'
     | '/forgot-password'
     | '/hubs'
     | '/inbox'
     | '/login'
+    | '/media'
     | '/messages'
     | '/privacy'
     | '/reset-password'
+    | '/share-target'
     | '/signals'
     | '/signup'
     | '/sitemap.xml'
+    | '/spotlight'
     | '/terms'
+    | '/welcome'
     | '/analytics'
     | '/balance'
+    | '/boosts'
+    | '/business'
     | '/create'
+    | '/griot'
+    | '/learn'
+    | '/onboarding'
     | '/settings'
     | '/upgrades'
+    | '/b/$slug'
     | '/hubs/$slug'
     | '/hubs/create'
+    | '/oauth/authorize'
     | '/p/$id'
     | '/signals/$slug'
+    | '/signals/channels'
     | '/signals/create'
+    | '/signals/opportunities'
+    | '/spotlight/$slug'
+    | '/tag/$slug'
     | '/edit/$id'
+    | '/spotlight/editorial'
+    | '/api/cron/chat-retention'
+    | '/api/griot/assist'
+    | '/api/media/delete'
+    | '/api/media/presign-upload'
+    | '/api/media/sign-read'
+    | '/api/v1/health'
+    | '/api/v1/openapi.json'
+    | '/api/v1/pings'
+    | '/api/webhooks/paystack'
     | '/api/public/ping-card/$id'
+    | '/api/v1/business/messages'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/@{$username}'
     | '/admin'
+    | '/businesses'
+    | '/clips'
+    | '/developers'
+    | '/download'
     | '/explore'
     | '/forgot-password'
     | '/hubs'
     | '/inbox'
     | '/login'
+    | '/media'
     | '/messages'
     | '/privacy'
     | '/reset-password'
+    | '/share-target'
     | '/signals'
     | '/signup'
     | '/sitemap.xml'
+    | '/spotlight'
     | '/terms'
+    | '/welcome'
     | '/analytics'
     | '/balance'
+    | '/boosts'
+    | '/business'
     | '/create'
+    | '/griot'
+    | '/learn'
+    | '/onboarding'
     | '/settings'
     | '/upgrades'
+    | '/b/$slug'
     | '/hubs/$slug'
     | '/hubs/create'
+    | '/oauth/authorize'
     | '/p/$id'
     | '/signals/$slug'
+    | '/signals/channels'
     | '/signals/create'
+    | '/signals/opportunities'
+    | '/spotlight/$slug'
+    | '/tag/$slug'
     | '/edit/$id'
+    | '/spotlight/editorial'
+    | '/api/cron/chat-retention'
+    | '/api/griot/assist'
+    | '/api/media/delete'
+    | '/api/media/presign-upload'
+    | '/api/media/sign-read'
+    | '/api/v1/health'
+    | '/api/v1/openapi.json'
+    | '/api/v1/pings'
+    | '/api/webhooks/paystack'
     | '/api/public/ping-card/$id'
+    | '/api/v1/business/messages'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/@{$username}'
     | '/admin'
+    | '/businesses'
+    | '/clips'
+    | '/developers'
+    | '/download'
     | '/explore'
     | '/forgot-password'
     | '/hubs'
     | '/inbox'
     | '/login'
+    | '/media'
     | '/messages'
     | '/privacy'
     | '/reset-password'
+    | '/share-target'
     | '/signals'
     | '/signup'
     | '/sitemap.xml'
+    | '/spotlight'
     | '/terms'
+    | '/welcome'
     | '/_authenticated/analytics'
     | '/_authenticated/balance'
+    | '/_authenticated/boosts'
+    | '/_authenticated/business'
     | '/_authenticated/create'
+    | '/_authenticated/griot'
+    | '/_authenticated/learn'
+    | '/_authenticated/onboarding'
     | '/_authenticated/settings'
     | '/_authenticated/upgrades'
+    | '/b/$slug'
     | '/hubs/$slug'
     | '/hubs/create'
+    | '/oauth/authorize'
     | '/p/$id'
     | '/signals/$slug'
+    | '/signals/channels'
     | '/signals/create'
+    | '/signals/opportunities'
+    | '/spotlight/$slug'
+    | '/tag/$slug'
     | '/_authenticated/edit/$id'
+    | '/_authenticated/spotlight/editorial'
+    | '/api/cron/chat-retention'
+    | '/api/griot/assist'
+    | '/api/media/delete'
+    | '/api/media/presign-upload'
+    | '/api/media/sign-read'
+    | '/api/v1/health'
+    | '/api/v1/openapi.json'
+    | '/api/v1/pings'
+    | '/api/webhooks/paystack'
     | '/api/public/ping-card/$id'
+    | '/api/v1/business/messages'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -364,20 +725,41 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AtChar123usernameChar125Route: typeof AtChar123usernameChar125Route
   AdminRoute: typeof AdminRoute
+  BusinessesRoute: typeof BusinessesRoute
+  ClipsRoute: typeof ClipsRoute
+  DevelopersRoute: typeof DevelopersRoute
+  DownloadRoute: typeof DownloadRoute
   ExploreRoute: typeof ExploreRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   HubsRoute: typeof HubsRouteWithChildren
   InboxRoute: typeof InboxRoute
   LoginRoute: typeof LoginRoute
+  MediaRoute: typeof MediaRoute
   MessagesRoute: typeof MessagesRoute
   PrivacyRoute: typeof PrivacyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  ShareTargetRoute: typeof ShareTargetRoute
   SignalsRoute: typeof SignalsRouteWithChildren
   SignupRoute: typeof SignupRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  SpotlightRoute: typeof SpotlightRouteWithChildren
   TermsRoute: typeof TermsRoute
+  WelcomeRoute: typeof WelcomeRoute
+  BSlugRoute: typeof BSlugRoute
+  OauthAuthorizeRoute: typeof OauthAuthorizeRoute
   PIdRoute: typeof PIdRoute
+  TagSlugRoute: typeof TagSlugRoute
+  ApiCronChatRetentionRoute: typeof ApiCronChatRetentionRoute
+  ApiGriotAssistRoute: typeof ApiGriotAssistRoute
+  ApiMediaDeleteRoute: typeof ApiMediaDeleteRoute
+  ApiMediaPresignUploadRoute: typeof ApiMediaPresignUploadRoute
+  ApiMediaSignReadRoute: typeof ApiMediaSignReadRoute
+  ApiV1HealthRoute: typeof ApiV1HealthRoute
+  ApiV1OpenapiDotjsonRoute: typeof ApiV1OpenapiDotjsonRoute
+  ApiV1PingsRoute: typeof ApiV1PingsRoute
+  ApiWebhooksPaystackRoute: typeof ApiWebhooksPaystackRoute
   ApiPublicPingCardIdRoute: typeof ApiPublicPingCardIdRoute
+  ApiV1BusinessMessagesRoute: typeof ApiV1BusinessMessagesRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -408,6 +790,34 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/businesses': {
+      id: '/businesses'
+      path: '/businesses'
+      fullPath: '/businesses'
+      preLoaderRoute: typeof BusinessesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/clips': {
+      id: '/clips'
+      path: '/clips'
+      fullPath: '/clips'
+      preLoaderRoute: typeof ClipsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/developers': {
+      id: '/developers'
+      path: '/developers'
+      fullPath: '/developers'
+      preLoaderRoute: typeof DevelopersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/download': {
+      id: '/download'
+      path: '/download'
+      fullPath: '/download'
+      preLoaderRoute: typeof DownloadRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/explore': {
@@ -445,6 +855,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/media': {
+      id: '/media'
+      path: '/media'
+      fullPath: '/media'
+      preLoaderRoute: typeof MediaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/messages': {
       id: '/messages'
       path: '/messages'
@@ -464,6 +881,13 @@ declare module '@tanstack/react-router' {
       path: '/reset-password'
       fullPath: '/reset-password'
       preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/share-target': {
+      id: '/share-target'
+      path: '/share-target'
+      fullPath: '/share-target'
+      preLoaderRoute: typeof ShareTargetRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/signals': {
@@ -487,11 +911,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/spotlight': {
+      id: '/spotlight'
+      path: '/spotlight'
+      fullPath: '/spotlight'
+      preLoaderRoute: typeof SpotlightRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/terms': {
       id: '/terms'
       path: '/terms'
       fullPath: '/terms'
       preLoaderRoute: typeof TermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/welcome': {
+      id: '/welcome'
+      path: '/welcome'
+      fullPath: '/welcome'
+      preLoaderRoute: typeof WelcomeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/analytics': {
@@ -508,11 +946,46 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBalanceRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/boosts': {
+      id: '/_authenticated/boosts'
+      path: '/boosts'
+      fullPath: '/boosts'
+      preLoaderRoute: typeof AuthenticatedBoostsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/business': {
+      id: '/_authenticated/business'
+      path: '/business'
+      fullPath: '/business'
+      preLoaderRoute: typeof AuthenticatedBusinessRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/create': {
       id: '/_authenticated/create'
       path: '/create'
       fullPath: '/create'
       preLoaderRoute: typeof AuthenticatedCreateRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/griot': {
+      id: '/_authenticated/griot'
+      path: '/griot'
+      fullPath: '/griot'
+      preLoaderRoute: typeof AuthenticatedGriotRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/learn': {
+      id: '/_authenticated/learn'
+      path: '/learn'
+      fullPath: '/learn'
+      preLoaderRoute: typeof AuthenticatedLearnRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/onboarding': {
+      id: '/_authenticated/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof AuthenticatedOnboardingRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/settings': {
@@ -529,6 +1002,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedUpgradesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/b/$slug': {
+      id: '/b/$slug'
+      path: '/b/$slug'
+      fullPath: '/b/$slug'
+      preLoaderRoute: typeof BSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/hubs/$slug': {
       id: '/hubs/$slug'
       path: '/$slug'
@@ -542,6 +1022,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/hubs/create'
       preLoaderRoute: typeof HubsCreateRouteImport
       parentRoute: typeof HubsRoute
+    }
+    '/oauth/authorize': {
+      id: '/oauth/authorize'
+      path: '/oauth/authorize'
+      fullPath: '/oauth/authorize'
+      preLoaderRoute: typeof OauthAuthorizeRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/p/$id': {
       id: '/p/$id'
@@ -557,12 +1044,40 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SignalsSlugRouteImport
       parentRoute: typeof SignalsRoute
     }
+    '/signals/channels': {
+      id: '/signals/channels'
+      path: '/channels'
+      fullPath: '/signals/channels'
+      preLoaderRoute: typeof SignalsChannelsRouteImport
+      parentRoute: typeof SignalsRoute
+    }
     '/signals/create': {
       id: '/signals/create'
       path: '/create'
       fullPath: '/signals/create'
       preLoaderRoute: typeof SignalsCreateRouteImport
       parentRoute: typeof SignalsRoute
+    }
+    '/signals/opportunities': {
+      id: '/signals/opportunities'
+      path: '/opportunities'
+      fullPath: '/signals/opportunities'
+      preLoaderRoute: typeof SignalsOpportunitiesRouteImport
+      parentRoute: typeof SignalsRoute
+    }
+    '/spotlight/$slug': {
+      id: '/spotlight/$slug'
+      path: '/$slug'
+      fullPath: '/spotlight/$slug'
+      preLoaderRoute: typeof SpotlightSlugRouteImport
+      parentRoute: typeof SpotlightRoute
+    }
+    '/tag/$slug': {
+      id: '/tag/$slug'
+      path: '/tag/$slug'
+      fullPath: '/tag/$slug'
+      preLoaderRoute: typeof TagSlugRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/edit/$id': {
       id: '/_authenticated/edit/$id'
@@ -571,11 +1086,88 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedEditIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/spotlight/editorial': {
+      id: '/_authenticated/spotlight/editorial'
+      path: '/spotlight/editorial'
+      fullPath: '/spotlight/editorial'
+      preLoaderRoute: typeof AuthenticatedSpotlightEditorialRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/api/cron/chat-retention': {
+      id: '/api/cron/chat-retention'
+      path: '/api/cron/chat-retention'
+      fullPath: '/api/cron/chat-retention'
+      preLoaderRoute: typeof ApiCronChatRetentionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/griot/assist': {
+      id: '/api/griot/assist'
+      path: '/api/griot/assist'
+      fullPath: '/api/griot/assist'
+      preLoaderRoute: typeof ApiGriotAssistRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/media/delete': {
+      id: '/api/media/delete'
+      path: '/api/media/delete'
+      fullPath: '/api/media/delete'
+      preLoaderRoute: typeof ApiMediaDeleteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/media/presign-upload': {
+      id: '/api/media/presign-upload'
+      path: '/api/media/presign-upload'
+      fullPath: '/api/media/presign-upload'
+      preLoaderRoute: typeof ApiMediaPresignUploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/media/sign-read': {
+      id: '/api/media/sign-read'
+      path: '/api/media/sign-read'
+      fullPath: '/api/media/sign-read'
+      preLoaderRoute: typeof ApiMediaSignReadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/health': {
+      id: '/api/v1/health'
+      path: '/api/v1/health'
+      fullPath: '/api/v1/health'
+      preLoaderRoute: typeof ApiV1HealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/openapi.json': {
+      id: '/api/v1/openapi.json'
+      path: '/api/v1/openapi.json'
+      fullPath: '/api/v1/openapi.json'
+      preLoaderRoute: typeof ApiV1OpenapiDotjsonRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/pings': {
+      id: '/api/v1/pings'
+      path: '/api/v1/pings'
+      fullPath: '/api/v1/pings'
+      preLoaderRoute: typeof ApiV1PingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/webhooks/paystack': {
+      id: '/api/webhooks/paystack'
+      path: '/api/webhooks/paystack'
+      fullPath: '/api/webhooks/paystack'
+      preLoaderRoute: typeof ApiWebhooksPaystackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/ping-card/$id': {
       id: '/api/public/ping-card/$id'
       path: '/api/public/ping-card/$id'
       fullPath: '/api/public/ping-card/$id'
       preLoaderRoute: typeof ApiPublicPingCardIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/business/messages': {
+      id: '/api/v1/business/messages'
+      path: '/api/v1/business/messages'
+      fullPath: '/api/v1/business/messages'
+      preLoaderRoute: typeof ApiV1BusinessMessagesRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -584,19 +1176,31 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAnalyticsRoute: typeof AuthenticatedAnalyticsRoute
   AuthenticatedBalanceRoute: typeof AuthenticatedBalanceRoute
+  AuthenticatedBoostsRoute: typeof AuthenticatedBoostsRoute
+  AuthenticatedBusinessRoute: typeof AuthenticatedBusinessRoute
   AuthenticatedCreateRoute: typeof AuthenticatedCreateRoute
+  AuthenticatedGriotRoute: typeof AuthenticatedGriotRoute
+  AuthenticatedLearnRoute: typeof AuthenticatedLearnRoute
+  AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedUpgradesRoute: typeof AuthenticatedUpgradesRoute
   AuthenticatedEditIdRoute: typeof AuthenticatedEditIdRoute
+  AuthenticatedSpotlightEditorialRoute: typeof AuthenticatedSpotlightEditorialRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAnalyticsRoute: AuthenticatedAnalyticsRoute,
   AuthenticatedBalanceRoute: AuthenticatedBalanceRoute,
+  AuthenticatedBoostsRoute: AuthenticatedBoostsRoute,
+  AuthenticatedBusinessRoute: AuthenticatedBusinessRoute,
   AuthenticatedCreateRoute: AuthenticatedCreateRoute,
+  AuthenticatedGriotRoute: AuthenticatedGriotRoute,
+  AuthenticatedLearnRoute: AuthenticatedLearnRoute,
+  AuthenticatedOnboardingRoute: AuthenticatedOnboardingRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedUpgradesRoute: AuthenticatedUpgradesRoute,
   AuthenticatedEditIdRoute: AuthenticatedEditIdRoute,
+  AuthenticatedSpotlightEditorialRoute: AuthenticatedSpotlightEditorialRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
@@ -616,36 +1220,73 @@ const HubsRouteWithChildren = HubsRoute._addFileChildren(HubsRouteChildren)
 
 interface SignalsRouteChildren {
   SignalsSlugRoute: typeof SignalsSlugRoute
+  SignalsChannelsRoute: typeof SignalsChannelsRoute
   SignalsCreateRoute: typeof SignalsCreateRoute
+  SignalsOpportunitiesRoute: typeof SignalsOpportunitiesRoute
 }
 
 const SignalsRouteChildren: SignalsRouteChildren = {
   SignalsSlugRoute: SignalsSlugRoute,
+  SignalsChannelsRoute: SignalsChannelsRoute,
   SignalsCreateRoute: SignalsCreateRoute,
+  SignalsOpportunitiesRoute: SignalsOpportunitiesRoute,
 }
 
 const SignalsRouteWithChildren =
   SignalsRoute._addFileChildren(SignalsRouteChildren)
+
+interface SpotlightRouteChildren {
+  SpotlightSlugRoute: typeof SpotlightSlugRoute
+}
+
+const SpotlightRouteChildren: SpotlightRouteChildren = {
+  SpotlightSlugRoute: SpotlightSlugRoute,
+}
+
+const SpotlightRouteWithChildren = SpotlightRoute._addFileChildren(
+  SpotlightRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AtChar123usernameChar125Route: AtChar123usernameChar125Route,
   AdminRoute: AdminRoute,
+  BusinessesRoute: BusinessesRoute,
+  ClipsRoute: ClipsRoute,
+  DevelopersRoute: DevelopersRoute,
+  DownloadRoute: DownloadRoute,
   ExploreRoute: ExploreRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   HubsRoute: HubsRouteWithChildren,
   InboxRoute: InboxRoute,
   LoginRoute: LoginRoute,
+  MediaRoute: MediaRoute,
   MessagesRoute: MessagesRoute,
   PrivacyRoute: PrivacyRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  ShareTargetRoute: ShareTargetRoute,
   SignalsRoute: SignalsRouteWithChildren,
   SignupRoute: SignupRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  SpotlightRoute: SpotlightRouteWithChildren,
   TermsRoute: TermsRoute,
+  WelcomeRoute: WelcomeRoute,
+  BSlugRoute: BSlugRoute,
+  OauthAuthorizeRoute: OauthAuthorizeRoute,
   PIdRoute: PIdRoute,
+  TagSlugRoute: TagSlugRoute,
+  ApiCronChatRetentionRoute: ApiCronChatRetentionRoute,
+  ApiGriotAssistRoute: ApiGriotAssistRoute,
+  ApiMediaDeleteRoute: ApiMediaDeleteRoute,
+  ApiMediaPresignUploadRoute: ApiMediaPresignUploadRoute,
+  ApiMediaSignReadRoute: ApiMediaSignReadRoute,
+  ApiV1HealthRoute: ApiV1HealthRoute,
+  ApiV1OpenapiDotjsonRoute: ApiV1OpenapiDotjsonRoute,
+  ApiV1PingsRoute: ApiV1PingsRoute,
+  ApiWebhooksPaystackRoute: ApiWebhooksPaystackRoute,
   ApiPublicPingCardIdRoute: ApiPublicPingCardIdRoute,
+  ApiV1BusinessMessagesRoute: ApiV1BusinessMessagesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

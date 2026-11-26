@@ -1,40 +1,75 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useRouterState } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth";
 import { PingMark } from "@/components/BrandLogo";
 import { cn } from "@/lib/utils";
 
+const BOOT_SHOWN_KEY = "ping_boot_shown_v1";
+const SKIP_BOOT_PREFIXES = ["/login", "/signup", "/forgot-password", "/reset-password", "/welcome"];
+
+const useSafeLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
 /**
  * Official PING Boot / Splash Screen.
  * Showcases the three official PING color marks (Lime primary, Gold & Silver accents)
- * during initial client boot and authentication hydration, then smoothly fades out.
+ * once per browser session on non-auth entry routes, then smoothly fades out.
  */
 export function BootSplashScreen() {
   const { ready } = useAuth();
-  const [dismissed, setDismissed] = useState(false);
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const isAuthOrOnboarding = SKIP_BOOT_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+
+  // Dismiss immediately during SSR or auth routes so login/signup forms are never covered.
+  const [dismissed, setDismissed] = useState(isAuthOrOnboarding);
   const [fadingOut, setFadingOut] = useState(false);
+  const readyRef = useRef(ready);
+  readyRef.current = ready;
+
+  useSafeLayoutEffect(() => {
+    if (isAuthOrOnboarding) {
+      setDismissed(true);
+      return;
+    }
+    try {
+      const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      const alreadyShown = window.sessionStorage.getItem(BOOT_SHOWN_KEY) === "1";
+      if (alreadyShown || reducedMotion) {
+        window.sessionStorage.setItem(BOOT_SHOWN_KEY, "1");
+        setDismissed(true);
+      }
+    } catch {
+      // Ignore storage access restrictions in hardened webviews
+    }
+  }, [isAuthOrOnboarding]);
 
   useEffect(() => {
-    const fadeTimer = setTimeout(
-      () => {
-        setFadingOut(true);
-      },
-      ready ? 320 : 650,
-    );
+    if (dismissed || isAuthOrOnboarding) return;
+    try {
+      window.sessionStorage.setItem(BOOT_SHOWN_KEY, "1");
+    } catch {
+      // Ignore storage errors
+    }
 
-    const removeTimer = setTimeout(
-      () => {
-        setDismissed(true);
-      },
-      ready ? 580 : 900,
-    );
+    const fadeDelay = readyRef.current ? 180 : 320;
+    const removeDelay = readyRef.current ? 360 : 520;
+
+    const fadeTimer = setTimeout(() => {
+      setFadingOut(true);
+    }, fadeDelay);
+
+    const removeTimer = setTimeout(() => {
+      setDismissed(true);
+    }, removeDelay);
 
     return () => {
       clearTimeout(fadeTimer);
       clearTimeout(removeTimer);
     };
-  }, [ready]);
+  }, [dismissed, isAuthOrOnboarding]);
 
-  if (dismissed) return null;
+  if (dismissed || isAuthOrOnboarding) return null;
 
   return (
     <div

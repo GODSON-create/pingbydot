@@ -1,8 +1,9 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { useState } from "react";
 import {
+  Bell,
   Home,
   Compass,
+  Building2,
   Inbox,
   Settings,
   Plus,
@@ -16,11 +17,22 @@ import {
   BarChart3,
   Coins,
   Crown,
+  Clapperboard,
+  Flame,
+  GraduationCap,
+  Megaphone,
+  Sparkles,
+  Code2,
+  Download,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { checkAdminAccess } from "@/lib/admin.functions";
 import { useAuth } from "@/lib/auth";
+import { isNative } from "@/lib/native";
+import { useNavOverlay } from "@/lib/nav-overlay";
 import { useTheme } from "@/lib/theme";
 import { userConversationsQuery } from "@/lib/messages";
 import { dotSummaryQuery } from "@/lib/economy";
@@ -34,26 +46,43 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useSignOut } from "./SiteHeader";
+import { useNotificationsState, useSignOut } from "./SiteHeader";
 import { isInboxPath } from "./BottomNav";
-import { CreateStackModal } from "./CreateStackModal";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 export function DesktopSidebar() {
   const { user, profile, ready } = useAuth();
   const { theme, resolvedTheme, setTheme } = useTheme();
+  const {
+    openOverlay,
+    closeOverlays,
+    isOpen,
+    onOpenChangeFor,
+    sidebarCollapsed,
+    toggleSidebarCollapsed,
+  } = useNavOverlay();
   const location = useLocation();
   const signOut = useSignOut();
-  const [createOpen, setCreateOpen] = useState(false);
 
-  const { pathname } = location;
+  const { pathname, searchStr } = location;
   const inInbox = isInboxPath(pathname);
+  const inChatWorkspace =
+    pathname.startsWith("/messages") ||
+    (pathname === "/inbox" &&
+      !searchStr.includes("section=hubs") &&
+      !searchStr.includes("section=signals"));
+  const effectiveCollapsed = sidebarCollapsed ?? inChatWorkspace;
+
+  const labelInline = effectiveCollapsed ? "hidden" : "hidden xl:inline truncate";
+  const labelInlineBlock = effectiveCollapsed ? "hidden" : "hidden xl:inline-block truncate";
+  const rowAlign = effectiveCollapsed ? "justify-center" : "justify-center xl:justify-start";
+  const rowBetween = effectiveCollapsed ? "justify-center" : "justify-center xl:justify-between";
 
   const verifyAdmin = useServerFn(checkAdminAccess);
   const admin = useQuery({
     queryKey: ["admin-access", user?.id],
-    queryFn: () => verifyAdmin(),
+    queryFn: async () => (isNative ? { isAdmin: false } : verifyAdmin()),
     enabled: ready && !!user,
     retry: false,
     staleTime: 0,
@@ -62,6 +91,7 @@ export function DesktopSidebar() {
   const { data: conversations = [] } = useQuery(userConversationsQuery(user?.id));
   const unreadMessages = conversations.reduce((sum, c) => sum + (c.unread_count ?? 0), 0);
   const { data: dotSummary } = useQuery(dotSummaryQuery(user?.id));
+  const { hasUnread: hasUnreadNotifications } = useNotificationsState(user?.id);
 
   const toggleTheme = () => {
     const nextTheme = theme === "system" ? "light" : theme === "light" ? "dark" : "system";
@@ -76,6 +106,7 @@ export function DesktopSidebar() {
   const primaryItems: Array<{
     to: string;
     params?: { username: string };
+    search?: Record<string, string>;
     label: string;
     icon: typeof Home;
     exact?: boolean;
@@ -85,6 +116,7 @@ export function DesktopSidebar() {
     { to: "/explore", label: "Explore", icon: Compass },
     {
       to: "/inbox",
+      search: {},
       label: "Inbox",
       icon: Inbox,
       ...(unreadMessages > 0 ? { badge: unreadMessages } : {}),
@@ -98,8 +130,7 @@ export function DesktopSidebar() {
             icon: User,
           },
         ]
-      : [{ to: "/login", label: "Profile", icon: User }]),
-    ...(admin.data?.isAdmin ? [{ to: "/admin", label: "Administration", icon: ShieldCheck }] : []),
+      : [{ to: user ? "/settings" : "/login", label: "Profile", icon: User }]),
   ];
 
   const ThemeIcon = theme === "system" ? Laptop : resolvedTheme === "dark" ? Moon : Sun;
@@ -108,14 +139,41 @@ export function DesktopSidebar() {
     <>
       <aside
         aria-label="Desktop Navigation"
-        className="hidden lg:flex flex-col justify-between h-screen sticky top-0 w-20 xl:w-64 border-r border-border/60 bg-card/40 backdrop-blur-xl px-3 xl:px-5 py-6 shrink-0 z-40 select-none"
+        data-collapsed={effectiveCollapsed ? "true" : "false"}
+        className={cn(
+          "hidden lg:flex flex-col justify-between h-screen sticky top-0 border-r border-border/60 bg-card/40 backdrop-blur-xl py-6 shrink-0 z-40 select-none overflow-y-auto transition-[width,padding] duration-200",
+          effectiveCollapsed ? "w-20 px-3" : "w-20 xl:w-64 px-3 xl:px-5",
+        )}
       >
         <div>
-          <div className="flex items-center justify-center xl:justify-start px-1 h-10">
+          <div
+            className={cn(
+              "flex items-center px-1 h-10",
+              effectiveCollapsed ? "justify-center" : "justify-center xl:justify-between",
+            )}
+          >
             <Link to="/" className="inline-flex items-center" aria-label="Ping by DOT">
-              <BrandLogo compact className="xl:hidden" />
-              <BrandLogo className="hidden xl:inline-flex" />
+              <BrandLogo compact className={effectiveCollapsed ? "inline-flex" : "xl:hidden"} />
+              {!effectiveCollapsed && <BrandLogo className="hidden xl:inline-flex" />}
             </Link>
+            <button
+              type="button"
+              data-testid="desktop-sidebar-toggle"
+              onClick={() => toggleSidebarCollapsed(effectiveCollapsed)}
+              aria-label={
+                effectiveCollapsed ? "Expand navigation sidebar" : "Collapse navigation sidebar"
+              }
+              title={
+                effectiveCollapsed ? "Expand navigation sidebar" : "Collapse navigation sidebar"
+              }
+              className="hidden xl:inline-flex size-8 items-center justify-center rounded-xl text-muted-foreground hover:bg-secondary/80 hover:text-foreground transition-colors"
+            >
+              {effectiveCollapsed ? (
+                <PanelLeftOpen className="size-4" />
+              ) : (
+                <PanelLeftClose className="size-4" />
+              )}
+            </button>
           </div>
 
           <nav className="mt-7 space-y-1" aria-label="Desktop Main Navigation">
@@ -133,9 +191,12 @@ export function DesktopSidebar() {
                   key={item.label}
                   to={item.to as any}
                   params={item.params as any}
+                  search={item.search as any}
+                  onClick={closeOverlays}
                   aria-current={isActive ? "page" : undefined}
                   className={cn(
-                    "relative flex items-center justify-center xl:justify-between gap-3 h-11 rounded-2xl px-3.5 transition-all text-sm font-semibold group",
+                    "relative flex items-center gap-3 h-11 rounded-2xl px-3.5 transition-all text-sm font-semibold group",
+                    rowBetween,
                     isActive
                       ? "bg-primary/15 text-primary border border-primary/25 shadow-soft"
                       : "text-muted-foreground hover:bg-secondary/80 hover:text-foreground",
@@ -151,10 +212,17 @@ export function DesktopSidebar() {
                           : "text-muted-foreground group-hover:text-foreground",
                       )}
                     />
-                    <span className="hidden xl:inline-block truncate">{item.label}</span>
+                    <span className={labelInlineBlock}>{item.label}</span>
                   </span>
                   {item.badge && item.badge > 0 ? (
-                    <span className="xl:static absolute top-1.5 right-1.5 inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold tabular-nums">
+                    <span
+                      className={cn(
+                        "inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold tabular-nums",
+                        effectiveCollapsed
+                          ? "absolute top-1.5 right-1.5"
+                          : "xl:static absolute top-1.5 right-1.5",
+                      )}
+                    >
                       {item.badge > 99 ? "99+" : item.badge}
                     </span>
                   ) : null}
@@ -163,41 +231,81 @@ export function DesktopSidebar() {
             })}
           </nav>
 
-          {/* PRIMARY ACTION: CREATE STACK */}
+          {/* 3. PRIMARY ACTION: CREATE STACK */}
           <div className="mt-5">
             <Button
               type="button"
               variant="hero"
-              onClick={() => setCreateOpen(true)}
-              className="w-full h-11 rounded-2xl text-sm font-bold shadow-lift flex items-center justify-center gap-2 px-0 xl:px-4"
+              onClick={() => openOverlay("create")}
+              className={cn(
+                "w-full h-11 rounded-2xl text-sm font-bold shadow-lift flex items-center justify-center gap-2",
+                effectiveCollapsed ? "px-0" : "px-0 xl:px-4",
+              )}
               title="Create"
             >
               <Plus className="size-5 shrink-0" />
-              <span className="hidden xl:inline">Create</span>
+              <span className={effectiveCollapsed ? "hidden" : "hidden xl:inline"}>Create</span>
             </Button>
           </div>
         </div>
 
-        {/* BOTTOM CONTROLS: THEME TOGGLE & USER PROFILE */}
+        {/* 4. BOTTOM CONTROLS: NOTIFICATIONS, THEME TOGGLE & USER PROFILE */}
         <div className="space-y-2.5 pt-4 border-t border-border/50">
           <button
             type="button"
+            onClick={() => openOverlay("notifications")}
+            className={cn(
+              "relative flex items-center gap-3 h-10 w-full rounded-2xl px-3 text-xs font-medium text-muted-foreground hover:bg-secondary/80 hover:text-foreground transition-all group",
+              rowBetween,
+            )}
+            aria-label="Notifications"
+            title="Notifications"
+          >
+            <span className="flex items-center gap-3 min-w-0">
+              <Bell className="size-4 shrink-0 text-muted-foreground group-hover:text-foreground" />
+              <span className={labelInline}>Notifications</span>
+            </span>
+            {hasUnreadNotifications && (
+              <span
+                data-testid="sidebar-notifications-unread-dot"
+                className={cn(
+                  "size-2 rounded-full bg-lime ring-2 ring-card",
+                  effectiveCollapsed
+                    ? "absolute top-2 right-2"
+                    : "xl:static absolute top-2 right-2",
+                )}
+                aria-hidden="true"
+              />
+            )}
+          </button>
+
+          <button
+            type="button"
             onClick={toggleTheme}
-            className="flex items-center justify-center xl:justify-start gap-3 h-10 w-full rounded-2xl px-3 text-xs font-medium text-muted-foreground hover:bg-secondary/80 hover:text-foreground transition-all group"
+            className={cn(
+              "flex items-center gap-3 h-10 w-full rounded-2xl px-3 text-xs font-medium text-muted-foreground hover:bg-secondary/80 hover:text-foreground transition-all group",
+              rowAlign,
+            )}
             title={`Switch Theme (Current: ${theme})`}
           >
             <ThemeIcon className="size-4 shrink-0 text-muted-foreground group-hover:text-foreground transition-transform group-hover:rotate-12" />
-            <span className="hidden xl:inline truncate capitalize">
+            <span className={cn(labelInline, "capitalize")}>
               {theme === "system" ? "System Default" : `${theme} Mode`}
             </span>
           </button>
 
           {ready && user ? (
-            <DropdownMenu>
+            <DropdownMenu
+              open={isOpen("sidebar-account")}
+              onOpenChange={onOpenChangeFor("sidebar-account")}
+            >
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="flex items-center justify-center xl:justify-between gap-3 w-full p-2 rounded-2xl hover:bg-secondary/80 text-left transition-all border border-border/40 hover:border-border"
+                  className={cn(
+                    "flex items-center gap-3 w-full p-2 rounded-2xl hover:bg-secondary/80 text-left transition-all border border-border/40 hover:border-border",
+                    rowBetween,
+                  )}
                   aria-label="Account Settings"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
@@ -206,16 +314,20 @@ export function DesktopSidebar() {
                       src={profile?.avatar_url}
                       size="sm"
                     />
-                    <div className="hidden xl:block min-w-0">
-                      <p className="font-semibold text-xs text-foreground truncate">
-                        {profile?.display_name || profile?.username}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground truncate">
-                        @{profile?.username}
-                      </p>
-                    </div>
+                    {!effectiveCollapsed && (
+                      <div className="hidden xl:block min-w-0">
+                        <p className="font-semibold text-xs text-foreground truncate">
+                          {profile?.display_name || profile?.username}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground truncate">
+                          @{profile?.username}
+                        </p>
+                      </div>
+                    )}
                   </div>
-                  <MoreVertical className="hidden xl:block size-4 text-muted-foreground shrink-0" />
+                  {!effectiveCollapsed && (
+                    <MoreVertical className="hidden xl:block size-4 text-muted-foreground shrink-0" />
+                  )}
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" side="top" className="w-60 rounded-2xl p-1.5 mb-2">
@@ -224,6 +336,7 @@ export function DesktopSidebar() {
                     <Link
                       to="/@{$username}"
                       params={{ username: profile.username }}
+                      onClick={closeOverlays}
                       className="flex items-center gap-2"
                     >
                       <User className="size-4" /> View profile
@@ -231,7 +344,11 @@ export function DesktopSidebar() {
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem asChild className="rounded-xl">
-                  <Link to="/balance" className="flex items-center justify-between">
+                  <Link
+                    to="/balance"
+                    onClick={closeOverlays}
+                    className="flex items-center justify-between"
+                  >
                     <span className="flex items-center gap-2">
                       <Coins className="size-4 text-gold" /> DOT Balance
                     </span>
@@ -243,30 +360,77 @@ export function DesktopSidebar() {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild className="rounded-xl">
-                  <Link to="/analytics" className="flex items-center gap-2">
+                  <Link to="/analytics" onClick={closeOverlays} className="flex items-center gap-2">
                     <BarChart3 className="size-4 text-primary" /> Analytics
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild className="rounded-xl">
-                  <Link to="/upgrades" className="flex items-center gap-2">
-                    <Crown className="size-4 text-gold" /> Account Upgrades
+                  <Link to="/upgrades" onClick={closeOverlays} className="flex items-center gap-2">
+                    <Crown className="size-4 text-gold" /> DOT Memberships
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild className="rounded-xl">
-                  <Link to="/settings" className="flex items-center gap-2">
+                  <Link to="/learn" onClick={closeOverlays} className="flex items-center gap-2">
+                    <GraduationCap className="size-4 text-primary" /> Ping Learn
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="rounded-xl">
+                  <Link to="/spotlight" onClick={closeOverlays} className="flex items-center gap-2">
+                    <Flame className="size-4 text-amber-500" /> Ping Spotlight
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="rounded-xl">
+                  <Link to="/clips" onClick={closeOverlays} className="flex items-center gap-2">
+                    <Clapperboard className="size-4 text-primary" /> Ping Clips
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="rounded-xl">
+                  <Link to="/boosts" onClick={closeOverlays} className="flex items-center gap-2">
+                    <Megaphone className="size-4 text-gold" /> Boost Campaigns
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="rounded-xl">
+                  <Link to="/business" onClick={closeOverlays} className="flex items-center gap-2">
+                    <Building2 className="size-4" /> Business Suite
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="rounded-xl">
+                  <Link to="/griot" onClick={closeOverlays} className="flex items-center gap-2">
+                    <Sparkles className="size-4 text-primary" /> GRIOT AI
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="rounded-xl">
+                  <Link
+                    to="/developers"
+                    onClick={closeOverlays}
+                    className="flex items-center gap-2"
+                  >
+                    <Code2 className="size-4" /> Developer Platform
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="rounded-xl">
+                  <Link to="/download" onClick={closeOverlays} className="flex items-center gap-2">
+                    <Download className="size-4" /> Download Ping App
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="rounded-xl">
+                  <Link to="/settings" onClick={closeOverlays} className="flex items-center gap-2">
                     <Settings className="size-4" /> Settings
                   </Link>
                 </DropdownMenuItem>
                 {admin.data?.isAdmin && (
                   <DropdownMenuItem asChild className="rounded-xl">
-                    <Link to="/admin" className="flex items-center gap-2">
+                    <Link to="/admin" onClick={closeOverlays} className="flex items-center gap-2">
                       <ShieldCheck className="size-4" /> Admin Console
                     </Link>
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onSelect={signOut}
+                  onSelect={() => {
+                    closeOverlays();
+                    signOut();
+                  }}
                   className="rounded-xl text-destructive flex items-center gap-2"
                 >
                   <LogOut className="size-4" /> Log out
@@ -274,19 +438,28 @@ export function DesktopSidebar() {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <div className="hidden xl:flex flex-col gap-2">
-              <Button asChild variant="outline" size="sm" className="w-full rounded-xl text-xs h-9">
-                <Link to="/login">Log in</Link>
-              </Button>
-              <Button asChild variant="hero" size="sm" className="w-full rounded-xl text-xs h-9">
-                <Link to="/signup">Join PING</Link>
-              </Button>
-            </div>
+            !effectiveCollapsed && (
+              <div className="hidden xl:flex flex-col gap-2">
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="w-full rounded-xl text-xs h-9"
+                >
+                  <Link to="/login" onClick={closeOverlays}>
+                    Log in
+                  </Link>
+                </Button>
+                <Button asChild variant="hero" size="sm" className="w-full rounded-xl text-xs h-9">
+                  <Link to="/signup" onClick={closeOverlays}>
+                    Join PING
+                  </Link>
+                </Button>
+              </div>
+            )
           )}
         </div>
       </aside>
-
-      <CreateStackModal open={createOpen} onOpenChange={setCreateOpen} />
     </>
   );
 }

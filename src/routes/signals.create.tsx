@@ -1,14 +1,18 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useState, useId } from "react";
 import { toast } from "sonner";
-import { Radio, ArrowLeft, Building, Sparkles } from "lucide-react";
+import { Radio, ArrowLeft, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { ensureClientProfileRow } from "@/lib/ensure-profile";
+import { SLUG_RE } from "@/lib/hubs";
+import { ImageUploadField } from "@/components/media/ImageUploadField";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { pageHead, siteUrl } from "@/lib/site";
+import { sanitizeErrorMessage } from "@/lib/error-diagnostics";
 import type { SignalInstitutionType } from "@/lib/signals";
 
 export const Route = createFileRoute("/signals/create")({
@@ -50,17 +54,37 @@ function CreateSignalPage() {
   const [avatarUrl, setAvatarUrl] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const focusFirstError = (errs: Record<string, string>) => {
+    const idMap: Record<string, string> = {
+      name: nameId,
+      slug: slugId,
+      websiteUrl: websiteId,
+      avatarUrl: avatarId,
+      description: descId,
+    };
+    const firstKey = ["name", "slug", "description", "websiteUrl", "avatarUrl"].find(
+      (k) => errs[k],
+    );
+    const elId = firstKey ? idMap[firstKey] : undefined;
+    if (elId && typeof document !== "undefined") {
+      const el = document.getElementById(elId);
+      el?.focus?.();
+      el?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    }
+  };
 
   const handleNameChange = (val: string) => {
     setName(val);
     if (!slugModified) {
-      setSlug(slugify(val));
+      setSlug(slugify(val).slice(0, 40).replace(/-+$/g, ""));
     }
   };
 
   const handleSlugChange = (val: string) => {
     setSlugModified(true);
-    setSlug(slugify(val));
+    setSlug(slugify(val).slice(0, 40));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -71,75 +95,169 @@ function CreateSignalPage() {
       return;
     }
 
+    const trimmedName = name.trim();
+    const cleanSlug = slug.trim().toLowerCase().replace(/-+$/g, "");
+    const trimmedDesc = description.trim();
+    const trimmedWebsite = websiteUrl.trim();
+    const trimmedAvatar = avatarUrl.trim();
+
     const errs: Record<string, string> = {};
-    if (!name.trim()) errs["name"] = "Channel name is required";
-    if (!slug.trim()) errs["slug"] = "Unique URL slug is required";
-    if (slug.length < 3) errs["slug"] = "Slug must be at least 3 characters";
+    if (trimmedName.length < 2 || trimmedName.length > 80) {
+      errs["name"] = "Channel name must be between 2 and 80 characters.";
+    }
+    if (!SLUG_RE.test(cleanSlug)) {
+      errs["slug"] = "Use 3–40 lowercase letters, numbers, or dashes (cannot start/end with -).";
+    }
+    if (trimmedDesc.length > 3000) {
+      errs["description"] = "Description must be 3000 characters or fewer.";
+    }
+    if (trimmedWebsite && !/^https?:\/\/\S+/i.test(trimmedWebsite)) {
+      errs["websiteUrl"] = "Enter a valid website link starting with https:// or http://.";
+    }
+    if (trimmedAvatar && !/^https?:\/\/\S+/i.test(trimmedAvatar)) {
+      errs["avatarUrl"] = "Enter a valid image link starting with https:// or upload a logo.";
+    }
 
     if (Object.keys(errs).length > 0) {
       setErrors(errs);
+      setFormError("Please fix the highlighted fields below before continuing.");
+      focusFirstError(errs);
       return;
     }
 
+    setErrors({});
+    setFormError(null);
     setIsSubmitting(true);
+
     try {
+      await ensureClientProfileRow(user);
+
+      // Check slug availability upfront
+      const { data: existingSignal, error: slugCheckErr } = await supabase
+        .from("signals")
+        .select("id")
+        .eq("slug", cleanSlug)
+        .maybeSingle();
+
+      if (slugCheckErr) throw slugCheckErr;
+      if (existingSignal) {
+        const dupErr = { slug: "This channel slug is already claimed. Please choose another." };
+        setErrors(dupErr);
+        setFormError(dupErr.slug);
+        focusFirstError(dupErr);
+        return;
+      }
+
+      const rpcPayload = {
+        _name: trimmedName,
+        _slug: cleanSlug,
+        _institution_type: category,
+        ...(trimmedDesc ? { _description: trimmedDesc } : {}),
+        ...(trimmedWebsite ? { _website_url: trimmedWebsite } : {}),
+      };
+
+      let createdId: string | undefined;
       let createdSlug: string | undefined;
 
-      const { data, error } = await supabase.rpc("create_signal", {
-        _name: name.trim(),
-        _slug: slug.trim(),
-        _institution_type: category,
-        ...(description.trim() ? { _description: description.trim() } : {}),
-        ...(websiteUrl.trim() ? { _website_url: websiteUrl.trim() } : {}),
-      });
+      let { data, error } = await supabase.rpc("create_signal", rpcPayload);
+
+      if (error && error.code === "23503") {
+        const recovered = await ensureClientProfileRow(user);
+        if (recovered) {
+          const retry = await supabase.rpc("create_signal", rpcPayload);
+          data = retry.data;
+          error = retry.error;
+        }
+      }
 
       if (!error && data) {
-        createdSlug = slug.trim();
-      } else {
-        // Fallback direct insert
-        const { data: directSignal, error: directErr } = await supabase
+        const record = data as { id?: string; slug?: string } | null;
+        createdId = record?.id;
+        createdSlug = record?.slug || cleanSlug;
+      } else if (error) {
+        const isMissingRpc =
+          error.code === "PGRST202" ||
+          error.code === "42883" ||
+          error.message?.toLowerCase().includes("does not exist");
+
+        if (error.code === "23505" || error.message?.toLowerCase().includes("unique")) {
+          const dupErr = { slug: "This channel slug is already claimed. Please choose another." };
+          setErrors(dupErr);
+          setFormError(dupErr.slug);
+          focusFirstError(dupErr);
+          return;
+        }
+
+        if (!isMissingRpc) {
+          throw error;
+        }
+
+        // Only fall back when create_signal RPC is completely unavailable
+        const directInsert = {
+          name: trimmedName,
+          slug: cleanSlug,
+          institution_type: category,
+          description: trimmedDesc,
+          website_url: trimmedWebsite || null,
+          avatar_url: trimmedAvatar || null,
+          created_by: user.id,
+          verified: false,
+          verification_status: "unverified",
+        };
+
+        let { data: directSignal, error: directErr } = await supabase
           .from("signals")
-          .insert({
-            name: name.trim(),
-            slug: slug.trim(),
-            institution_type: category,
-            description: description.trim(),
-            website_url: websiteUrl.trim() || null,
-            avatar_url: avatarUrl.trim() || null,
-            created_by: user.id,
-            verified: false,
-            verification_status: "unverified",
-          })
+          .insert(directInsert)
           .select("id, slug")
           .single();
 
-        if (directErr) {
-          if (directErr.message.includes("unique") || directErr.code === "23505") {
-            setErrors({ slug: "This channel slug is already claimed. Please choose another." });
-            return;
+        if (directErr && directErr.code === "23503") {
+          const recovered = await ensureClientProfileRow(user);
+          if (recovered) {
+            const retry = await supabase
+              .from("signals")
+              .insert(directInsert)
+              .select("id, slug")
+              .single();
+            directSignal = retry.data;
+            directErr = retry.error;
           }
-          throw directErr;
         }
 
-        // Ensure creator is registered as admin publisher
-        await supabase.from("signal_publishers").upsert(
-          {
-            signal_id: directSignal.id,
-            user_id: user.id,
-            role: "admin",
-            assigned_by: user.id,
-          },
-          { onConflict: "signal_id,user_id" },
-        );
+        if (directErr || !directSignal) {
+          if (directErr?.message?.includes("unique") || directErr?.code === "23505") {
+            const dupErr = { slug: "This channel slug is already claimed. Please choose another." };
+            setErrors(dupErr);
+            setFormError(dupErr.slug);
+            focusFirstError(dupErr);
+            return;
+          }
+          throw directErr ?? new Error("Failed to register Signal channel.");
+        }
 
+        createdId = directSignal.id;
         createdSlug = directSignal.slug;
       }
 
+      // Persist avatar_url on newly created Signal (RPC doesn't accept _avatar_url)
+      if (trimmedAvatar && (createdId || createdSlug)) {
+        const updateQuery = supabase.from("signals").update({ avatar_url: trimmedAvatar });
+        const { error: avErr } = createdId
+          ? await updateQuery.eq("id", createdId)
+          : await updateQuery.eq("slug", createdSlug!);
+        if (avErr) {
+          console.warn("Signal created, but logo URL could not be updated:", avErr);
+        }
+      }
+
       toast.success("Signal channel successfully registered!");
-      navigate({ to: "/signals/$slug", params: { slug: createdSlug || slug.trim() } });
+      navigate({ to: "/signals/$slug", params: { slug: createdSlug || cleanSlug } });
     } catch (err: unknown) {
       console.error("Create signal error:", err);
-      toast.error(err instanceof Error ? err.message : "Failed to create Signal channel.");
+      const raw = err instanceof Error ? err.message : "Failed to create Signal channel.";
+      const friendly = sanitizeErrorMessage(raw);
+      setFormError(friendly);
+      toast.error(friendly);
     } finally {
       setIsSubmitting(false);
     }
@@ -195,7 +313,11 @@ function CreateSignalPage() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="surface-card mt-8 rounded-3xl p-6 sm:p-8 space-y-6">
+      <form
+        onSubmit={handleSubmit}
+        noValidate
+        className="surface-card mt-8 rounded-3xl p-6 sm:p-8 space-y-6"
+      >
         <div>
           <Label htmlFor={nameId} className="text-sm font-semibold">
             Institution or Collective Name <span className="text-destructive">*</span>
@@ -272,31 +394,37 @@ function CreateSignalPage() {
           />
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-4">
           <div>
             <Label htmlFor={websiteId} className="text-sm font-semibold">
               Official Website
             </Label>
             <Input
               id={websiteId}
+              type="url"
               value={websiteUrl}
               onChange={(e) => setWebsiteUrl(e.target.value)}
               placeholder="https://your-org.edu"
               className="mt-1.5 rounded-2xl h-11"
             />
+            {errors["websiteUrl"] && (
+              <p className="mt-1 text-xs text-destructive">{errors["websiteUrl"]}</p>
+            )}
           </div>
-          <div>
-            <Label htmlFor={avatarId} className="text-sm font-semibold">
-              Avatar Image URL
-            </Label>
-            <Input
-              id={avatarId}
-              value={avatarUrl}
-              onChange={(e) => setAvatarUrl(e.target.value)}
-              placeholder="https://…/logo.png"
-              className="mt-1.5 rounded-2xl h-11"
-            />
-          </div>
+
+          <ImageUploadField
+            folder="signals"
+            userId={user.id}
+            value={avatarUrl}
+            onChange={setAvatarUrl}
+            label="Channel Emblem / Logo (optional)"
+            placeholder="https://…/logo.png"
+            fallbackName={name || "Signal"}
+            shape="rounded"
+            inputId={avatarId}
+            error={errors["avatarUrl"]}
+            disabled={isSubmitting}
+          />
         </div>
 
         <div className="rounded-2xl bg-secondary/50 p-4 border border-border/60 flex items-start gap-3">
@@ -308,9 +436,20 @@ function CreateSignalPage() {
           </div>
         </div>
 
+        {formError && (
+          <div
+            role="alert"
+            className="rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-xs font-medium text-destructive"
+          >
+            {formError}
+          </div>
+        )}
+
         <div className="pt-2 flex items-center justify-end gap-3">
           <Button asChild variant="outline" className="rounded-xl">
-            <Link to="/signals">Cancel</Link>
+            <Link to="/inbox" search={{ section: "signals" }}>
+              Cancel
+            </Link>
           </Button>
           <Button type="submit" variant="hero" disabled={isSubmitting} className="rounded-xl">
             {isSubmitting ? "Registering…" : "Register Signal Channel"}

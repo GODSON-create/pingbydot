@@ -1,0 +1,22 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": ["REPLACE_TEAM_ID.app.lovable.pingbydot"],
+        "components": [
+          { "/": "/p/*" },
+          { "/": "/@*" },
+          { "/": "/hubs/*" },
+          { "/": "/signals/*" },
+          { "/": "/media*" },
+          { "/": "/clips*" },
+          { "/": "/spotlight/*" },
+          { "/": "/learn*" },
+          { "/": "/download*" },
+          { "/": "/share-target*" }
+        ]
+      }
+    ]
+  }
+}

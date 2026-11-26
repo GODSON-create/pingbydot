@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { pageHead, siteUrl, NOINDEX } from "@/lib/site";
 import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
 import { useSuspenseQuery, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -32,9 +32,14 @@ import {
   Lock,
   Wallet,
   Activity,
+  MapPin,
+  Globe,
+  VolumeX,
+  Bookmark,
 } from "lucide-react";
 import { toast } from "sonner";
 import { profileQuery, likeCount, replyCount, type Profile, type Ping } from "@/lib/pings";
+import { PUBLIC_PING_SELECT } from "@/lib/public-queries";
 import { parseStructuredPing } from "@/lib/validation";
 import {
   useGetOrCreateDirectConversation,
@@ -42,8 +47,12 @@ import {
   useBlockUser,
   useUnblockUser,
 } from "@/lib/messages";
+import { mutedUsersQuery, useMuteUser, useUnmuteUser } from "@/lib/mutes";
+import { mutualConnectionsQuery, savedAccountsQuery, useToggleSaveAccount } from "@/lib/social";
 import { FounderAvatar } from "@/components/ping/Avatar";
 import { PingCard } from "@/components/ping/PingCard";
+import { UniversalShareDialog } from "@/components/sharing/UniversalShareDialog";
+import { QueryErrorCard } from "@/components/QueryErrorCard";
 import { ErrorComponent } from "@/routes/__root";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,6 +76,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
 import { useSignOut } from "@/components/layout/SiteHeader";
+import { useNavOverlay } from "@/lib/nav-overlay";
+import { formatInterestLabel, formatPathwayLabel } from "@/lib/pathways";
 import { PingMark } from "@/components/BrandLogo";
 import { PublicConnections } from "@/components/connections/PublicConnections";
 import { ProfileHighlights } from "@/components/moments/ProfileHighlights";
@@ -78,7 +89,10 @@ import {
   useRemoveCloseCircleMember,
 } from "@/lib/moments";
 import { MomentViewerModal } from "@/components/moments/MomentViewerModal";
+import { ResolvedMomentThumb } from "@/components/media/ResolvedPrivateMedia";
 import { dotSummaryQuery, publicAccountTierQuery } from "@/lib/economy";
+import { formatProfessionalBadgeLabel, publicVerificationQuery } from "@/lib/verification";
+import { VerificationBadge } from "@/components/verification/VerificationBadge";
 import { followQuery, myHubsQuery } from "@/lib/hub-queries";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -94,7 +108,7 @@ export const Route = createFileRoute("/@{$username}")({
   notFoundComponent: () => (
     <div className="px-5 py-20 text-center">
       <h1 className="font-display text-4xl font-extrabold">No one here yet</h1>
-      <p>That founder profile doesn't exist.</p>
+      <p className="mt-2 text-sm text-muted-foreground">That Ping profile doesn&apos;t exist.</p>
       <Button asChild className="mt-6">
         <Link to="/explore">Explore Pings</Link>
       </Button>
@@ -164,6 +178,9 @@ function FollowButton({
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ["follow", profileId] });
       qc.invalidateQueries({ queryKey: ["profile-follow-list", profileId] });
+      qc.invalidateQueries({ queryKey: ["following-feed"] });
+      qc.invalidateQueries({ queryKey: ["explore-followed"] });
+      qc.invalidateQueries({ queryKey: ["header-notifications"] });
     },
   });
 
@@ -177,7 +194,7 @@ function FollowButton({
       disabled={followMutation.isPending}
       onClick={() => {
         if (!currentUserId) {
-          toast("Sign in to follow founders", {
+          toast("Sign in to follow people", {
             action: { label: "Log in", onClick: () => (window.location.href = "/login") },
           });
           return;
@@ -213,12 +230,22 @@ function FollowListDialog({
 }) {
   const [mode, setMode] = useState<"followers" | "following">(initialMode);
 
-  const { data: rows = [], isLoading } = useQuery({
+  useEffect(() => {
+    if (open) setMode(initialMode);
+  }, [open, initialMode]);
+
+  const {
+    data: rows = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["profile-follow-list", profileId, mode],
     enabled: open && Boolean(profileId),
     queryFn: async (): Promise<Profile[]> => {
       if (mode === "followers") {
-        const { data, error } = await supabase
+        const { data, error: queryError } = await supabase
           .from("follows")
           .select(
             "follower:profiles!follows_follower_id_fkey(id, username, display_name, bio, avatar_url, created_at)",
@@ -226,12 +253,12 @@ function FollowListDialog({
           .eq("following_id", profileId)
           .order("created_at", { ascending: false })
           .limit(60);
-        if (error || !data) return [];
-        return data
+        if (queryError) throw queryError;
+        return (data ?? [])
           .map((r) => (r as unknown as { follower: Profile | null }).follower)
           .filter((p): p is Profile => Boolean(p));
       }
-      const { data, error } = await supabase
+      const { data, error: queryError } = await supabase
         .from("follows")
         .select(
           "following:profiles!follows_following_id_fkey(id, username, display_name, bio, avatar_url, created_at)",
@@ -239,26 +266,20 @@ function FollowListDialog({
         .eq("follower_id", profileId)
         .order("created_at", { ascending: false })
         .limit(60);
-      if (error || !data) return [];
-      return data
+      if (queryError) throw queryError;
+      return (data ?? [])
         .map((r) => (r as unknown as { following: Profile | null }).following)
         .filter((p): p is Profile => Boolean(p));
     },
   });
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (next) setMode(initialMode);
-        onOpenChange(next);
-      }}
-    >
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md rounded-3xl p-6 max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="font-display text-xl">{displayName}</DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
-            Browse builders connected with this profile.
+            Browse people connected with this profile.
           </DialogDescription>
         </DialogHeader>
 
@@ -296,6 +317,13 @@ function FollowListDialog({
                 <div key={i} className="h-14 animate-pulse rounded-2xl bg-muted/40" />
               ))}
             </div>
+          ) : isError ? (
+            <QueryErrorCard
+              compact
+              title="Couldn't load connections"
+              error={error}
+              onRetry={() => void refetch()}
+            />
           ) : rows.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
               {mode === "followers" ? "No followers yet." : "Not following anyone yet."}
@@ -458,33 +486,67 @@ function ProfileContent({
   const removeCloseCircle = useRemoveCloseCircleMember();
   const blockUser = useBlockUser();
   const unblockUser = useUnblockUser();
+  const muteUser = useMuteUser();
+  const unmuteUser = useUnmuteUser();
 
-  const [menuDrawerOpen, setMenuDrawerOpen] = useState(false);
+  const { isOpen, openOverlay, onOpenChangeFor, closeOverlays } = useNavOverlay();
   const [momentModalOpen, setMomentModalOpen] = useState(false);
   const [closeCircleOpen, setCloseCircleOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [shareProfileOpen, setShareProfileOpen] = useState(false);
   const [followDialog, setFollowDialog] = useState<{
     open: boolean;
     mode: "followers" | "following";
   }>({ open: false, mode: "followers" });
 
-  const { profile, pings, connections } = data;
+  const { profile, pings: publicPings, connections } = data;
   const isMe = user?.id === profile.id;
   const name = profile.display_name || profile.username || username;
+  const profileVisibility =
+    (profile as Profile & { profile_visibility?: string | null }).profile_visibility ?? "public";
+  const isRestrictedProfile = profileVisibility === "private" || profileVisibility === "followers";
+
+  // When a profile is Private or Followers-only, SSR returns empty pings anonymously;
+  // authenticated viewers query Supabase directly where DB RLS `can_view_profile_content`
+  // authoritatively authorizes owners, followers, and mutual connections.
+  const { data: authorizedPings = [] } = useQuery({
+    queryKey: ["profile-authorized-pings", profile.id, user?.id],
+    enabled: isRestrictedProfile && Boolean(user?.id),
+    queryFn: async (): Promise<Ping[]> => {
+      const { data: rows, error } = await supabase
+        .from("pings")
+        .select(PUBLIC_PING_SELECT)
+        .is("hidden_at", null)
+        .eq("user_id", profile.id)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false });
+      if (error) return [];
+      return (rows ?? []) as unknown as Ping[];
+    },
+  });
+
+  const pings = isRestrictedProfile ? authorizedPings : publicPings;
 
   const { data: follow } = useQuery(followQuery(profile.id, user?.id));
   const { data: joinedHubs = [] } = useQuery(myHubsQuery(profile.id));
   const { data: activeMoments = [] } = useQuery(userActiveMomentsQuery(profile.id, user?.id));
   const { data: accountTier = "free" } = useQuery(publicAccountTierQuery(profile.id));
+  const { data: verificationBadges } = useQuery(publicVerificationQuery(profile.id));
   // Retrieve DOT balance from the authenticated user's real wallet/account query
   const { data: dotSummary } = useQuery(dotSummaryQuery(user?.id));
   const { data: closeCircleMembers = [] } = useQuery(closeCircleQuery(user?.id));
   const { data: blockedUsers = [] } = useQuery(blockedUsersQuery(user?.id));
+  const { data: mutedUsers = [] } = useQuery(mutedUsersQuery(user?.id));
+  const { data: savedAccounts = new Set<string>() } = useQuery(savedAccountsQuery(user?.id));
+  const toggleSaveAccount = useToggleSaveAccount(user?.id);
+  const { data: mutualInfo } = useQuery(mutualConnectionsQuery(user?.id, profile.id));
 
   const hasActiveMoments = activeMoments.length > 0;
   const hasUnseenMoments = activeMoments.some((m) => !m.has_viewed);
   const inCloseCircle = closeCircleMembers.some((m) => m.member_id === profile.id);
   const isBlocked = blockedUsers.some((b) => b.blocked_id === profile.id);
+  const isMuted = mutedUsers.some((m) => m.muted_id === profile.id);
+  const isAccountSaved = savedAccounts.has(profile.id);
 
   // Extract relevant skills / interests from the creator's structured Pings & bio hashtags
   const skillTags = (() => {
@@ -511,36 +573,37 @@ function ProfileContent({
     toast.success(`Theme set to ${next}`);
   };
 
-  const shareProfile = async () => {
-    const url = siteUrl(`/@${encodeURIComponent(profile.username)}`);
-    try {
-      if (typeof navigator !== "undefined" && navigator.share) {
-        await navigator.share({ title: `${name} on PING`, url });
-        return;
-      }
-      await navigator.clipboard.writeText(url);
-      toast.success("Profile link copied");
-    } catch {
-      toast.error("Couldn't copy profile link.");
-    }
-  };
+  const professionalBadgeLabel = verificationBadges?.professional_verified
+    ? formatProfessionalBadgeLabel(verificationBadges.professional_pathway)
+    : null;
 
-  const verificationBadge =
-    accountTier === "institution" ? (
-      <span className="inline-flex items-center gap-1 rounded-full bg-gold/15 text-gold border border-gold/30 px-2.5 py-0.5 text-[11px] font-bold">
-        <ShieldCheck className="size-3" /> Verified Institution
-      </span>
-    ) : accountTier === "pro" ? (
-      <span className="inline-flex items-center gap-1 rounded-full bg-gold/15 text-gold border border-gold/30 px-2.5 py-0.5 text-[11px] font-bold">
-        <Crown className="size-3" /> Founder Pro
-      </span>
-    ) : accountTier === "plus" ? (
-      <span className="inline-flex items-center gap-1 rounded-full bg-lime/20 dark:bg-lime/15 text-lime-foreground dark:text-lime border border-lime/30 px-2.5 py-0.5 text-[11px] font-bold">
-        <Sparkles className="size-3" /> Builder Plus
-      </span>
-    ) : (
-      <CheckCircle2 className="size-4 text-primary shrink-0" aria-label="Verified PING profile" />
-    );
+  const verificationBadge = (
+    <>
+      {verificationBadges?.identity_verified && (
+        <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 text-primary border border-primary/30 px-2.5 py-0.5 text-[11px] font-bold">
+          <CheckCircle2 className="size-3" /> Verified Identity
+        </span>
+      )}
+      {professionalBadgeLabel && (
+        <span className="inline-flex items-center gap-1 rounded-full bg-gold/15 text-gold border border-gold/30 px-2.5 py-0.5 text-[11px] font-bold">
+          <ShieldCheck className="size-3" /> {professionalBadgeLabel}
+        </span>
+      )}
+      {accountTier === "institution" ? (
+        <span className="inline-flex items-center gap-1 rounded-full bg-secondary text-secondary-foreground border border-border px-2.5 py-0.5 text-[11px] font-bold">
+          <Building2 className="size-3" /> Organization Plan
+        </span>
+      ) : accountTier === "pro" ? (
+        <span className="inline-flex items-center gap-1 rounded-full bg-gold/15 text-gold border border-gold/30 px-2.5 py-0.5 text-[11px] font-bold">
+          <Crown className="size-3" /> Founder Pro
+        </span>
+      ) : accountTier === "plus" ? (
+        <span className="inline-flex items-center gap-1 rounded-full bg-lime/20 dark:bg-lime/15 text-lime-foreground dark:text-lime border border-lime/30 px-2.5 py-0.5 text-[11px] font-bold">
+          <Sparkles className="size-3" /> Builder Plus
+        </span>
+      ) : null}
+    </>
+  );
 
   const drawerLinkClass =
     "flex w-full items-center justify-between gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -556,7 +619,7 @@ function ProfileContent({
                 type="button"
                 variant="outline"
                 size="icon"
-                onClick={() => setMenuDrawerOpen(true)}
+                onClick={() => openOverlay("profile-drawer")}
                 aria-label="Profile options menu"
                 title="Open account & profile menu"
                 className="size-10 rounded-full bg-card/90 shadow-sm hover:bg-secondary"
@@ -590,6 +653,7 @@ function ProfileContent({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h1 className="font-display text-2xl font-extrabold sm:text-4xl">{name}</h1>
+                  <VerificationBadge userId={profile.id} badges={verificationBadges} size="md" />
                   {verificationBadge}
                 </div>
                 <p className="text-muted-foreground text-sm mt-0.5">
@@ -628,6 +692,58 @@ function ProfileContent({
                   </p>
                 )}
 
+                {/* Optional Location, Country & Website */}
+                {(profile.location || profile.country || profile.website_url) && (
+                  <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                    {(profile.location || profile.country) && (
+                      <span className="inline-flex items-center gap-1.5">
+                        <MapPin className="size-3.5 text-primary" />
+                        {[profile.location, profile.country].filter(Boolean).join(", ")}
+                      </span>
+                    )}
+                    {profile.website_url && /^https?:\/\//i.test(profile.website_url) && (
+                      <a
+                        href={profile.website_url}
+                        target="_blank"
+                        rel="noopener noreferrer nofollow ugc"
+                        className="inline-flex items-center gap-1.5 text-primary hover:underline"
+                      >
+                        <Globe className="size-3.5" />
+                        {profile.website_url
+                          .replace(/^https?:\/\/(www\.)?/i, "")
+                          .replace(/\/$/, "")}
+                      </a>
+                    )}
+                  </div>
+                )}
+
+                {profile.interests && profile.interests.length > 0 && (
+                  <div className="mt-2.5 flex flex-wrap gap-1.5" aria-label="Interests">
+                    {profile.interests.map((id) => (
+                      <span
+                        key={id}
+                        className="rounded-full border border-border bg-secondary/70 px-2.5 py-0.5 text-[11px] font-medium text-secondary-foreground"
+                      >
+                        {formatInterestLabel(id)}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Optional Participation Pathways */}
+                {profile.participation_pathways && profile.participation_pathways.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Participation pathways">
+                    {profile.participation_pathways.map((id) => (
+                      <span
+                        key={id}
+                        className="rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-[11px] font-semibold text-foreground"
+                      >
+                        {formatPathwayLabel(id)}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
                 {/* Relevant Skills / Interests */}
                 {skillTags.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Skills and interests">
@@ -642,7 +758,31 @@ function ProfileContent({
                   </div>
                 )}
 
-                {/* Primary Profile Actions: Edit Profile / Follow / Message & Share Profile */}
+                {/* Mutual Connections Badge */}
+                {!isMe &&
+                  (mutualInfo?.isMutualFollow ||
+                    (mutualInfo?.sharedConnections.length ?? 0) > 0) && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      {mutualInfo?.isMutualFollow && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-semibold text-primary">
+                          <UserCheck className="size-3" /> Mutual connection
+                        </span>
+                      )}
+                      {mutualInfo && mutualInfo.sharedConnections.length > 0 && (
+                        <span>
+                          Followed by{" "}
+                          <strong className="text-foreground">
+                            @{mutualInfo.sharedConnections[0]?.username}
+                          </strong>
+                          {mutualInfo.sharedConnections.length > 1
+                            ? ` and ${mutualInfo.sharedConnections.length - 1} other${mutualInfo.sharedConnections.length > 2 ? "s" : ""} you follow`
+                            : " whom you follow"}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                {/* Primary Profile Actions: Edit Profile / Follow / Message / Save & Share Profile */}
                 <div className="mt-5 flex flex-wrap items-center gap-2.5">
                   {isMe ? (
                     <Button asChild size="sm" variant="hero" className="rounded-full px-5">
@@ -652,25 +792,55 @@ function ProfileContent({
                     <>
                       <FollowButton profileId={profile.id} currentUserId={user?.id} />
                       {user && (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          className="rounded-full font-semibold"
-                          disabled={startChatMutation.isPending}
-                          onClick={async () => {
-                            try {
-                              const convId = await startChatMutation.mutateAsync(profile.id);
-                              navigate({
-                                to: "/messages",
-                                search: { conversationId: convId },
-                              });
-                            } catch (e: any) {
-                              toast.error(e.message || "Failed to start direct conversation");
+                        <>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="rounded-full font-semibold"
+                            disabled={startChatMutation.isPending}
+                            onClick={async () => {
+                              try {
+                                const convId = await startChatMutation.mutateAsync(profile.id);
+                                navigate({
+                                  to: "/messages",
+                                  search: { conversationId: convId },
+                                });
+                              } catch (e: any) {
+                                toast.error(e.message || "Failed to start direct conversation");
+                              }
+                            }}
+                          >
+                            <MessageSquare className="size-4 mr-1.5" /> Message
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={isAccountSaved ? "secondary" : "outline"}
+                            className="rounded-full"
+                            disabled={toggleSaveAccount.isPending}
+                            onClick={() =>
+                              toggleSaveAccount.mutate(
+                                { targetUserId: profile.id, currentlySaved: isAccountSaved },
+                                {
+                                  onSuccess: (saved) =>
+                                    toast.success(
+                                      saved
+                                        ? `Saved @${profile.username}`
+                                        : `Removed @${profile.username} from saved accounts`,
+                                    ),
+                                },
+                              )
                             }
-                          }}
-                        >
-                          <MessageSquare className="size-4 mr-1.5" /> Message
-                        </Button>
+                          >
+                            <Bookmark
+                              className={cn(
+                                "size-4 mr-1",
+                                isAccountSaved && "fill-current text-primary",
+                              )}
+                            />
+                            {isAccountSaved ? "Saved" : "Save"}
+                          </Button>
+                        </>
                       )}
                     </>
                   )}
@@ -679,15 +849,30 @@ function ProfileContent({
                     variant="outline"
                     size="sm"
                     className="rounded-full"
-                    onClick={shareProfile}
+                    onClick={() => setShareProfileOpen(true)}
                   >
                     <Share2 className="size-4" /> Share Profile
                   </Button>
                 </div>
+                <UniversalShareDialog
+                  open={shareProfileOpen}
+                  onOpenChange={setShareProfileOpen}
+                  payload={{
+                    targetType: "profile",
+                    targetId: profile.id,
+                    title: `${name} (@${profile.username}) on Ping`,
+                    description: profile.bio || `Connect with ${name} on Ping by DOT.`,
+                    path: `/@${profile.username}`,
+                  }}
+                />
               </div>
             </div>
 
-            <PublicConnections connections={connections} />
+            <PublicConnections
+              connections={connections}
+              ownerId={profile.id}
+              currentUserId={user?.id}
+            />
           </div>
         </div>
       </section>
@@ -718,6 +903,20 @@ function ProfileContent({
                       <Link to="/create">Create your first Ping</Link>
                     </Button>
                   </>
+                ) : isRestrictedProfile ? (
+                  <div className="space-y-2">
+                    <Lock className="mx-auto size-6 text-muted-foreground/70" />
+                    <p className="font-semibold text-foreground">
+                      {profileVisibility === "private"
+                        ? "This profile is private"
+                        : "Followers-only profile"}
+                    </p>
+                    <p className="text-xs">
+                      {profileVisibility === "private"
+                        ? `Only mutual connections can view ${name}'s Pings or send direct messages.`
+                        : `Follow @${profile.username} to view their Pings.`}
+                    </p>
+                  </div>
                 ) : (
                   <p>{name} hasn't shared a Ping yet.</p>
                 )}
@@ -752,20 +951,12 @@ function ProfileContent({
                     onClick={() => setMomentModalOpen(true)}
                     className="group relative aspect-[9/14] overflow-hidden rounded-3xl bg-black text-left shadow-sm"
                   >
-                    {m.media_type === "video" ? (
-                      <video
-                        src={m.media_url}
-                        muted
-                        playsInline
-                        className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                      />
-                    ) : (
-                      <img
-                        src={m.media_url}
-                        alt={m.caption || "Moment"}
-                        className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                      />
-                    )}
+                    <ResolvedMomentThumb
+                      mediaUrl={m.media_url}
+                      mediaType={m.media_type}
+                      alt={m.caption || "Moment"}
+                      className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                    />
                     <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-3 text-white">
                       {m.caption && <p className="line-clamp-2 text-xs font-medium">{m.caption}</p>}
                       <p className="mt-1 text-[10px] text-white/70">
@@ -845,7 +1036,7 @@ function ProfileContent({
       </section>
 
       {/* THREE-LINE MENU SIDE DRAWER (Full-Height Account & Profile Menu) */}
-      <Sheet open={menuDrawerOpen} onOpenChange={setMenuDrawerOpen}>
+      <Sheet open={isOpen("profile-drawer")} onOpenChange={onOpenChangeFor("profile-drawer")}>
         <SheetContent
           side="right"
           className="w-full sm:max-w-sm overflow-y-auto rounded-l-3xl p-6 flex flex-col justify-between"
@@ -885,11 +1076,7 @@ function ProfileContent({
                 </div>
 
                 {/* 2. DOT Wallet */}
-                <Link
-                  to="/balance"
-                  onClick={() => setMenuDrawerOpen(false)}
-                  className={drawerLinkClass}
-                >
+                <Link to="/balance" onClick={() => closeOverlays()} className={drawerLinkClass}>
                   <span className="flex items-center gap-3">
                     <Wallet className="size-4 text-primary" /> DOT Wallet
                   </span>
@@ -899,11 +1086,7 @@ function ProfileContent({
                 </Link>
 
                 {/* 3. Verification */}
-                <Link
-                  to="/upgrades"
-                  onClick={() => setMenuDrawerOpen(false)}
-                  className={drawerLinkClass}
-                >
+                <Link to="/upgrades" onClick={() => closeOverlays()} className={drawerLinkClass}>
                   <span className="flex items-center gap-3">
                     <ShieldCheck className="size-4 text-gold" /> Verification & Upgrades
                   </span>
@@ -911,11 +1094,7 @@ function ProfileContent({
                 </Link>
 
                 {/* 4. Settings */}
-                <Link
-                  to="/settings"
-                  onClick={() => setMenuDrawerOpen(false)}
-                  className={drawerLinkClass}
-                >
+                <Link to="/settings" onClick={() => closeOverlays()} className={drawerLinkClass}>
                   <span className="flex items-center gap-3">
                     <Settings className="size-4" /> Settings
                   </span>
@@ -925,7 +1104,7 @@ function ProfileContent({
                 <button
                   type="button"
                   onClick={() => {
-                    setMenuDrawerOpen(false);
+                    closeOverlays();
                     setCloseCircleOpen(true);
                   }}
                   className={drawerLinkClass}
@@ -937,33 +1116,21 @@ function ProfileContent({
                 </button>
 
                 {/* 6. Notifications */}
-                <Link
-                  to="/settings"
-                  onClick={() => setMenuDrawerOpen(false)}
-                  className={drawerLinkClass}
-                >
+                <Link to="/settings" onClick={() => closeOverlays()} className={drawerLinkClass}>
                   <span className="flex items-center gap-3">
                     <Bell className="size-4" /> Notifications
                   </span>
                 </Link>
 
                 {/* 7. Help and Support */}
-                <Link
-                  to="/terms"
-                  onClick={() => setMenuDrawerOpen(false)}
-                  className={drawerLinkClass}
-                >
+                <Link to="/terms" onClick={() => closeOverlays()} className={drawerLinkClass}>
                   <span className="flex items-center gap-3">
                     <HelpCircle className="size-4" /> Help and Support
                   </span>
                 </Link>
 
                 {/* 8. Account Management & Analytics */}
-                <Link
-                  to="/analytics"
-                  onClick={() => setMenuDrawerOpen(false)}
-                  className={drawerLinkClass}
-                >
+                <Link to="/analytics" onClick={() => closeOverlays()} className={drawerLinkClass}>
                   <span className="flex items-center gap-3">
                     <BarChart3 className="size-4 text-primary" /> Account Management & Analytics
                   </span>
@@ -988,7 +1155,7 @@ function ProfileContent({
                     <button
                       type="button"
                       onClick={() => {
-                        setMenuDrawerOpen(false);
+                        closeOverlays();
                         if (inCloseCircle) {
                           removeCloseCircle.mutate(profile.id, {
                             onSuccess: () =>
@@ -1012,7 +1179,40 @@ function ProfileContent({
                     <button
                       type="button"
                       onClick={() => {
-                        setMenuDrawerOpen(false);
+                        closeOverlays();
+                        if (!user) return;
+                        if (isMuted) {
+                          unmuteUser.mutate(
+                            { userId: user.id, targetUserId: profile.id },
+                            {
+                              onSuccess: () => toast.success(`Unmuted @${profile.username}`),
+                              onError: (e: any) =>
+                                toast.error(e?.message || "Could not unmute user."),
+                            },
+                          );
+                        } else {
+                          muteUser.mutate(
+                            { userId: user.id, targetUserId: profile.id },
+                            {
+                              onSuccess: () => toast.success(`Muted @${profile.username}`),
+                              onError: (e: any) =>
+                                toast.error(e?.message || "Could not mute user."),
+                            },
+                          );
+                        }
+                      }}
+                      className={drawerLinkClass}
+                    >
+                      <span className="flex items-center gap-3">
+                        <VolumeX className="size-4" />
+                        {isMuted ? "Unmute Account" : "Mute Account"}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        closeOverlays();
                         if (isBlocked) {
                           unblockUser.mutate(profile.id, {
                             onSuccess: () => toast.success(`Unblocked @${profile.username}`),
@@ -1034,7 +1234,7 @@ function ProfileContent({
                     <button
                       type="button"
                       onClick={() => {
-                        setMenuDrawerOpen(false);
+                        closeOverlays();
                         setReportOpen(true);
                       }}
                       className={cn(drawerLinkClass, "text-destructive")}
@@ -1048,16 +1248,19 @@ function ProfileContent({
               </div>
             ) : (
               <div className="mt-5 space-y-3">
-                <button type="button" onClick={shareProfile} className={drawerLinkClass}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeOverlays();
+                    setShareProfileOpen(true);
+                  }}
+                  className={drawerLinkClass}
+                >
                   <span className="flex items-center gap-3">
                     <Link2 className="size-4" /> Share Profile Link
                   </span>
                 </button>
-                <Link
-                  to="/terms"
-                  onClick={() => setMenuDrawerOpen(false)}
-                  className={drawerLinkClass}
-                >
+                <Link to="/terms" onClick={() => closeOverlays()} className={drawerLinkClass}>
                   <span className="flex items-center gap-3">
                     <HelpCircle className="size-4" /> Help and Support
                   </span>
@@ -1075,7 +1278,7 @@ function ProfileContent({
               <button
                 type="button"
                 onClick={() => {
-                  setMenuDrawerOpen(false);
+                  closeOverlays();
                   signOut();
                 }}
                 className={cn(drawerLinkClass, "text-destructive hover:bg-destructive/10")}

@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
-import { ArrowUpRight } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "@tanstack/react-router";
+import { ArrowUpRight, Briefcase, Building2, Clapperboard, Radio } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -21,8 +21,15 @@ interface CreateStackModalProps {
 export function CreateStackModal({ open, onOpenChange }: CreateStackModalProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [momentOpen, setMomentOpen] = useState(false);
   const [liveOpen, setLiveOpen] = useState(false);
+
+  // Close secondary modals immediately whenever the user navigates.
+  useEffect(() => {
+    setMomentOpen(false);
+    setLiveOpen(false);
+  }, [location.pathname, location.searchStr]);
 
   const requireAuthOrRun = (nextPath: string, action: () => void) => {
     if (!user) {
@@ -46,8 +53,12 @@ export function CreateStackModal({ open, onOpenChange }: CreateStackModalProps) 
             </DialogDescription>
           </DialogHeader>
 
-          {/* Stacked 3-Card Creation Deck */}
-          <div className="mt-4 space-y-3" role="list" aria-label="Creation options">
+          {/* Unified Creation Deck: Ping, Moment, Signal, Hub & Go Live */}
+          <div
+            className="mt-4 space-y-2.5 max-h-[70dvh] overflow-y-auto pr-0.5"
+            role="list"
+            aria-label="Creation options"
+          >
             {/* CARD 1 — CREATE A PING (Official Lime Mark) */}
             <button
               type="button"
@@ -58,7 +69,7 @@ export function CreateStackModal({ open, onOpenChange }: CreateStackModalProps) 
                   navigate({ to: "/create" });
                 })
               }
-              className="group relative flex w-full items-start gap-4 rounded-3xl border border-primary/35 bg-primary/10 p-5 text-left transition-all hover:-translate-y-0.5 hover:border-primary hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="group relative flex w-full items-start gap-4 rounded-3xl border border-primary/35 bg-primary/10 p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <PingMark variant="lime" size="lg" alt="Create a Ping" />
               <div className="min-w-0 flex-1">
@@ -84,7 +95,7 @@ export function CreateStackModal({ open, onOpenChange }: CreateStackModalProps) 
                   setMomentOpen(true);
                 })
               }
-              className="group relative flex w-full items-start gap-4 rounded-3xl border border-border bg-secondary/50 p-5 text-left transition-all hover:-translate-y-0.5 hover:border-primary/60 hover:bg-secondary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="group relative flex w-full items-start gap-4 rounded-3xl border border-border bg-secondary/50 p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/60 hover:bg-secondary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <PingMark variant="silver" size="lg" alt="Create a Moment" />
               <div className="min-w-0 flex-1">
@@ -100,7 +111,148 @@ export function CreateStackModal({ open, onOpenChange }: CreateStackModalProps) 
               </div>
             </button>
 
-            {/* CARD 3 — GO LIVE (Official Gold Mark) */}
+            {/* CARD 2B — PUBLISH A PING CLIP */}
+            <button
+              type="button"
+              role="listitem"
+              onClick={() =>
+                requireAuthOrRun("/clips", () => {
+                  onOpenChange(false);
+                  navigate({ to: "/clips" });
+                })
+              }
+              className="group relative flex w-full items-start gap-4 rounded-3xl border border-border bg-secondary/45 p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/60 hover:bg-secondary/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+                <Clapperboard className="size-6" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-display text-base font-extrabold text-foreground">
+                    Publish a Clip
+                  </span>
+                  <ArrowUpRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-foreground" />
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  Share a persistent vertical short-form video for discovery &amp; Spotlight.
+                </p>
+              </div>
+            </button>
+
+            {/* CARD 3 — CREATE A SIGNAL */}
+            <button
+              type="button"
+              role="listitem"
+              onClick={() =>
+                requireAuthOrRun("/signals/create", () => {
+                  onOpenChange(false);
+                  navigate({ to: "/signals/create" });
+                })
+              }
+              className="group relative flex w-full items-start gap-4 rounded-3xl border border-border bg-secondary/40 p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/60 hover:bg-secondary/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+                <Radio className="size-6" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-display text-base font-extrabold text-foreground">
+                    Create a Signal
+                  </span>
+                  <ArrowUpRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-foreground" />
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  Establish an official institutional broadcast channel.
+                </p>
+              </div>
+            </button>
+
+            {/* CARD 4 — PUBLISH AN OPPORTUNITY */}
+            <button
+              type="button"
+              role="listitem"
+              onClick={() =>
+                requireAuthOrRun("/signals/opportunities", () => {
+                  onOpenChange(false);
+                  navigate({ to: "/signals/opportunities" });
+                })
+              }
+              className="group relative flex w-full items-start gap-4 rounded-3xl border border-border bg-secondary/40 p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/60 hover:bg-secondary/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+                <Briefcase className="size-6" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-display text-base font-extrabold text-foreground">
+                    Publish an Opportunity
+                  </span>
+                  <ArrowUpRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-foreground" />
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  Post funding, jobs, grants, mentorship, partnerships, or requests.
+                </p>
+              </div>
+            </button>
+
+            {/* CARD 5 — IMPORT EXTERNAL LINK */}
+            <button
+              type="button"
+              role="listitem"
+              onClick={() =>
+                requireAuthOrRun("/share-target", () => {
+                  onOpenChange(false);
+                  navigate({ to: "/share-target" });
+                })
+              }
+              className="group relative flex w-full items-start gap-4 rounded-3xl border border-border bg-secondary/40 p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/60 hover:bg-secondary/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-secondary text-primary">
+                <ArrowUpRight className="size-6" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-display text-base font-extrabold text-foreground">
+                    Import External Link
+                  </span>
+                  <ArrowUpRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-foreground" />
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  Bring a post or link from X, YouTube, Snapchat, or the web with source
+                  attribution.
+                </p>
+              </div>
+            </button>
+
+            {/* CARD 5 — CREATE A HUB */}
+            <button
+              type="button"
+              role="listitem"
+              onClick={() =>
+                requireAuthOrRun("/hubs/create", () => {
+                  onOpenChange(false);
+                  navigate({ to: "/hubs/create" });
+                })
+              }
+              className="group relative flex w-full items-start gap-4 rounded-3xl border border-border bg-secondary/40 p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/60 hover:bg-secondary/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-secondary text-foreground">
+                <Building2 className="size-6" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-display text-base font-extrabold text-foreground">
+                    Create a Hub
+                  </span>
+                  <ArrowUpRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-foreground" />
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  Start a collaborative group communication space.
+                </p>
+              </div>
+            </button>
+
+            {/* CARD 5 — GO LIVE (Official Gold Mark) */}
             <button
               type="button"
               role="listitem"
@@ -110,7 +262,7 @@ export function CreateStackModal({ open, onOpenChange }: CreateStackModalProps) 
                   setLiveOpen(true);
                 })
               }
-              className="group relative flex w-full items-start gap-4 rounded-3xl border border-gold/30 bg-gold/10 p-5 text-left transition-all hover:-translate-y-0.5 hover:border-gold/60 hover:bg-gold/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="group relative flex w-full items-start gap-4 rounded-3xl border border-gold/30 bg-gold/10 p-4 text-left transition-all hover:-translate-y-0.5 hover:border-gold/60 hover:bg-gold/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <PingMark variant="gold" size="lg" alt="Go Live" />
               <div className="min-w-0 flex-1">

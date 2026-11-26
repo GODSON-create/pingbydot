@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { ensureClientProfileRow } from "@/lib/ensure-profile";
 import type { Json } from "@/integrations/supabase/types";
 
 export type SignalInstitutionType =
@@ -89,8 +90,7 @@ export function signalsQuery(filters?: { search?: string; category?: string }) {
 
       const { data, error } = await q;
       if (error) {
-        console.warn("Failed to load signals:", error);
-        return [];
+        throw error;
       }
       return (data || []) as unknown as Signal[];
     },
@@ -111,8 +111,7 @@ export function signalBySlugQuery(slug: string) {
         .maybeSingle();
 
       if (error) {
-        console.warn("Failed to load signal:", error);
-        return null;
+        throw error;
       }
       return (data as unknown as Signal) || null;
     },
@@ -133,8 +132,7 @@ export function signalPostsQuery(signalId: string, currentUserId?: string) {
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.warn("Failed to load signal posts:", error);
-        return [];
+        throw error;
       }
       if (!rawPosts || rawPosts.length === 0) return [];
 
@@ -226,8 +224,7 @@ export function signalPublishersListQuery(signalId: string) {
         .order("created_at", { ascending: true });
 
       if (error) {
-        console.warn("Failed to load signal publishers:", error);
-        return [];
+        throw error;
       }
       return (data ?? []) as unknown as SignalPublisherMember[];
     },
@@ -470,3 +467,110 @@ export const myFollowedSignalsQuery = (userId: string | undefined) => ({
     return new Set(data.map((r) => r.signal_id));
   },
 });
+
+export interface SignalMessage {
+  id: string;
+  signal_id: string;
+  sender_id: string;
+  parent_id: string | null;
+  content: string;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+  sender?: {
+    id: string;
+    username: string;
+    display_name: string;
+    avatar_url: string | null;
+  } | null;
+}
+
+export function signalMessagesQuery(signalId: string) {
+  return {
+    queryKey: ["signal-messages", signalId],
+    enabled: Boolean(signalId),
+    queryFn: async (): Promise<SignalMessage[]> => {
+      const { data, error } = await supabase
+        .from("signal_messages")
+        .select(
+          `
+          id, signal_id, sender_id, parent_id, content, deleted_at, created_at, updated_at,
+          sender:profiles!signal_messages_sender_id_fkey(id, username, display_name, avatar_url)
+        `,
+        )
+        .eq("signal_id", signalId)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: true })
+        .limit(150);
+
+      if (error) {
+        if (error.code === "PGRST205" || /could not find the table/i.test(error.message || "")) {
+          throw new Error(
+            "Signal channel discussions require database migration 0022 to be applied.",
+          );
+        }
+        throw error;
+      }
+      return (data ?? []) as unknown as SignalMessage[];
+    },
+  };
+}
+
+export function useSendSignalMessage(signalId: string) {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: { content: string; parentId?: string | null }) => {
+      const { data: u } = await supabase.auth.getSession();
+      const userObj = u.session?.user;
+      const userId = userObj?.id;
+      if (!userId) throw new Error("Please sign in to post in Signal channel chat.");
+      const cleaned = payload.content.trim();
+      if (!cleaned) throw new Error("Message cannot be empty.");
+
+      const insertPayload = {
+        signal_id: signalId,
+        sender_id: userId,
+        parent_id: payload.parentId ?? null,
+        content: cleaned,
+      };
+
+      let { error } = await supabase.from("signal_messages").insert(insertPayload);
+      if (error && error.code === "23503") {
+        const recovered = await ensureClientProfileRow(userObj);
+        if (recovered) {
+          const retry = await supabase.from("signal_messages").insert(insertPayload);
+          error = retry.error;
+        }
+      }
+      if (error) {
+        if (error.code === "PGRST205" || /could not find the table/i.test(error.message || "")) {
+          throw new Error(
+            "Posting in Signal channel discussions requires database migration 0022.",
+          );
+        }
+        throw error;
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["signal-messages", signalId] });
+    },
+  });
+}
+
+export function useDeleteSignalMessage(signalId: string) {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (messageId: string) => {
+      const { error } = await supabase
+        .from("signal_messages")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", messageId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["signal-messages", signalId] });
+    },
+  });
+}

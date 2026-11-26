@@ -176,8 +176,10 @@ const REQUIRED_TABLES_0011_0020 = [
   "saved_pings",
   "hub_forums",
   "hub_forum_members",
+  "hub_forum_posts",
   "hub_broadcasts",
   "hub_broadcast_reads",
+  "signal_messages",
 ];
 
 async function runSchemaVerification(sql, releaseEntries) {
@@ -246,8 +248,436 @@ async function runSchemaVerification(sql, releaseEntries) {
     );
   }
 
+  const [{ media_bucket_present: mediaBucketPresent, dm_bucket_private: dmBucketPrivate, dm_policy_count: dmPolicyCount }] = await sql`
+    SELECT
+      EXISTS (
+        SELECT 1 FROM storage.buckets WHERE id = 'media' AND public = true
+      ) AS media_bucket_present,
+      EXISTS (
+        SELECT 1 FROM storage.buckets WHERE id = 'dm-attachments' AND public = false
+      ) AS dm_bucket_private,
+      (
+        SELECT count(*)::int FROM pg_policies
+        WHERE schemaname = 'storage'
+          AND tablename = 'objects'
+          AND policyname IN (
+            'DM conversation participants read signed files',
+            'DM uploaders manage own files',
+            'DM uploaders update own files',
+            'DM uploaders delete own files'
+          )
+      ) AS dm_policy_count
+  `;
+  if (!mediaBucketPresent || !dmBucketPrivate || dmPolicyCount < 4) {
+    throw new Error(
+      `Schema Verification FAILED — storage bucket/policy mismatch (media=${mediaBucketPresent}, dm_private=${dmBucketPrivate}, dm_policies=${dmPolicyCount}/4; apply migrations 0021/0027/0036)`,
+    );
+  }
+
+  const [{ pathways_col_present: pathwaysColPresent, onboarding_col_present: onboardingColPresent, country_col_present: countryColPresent, interests_col_present: interestsColPresent, anon_onb_exec: anonOnbExec }] = await sql`
+    SELECT
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'participation_pathways'
+      ) AS pathways_col_present,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'onboarding_completed_at'
+      ) AS onboarding_col_present,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'country'
+      ) AS country_col_present,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'interests'
+      ) AS interests_col_present,
+      has_function_privilege('anon', 'public.complete_my_onboarding(text, text, text, text, text[], boolean, text, text[], boolean)', 'EXECUTE') AS anon_onb_exec
+  `;
+  if (!pathwaysColPresent || !onboardingColPresent || !countryColPresent || !interestsColPresent || anonOnbExec) {
+    throw new Error(
+      `Schema Verification FAILED — onboarding schema/privilege mismatch (pathways=${pathwaysColPresent}, onboarding=${onboardingColPresent}, country=${countryColPresent}, interests=${interestsColPresent}, anon_onb_exec=${anonOnbExec})`,
+    );
+  }
+
+  const [{ ev_rls, out_rls, anon_ev_ins, auth_ev_ins, auth_ver_exec }] = await sql`
+    SELECT
+      coalesce((SELECT relrowsecurity FROM pg_class WHERE oid = 'public.economic_events'::regclass), false) AS ev_rls,
+      coalesce((SELECT relrowsecurity FROM pg_class WHERE oid = 'public.verified_economic_outcomes'::regclass), false) AS out_rls,
+      has_table_privilege('anon', 'public.economic_events', 'INSERT') AS anon_ev_ins,
+      has_table_privilege('authenticated', 'public.economic_events', 'INSERT') AS auth_ev_ins,
+      has_function_privilege(
+        'authenticated',
+        'public.record_verified_economic_outcome(text, uuid, uuid, char, bigint, bigint, text, text, text, uuid, text, text, text, jsonb)',
+        'EXECUTE'
+      ) AS auth_ver_exec
+  `;
+  if (!ev_rls || !out_rls || anon_ev_ins || auth_ev_ins || auth_ver_exec) {
+    throw new Error(
+      `Schema Verification FAILED — economic measurement security mismatch (ev_rls=${ev_rls}, out_rls=${out_rls}, anon_ev_ins=${anon_ev_ins}, auth_ev_ins=${auth_ev_ins}, auth_ver_exec=${auth_ver_exec})`,
+    );
+  }
+
+  const [{ av_rls, va_rls, mo_rls, anon_av_ins, auth_av_ins }] = await sql`
+    SELECT
+      coalesce((SELECT relrowsecurity FROM pg_class WHERE oid = 'public.account_verifications'::regclass), false) AS av_rls,
+      coalesce((SELECT relrowsecurity FROM pg_class WHERE oid = 'public.verification_audit'::regclass), false) AS va_rls,
+      coalesce((SELECT relrowsecurity FROM pg_class WHERE oid = 'public.monetization_offerings'::regclass), false) AS mo_rls,
+      has_table_privilege('anon', 'public.account_verifications', 'INSERT') AS anon_av_ins,
+      has_table_privilege('authenticated', 'public.account_verifications', 'INSERT') AS auth_av_ins
+  `;
+  if (!av_rls || !va_rls || !mo_rls || anon_av_ins || auth_av_ins) {
+    throw new Error(
+      `Schema Verification FAILED — verification foundation security mismatch (av_rls=${av_rls}, va_rls=${va_rls}, mo_rls=${mo_rls}, anon_av_ins=${anon_av_ins}, auth_av_ins=${auth_av_ins})`,
+    );
+  }
+
+  const [{ mutes_rls, anon_export_exec, location_col, website_col, vis_col }] = await sql`
+    SELECT
+      coalesce((SELECT relrowsecurity FROM pg_class WHERE oid = 'public.user_mutes'::regclass), false) AS mutes_rls,
+      has_function_privilege('anon', 'public.export_my_account_data()', 'EXECUTE') AS anon_export_exec,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'location'
+      ) AS location_col,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'website_url'
+      ) AS website_col,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'profile_visibility'
+      ) AS vis_col
+  `;
+  if (!mutes_rls || anon_export_exec || !location_col || !website_col || !vis_col) {
+    throw new Error(
+      `Schema Verification FAILED — Phase 1 profile/mute/export schema mismatch (mutes_rls=${mutes_rls}, anon_export_exec=${anon_export_exec}, location=${location_col}, website=${website_col}, visibility=${vis_col})`,
+    );
+  }
+
+  const [{ p2_rls_count, anon_group_exec, anon_opp_exec }] = await sql`
+    SELECT
+      (
+        SELECT count(*)::int FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relrowsecurity = true
+          AND c.relname = ANY(ARRAY[
+            'user_saved_accounts', 'user_topic_follows', 'ping_reactions',
+            'ping_polls', 'ping_poll_options', 'ping_poll_votes',
+            'private_message_reactions', 'saved_messages',
+            'hub_events', 'hub_event_rsvps',
+            'signal_opportunities', 'signal_applications', 'notifications'
+          ])
+      ) AS p2_rls_count,
+      has_function_privilege('anon', 'public.create_group_conversation(text, text, uuid[], boolean)', 'EXECUTE') AS anon_group_exec,
+      has_function_privilege('anon', 'public.submit_signal_application(uuid, text, text)', 'EXECUTE') AS anon_opp_exec
+  `;
+  if (p2_rls_count < 13 || anon_group_exec || anon_opp_exec) {
+    throw new Error(
+      `Schema Verification FAILED — Phase 2 schema/privilege mismatch (rls_count=${p2_rls_count}/13, anon_group=${anon_group_exec}, anon_opp=${anon_opp_exec})`,
+    );
+  }
+
+  const [{ p3_rls_count, fmt_col_present }] = await sql`
+    SELECT
+      (
+        SELECT count(*)::int FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relrowsecurity = true
+          AND c.relname = ANY(ARRAY[
+            'media_assets', 'ping_video_views', 'copyright_reports',
+            'music_tracks', 'content_music_attachments', 'share_events'
+          ])
+      ) AS p3_rls_count,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'pings' AND column_name = 'content_format'
+      ) AS fmt_col_present
+  `;
+  if (p3_rls_count < 6 || !fmt_col_present) {
+    throw new Error(
+      `Schema Verification FAILED — Phase 3 multimedia/music/share schema mismatch (rls_count=${p3_rls_count}/6, content_format=${fmt_col_present})`,
+    );
+  }
+
+  const [{ p4_rls_count, auth_settle_exec, anon_biz_exec }] = await sql`
+    SELECT
+      (
+        SELECT count(*)::int FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relrowsecurity = true
+          AND c.relname = ANY(ARRAY[
+            'business_profiles', 'business_team_members', 'business_offerings',
+            'business_reviews', 'business_enquiries', 'business_saved_replies',
+            'creator_commercial_profiles', 'ad_campaigns', 'ad_reports',
+            'hub_membership_plans'
+          ])
+      ) AS p4_rls_count,
+      has_function_privilege('authenticated', 'public.settle_dot_topup_intent(text, text, integer, text)', 'EXECUTE') AS auth_settle_exec,
+      has_function_privilege('anon', 'public.is_business_member(uuid, uuid, text[])', 'EXECUTE') AS anon_biz_exec
+  `;
+  if (p4_rls_count < 10 || auth_settle_exec || anon_biz_exec) {
+    throw new Error(
+      `Schema Verification FAILED — Phase 4 business/wallet security mismatch (rls_count=${p4_rls_count}/10, auth_settle=${auth_settle_exec}, anon_biz=${anon_biz_exec})`,
+    );
+  }
+
+  const [{ p5_rls_count, auth_verify_key_exec, anon_rl_exec, locale_col_present }] = await sql`
+    SELECT
+      (
+        SELECT count(*)::int FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relrowsecurity = true
+          AND c.relname = ANY(ARRAY[
+            'griot_ai_preferences', 'griot_audit_logs', 'developer_apps',
+            'oauth_authorization_codes', 'oauth_access_tokens', 'developer_api_keys',
+            'developer_webhooks', 'developer_webhook_deliveries', 'api_rate_limits'
+          ])
+      ) AS p5_rls_count,
+      has_function_privilege('authenticated', 'public.verify_api_key_hash(text)', 'EXECUTE') AS auth_verify_key_exec,
+      has_function_privilege('anon', 'public.check_server_rate_limit(text, integer, integer)', 'EXECUTE') AS anon_rl_exec,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'preferred_locale'
+      ) AS locale_col_present
+  `;
+  if (p5_rls_count < 9 || auth_verify_key_exec || anon_rl_exec || !locale_col_present) {
+    throw new Error(
+      `Schema Verification FAILED — Phase 5 GRIOT/developer/scale security mismatch (rls_count=${p5_rls_count}/9, auth_verify_key=${auth_verify_key_exec}, anon_rl=${anon_rl_exec}, preferred_locale=${locale_col_present})`,
+    );
+  }
+
+  const [{ p6_rls_count, auth_ent_ins, anon_sub_exec, anon_boost_exec }] = await sql`
+    SELECT
+      (
+        SELECT count(*)::int FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relrowsecurity = true
+          AND c.relname = ANY(ARRAY[
+            'membership_plans', 'subscription_entitlements', 'subscription_receipts',
+            'boost_campaigns', 'boost_campaign_events', 'boost_campaign_reports',
+            'boost_refund_audit', 'dot_tags', 'ping_dot_tags', 'user_dot_tag_follows'
+          ])
+      ) AS p6_rls_count,
+      has_table_privilege('authenticated', 'public.subscription_entitlements', 'INSERT') AS auth_ent_ins,
+      has_function_privilege('anon', 'public.subscribe_with_dots(text, text)', 'EXECUTE') AS anon_sub_exec,
+      has_function_privilege('anon', 'public.create_boost_campaign(text, uuid, integer, text, text[], text[], text)', 'EXECUTE') AS anon_boost_exec
+  `;
+  if (p6_rls_count < 10 || auth_ent_ins || anon_sub_exec || anon_boost_exec) {
+    throw new Error(
+      `Schema Verification FAILED — Premium UX/DOT economy security mismatch (rls_count=${p6_rls_count}/10, auth_ent_ins=${auth_ent_ins}, anon_sub=${anon_sub_exec}, anon_boost=${anon_boost_exec})`,
+    );
+  }
+
+  const [{ p7_rls_count, auth_learn_ent_ins, auth_spot_pub_ins, anon_spot_exec, anon_clip_conv }] =
+    await sql`
+      SELECT
+        (
+          SELECT count(*)::int FROM pg_class c
+          JOIN pg_namespace n ON n.oid = c.relnamespace
+          WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relrowsecurity = true
+            AND c.relname = ANY(ARRAY[
+              'learn_courses', 'course_release_schedules', 'course_entitlements',
+              'learn_course_progress', 'learn_audit_logs',
+              'spotlight_rubric_config', 'spotlight_candidates', 'spotlight_nominations',
+              'spotlight_evaluations', 'spotlight_publications',
+              'spotlight_distribution_records', 'spotlight_editorial_audit_logs',
+              'ping_clips', 'clip_media_relationships', 'clip_likes',
+              'clip_saves', 'clip_replies', 'clip_reports'
+            ])
+        ) AS p7_rls_count,
+        has_table_privilege('authenticated', 'public.course_entitlements', 'INSERT') AS auth_learn_ent_ins,
+        has_table_privilege('authenticated', 'public.spotlight_publications', 'INSERT') AS auth_spot_pub_ins,
+        has_function_privilege('anon', 'public.submit_spotlight_story(text, text, text, text, uuid, text[])', 'EXECUTE') AS anon_spot_exec,
+        has_function_privilege('anon', 'public.publish_moment_as_clip(uuid, text, text, text[])', 'EXECUTE') AS anon_clip_conv
+    `;
+  if (
+    p7_rls_count < 18 ||
+    auth_learn_ent_ins ||
+    auth_spot_pub_ins ||
+    anon_spot_exec ||
+    anon_clip_conv
+  ) {
+    throw new Error(
+      `Schema Verification FAILED — Ping Learn/Spotlight/Clips security mismatch (rls_count=${p7_rls_count}/18, auth_learn_ent_ins=${auth_learn_ent_ins}, auth_spot_pub_ins=${auth_spot_pub_ins}, anon_spot=${anon_spot_exec}, anon_clip=${anon_clip_conv})`,
+    );
+  }
+
+  const [
+    { p8_rls_count, auth_role_ins, auth_appt_ins, auth_metrics_exec, anon_appoint_exec },
+  ] = await sql`
+    SELECT
+      (
+        SELECT count(*)::int FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relrowsecurity = true
+          AND c.relname = ANY(ARRAY[
+            'admin_role_permissions', 'admin_user_permissions', 'admin_appointments',
+            'user_presence_heartbeats', 'system_error_logs',
+            'early_access_registrations', 'download_attribution_events'
+          ])
+      ) AS p8_rls_count,
+      has_table_privilege('authenticated', 'public.user_roles', 'INSERT') AS auth_role_ins,
+      has_table_privilege('authenticated', 'public.admin_appointments', 'INSERT') AS auth_appt_ins,
+      has_function_privilege('authenticated', 'public.admin_control_centre_metrics()', 'EXECUTE') AS auth_metrics_exec,
+      has_function_privilege('anon', 'public.owner_appoint_admin(uuid, text, text)', 'EXECUTE') AS anon_appoint_exec
+  `;
+  if (
+    p8_rls_count < 7 ||
+    auth_role_ins ||
+    auth_appt_ins ||
+    auth_metrics_exec ||
+    anon_appoint_exec
+  ) {
+    throw new Error(
+      `Schema Verification FAILED — Admin Control Centre & Early Access security mismatch (rls_count=${p8_rls_count}/7, auth_role_ins=${auth_role_ins}, auth_appt_ins=${auth_appt_ins}, auth_metrics_exec=${auth_metrics_exec}, anon_appoint_exec=${anon_appoint_exec})`,
+    );
+  }
+
+  // Stage 1 (0037) schema repair & messaging/privacy security checks
+  const [
+    {
+      auth_conv_ins,
+      auth_cm_ins,
+      auth_cm_del,
+      auth_cm_role_upd,
+      auth_pm_ins,
+      auth_pm_del,
+      auth_pm_status_upd,
+      auth_legacy_cm_ins,
+      direct_pair_uidx,
+      pending_msg_uidx,
+      req_status_col,
+      dm_perm_col,
+      notif_title_col,
+      notif_ping_nullable,
+      cm_owner_role_allowed,
+      anon_accept_req_exec,
+    },
+  ] = await sql`
+    SELECT
+      has_table_privilege('authenticated', 'public.conversations', 'INSERT') AS auth_conv_ins,
+      has_table_privilege('authenticated', 'public.conversation_members', 'INSERT') AS auth_cm_ins,
+      has_table_privilege('authenticated', 'public.conversation_members', 'DELETE') AS auth_cm_del,
+      has_column_privilege('authenticated', 'public.conversation_members', 'role', 'UPDATE') AS auth_cm_role_upd,
+      has_table_privilege('authenticated', 'public.private_messages', 'INSERT') AS auth_pm_ins,
+      has_table_privilege('authenticated', 'public.private_messages', 'DELETE') AS auth_pm_del,
+      has_column_privilege('authenticated', 'public.private_messages', 'status', 'UPDATE') AS auth_pm_status_upd,
+      has_table_privilege('authenticated', 'public.conversation_messages', 'INSERT') AS auth_legacy_cm_ins,
+      EXISTS (
+        SELECT 1 FROM pg_indexes
+        WHERE schemaname = 'public' AND tablename = 'conversations' AND indexname = 'conversations_direct_pair_uidx'
+      ) AS direct_pair_uidx,
+      EXISTS (
+        SELECT 1 FROM pg_indexes
+        WHERE schemaname = 'public' AND tablename = 'private_messages' AND indexname = 'private_messages_one_pending_request_uidx'
+      ) AS pending_msg_uidx,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'conversations' AND column_name = 'request_status'
+      ) AS req_status_col,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'user_privacy_preferences' AND column_name = 'dm_permission'
+      ) AS dm_perm_col,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'notifications' AND column_name = 'title'
+      ) AS notif_title_col,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'notifications' AND column_name = 'ping_id' AND is_nullable = 'YES'
+      ) AS notif_ping_nullable,
+      EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'public.conversation_members'::regclass
+          AND conname = 'conversation_members_role_check'
+          AND pg_get_constraintdef(oid) ILIKE '%owner%'
+      ) AS cm_owner_role_allowed,
+      has_function_privilege('anon', 'public.accept_message_request(uuid)', 'EXECUTE') AS anon_accept_req_exec
+  `;
+  if (
+    auth_conv_ins ||
+    auth_cm_ins ||
+    auth_cm_del ||
+    auth_cm_role_upd ||
+    auth_pm_ins ||
+    auth_pm_del ||
+    auth_pm_status_upd ||
+    auth_legacy_cm_ins ||
+    !direct_pair_uidx ||
+    !pending_msg_uidx ||
+    !req_status_col ||
+    !dm_perm_col ||
+    !notif_title_col ||
+    !notif_ping_nullable ||
+    !cm_owner_role_allowed ||
+    anon_accept_req_exec
+  ) {
+    throw new Error(
+      `Schema Verification FAILED — Stage 1 (0037) messaging/privacy hardening mismatch (conv_ins=${auth_conv_ins}, cm_role_upd=${auth_cm_role_upd}, pm_status_upd=${auth_pm_status_upd}, req_status=${req_status_col}, dm_perm=${dm_perm_col}, owner_role=${cm_owner_role_allowed})`,
+    );
+  }
+
+  // Stage 2 (0038–0041) buckets, tables, indexes, and security RPCs verification (M11)
+  const [
+    {
+      hub_bucket_private,
+      pmoment_bucket_private,
+      has_deletion_queue,
+      has_claimed_at,
+      has_feature_flags,
+      has_conv_media_idx,
+      has_24h_unviewed_idx,
+      auth_media_assets_ins,
+      has_can_read_dm_rpc,
+      has_anon_hub_policy,
+    },
+  ] = await sql`
+    SELECT
+      EXISTS (SELECT 1 FROM storage.buckets WHERE id = 'hub-attachments' AND public = false) AS hub_bucket_private,
+      EXISTS (SELECT 1 FROM storage.buckets WHERE id = 'private-moments' AND public = false) AS pmoment_bucket_private,
+      to_regclass('public.media_deletion_queue') IS NOT NULL AS has_deletion_queue,
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'media_deletion_queue' AND column_name = 'claimed_at'
+      ) AS has_claimed_at,
+      to_regclass('public.app_feature_flags') IS NOT NULL AS has_feature_flags,
+      EXISTS (
+        SELECT 1 FROM pg_indexes
+        WHERE schemaname = 'public' AND tablename = 'private_messages' AND indexname = 'private_messages_conv_media_url_idx'
+      ) AS has_conv_media_idx,
+      EXISTS (
+        SELECT 1 FROM pg_indexes
+        WHERE schemaname = 'public' AND tablename = 'private_messages' AND indexname = 'private_messages_24h_unviewed_idx'
+      ) AS has_24h_unviewed_idx,
+      has_table_privilege('authenticated', 'public.media_assets', 'INSERT') AS auth_media_assets_ins,
+      to_regprocedure('public.can_read_dm_media_object(uuid,text)') IS NOT NULL AS has_can_read_dm_rpc,
+      EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE schemaname = 'storage' AND tablename = 'objects'
+          AND policyname = 'Public hub attachments readable by anon'
+      ) AS has_anon_hub_policy
+  `;
+  if (
+    !hub_bucket_private ||
+    !pmoment_bucket_private ||
+    !has_deletion_queue ||
+    !has_claimed_at ||
+    !has_feature_flags ||
+    !has_conv_media_idx ||
+    !has_24h_unviewed_idx ||
+    auth_media_assets_ins ||
+    !has_can_read_dm_rpc ||
+    !has_anon_hub_policy
+  ) {
+    throw new Error(
+      `Schema Verification FAILED — Stage 2 (0038–0041) mismatch (hub_bucket=${hub_bucket_private}, pmoment_bucket=${pmoment_bucket_private}, deletion_queue=${has_deletion_queue}, claimed_at=${has_claimed_at}, auth_media_assets_ins=${auth_media_assets_ins}, can_read_dm=${has_can_read_dm_rpc}, anon_hub=${has_anon_hub_policy})`,
+    );
+  }
+
   console.log(
-    `[SCHEMA VERIFIED] Ledger ${minTag}–${maxTag}: ${releaseEntries.length}/${releaseEntries.length} recorded (total rows=${ledgerRows.length}); ${REQUIRED_TABLES_0011_0020.length}/${REQUIRED_TABLES_0011_0020.length} tables with RLS; hardened indexes & privileges intact.`,
+    `[SCHEMA VERIFIED] Ledger ${minTag}–${maxTag}: ${releaseEntries.length}/${releaseEntries.length} recorded (total rows=${ledgerRows.length}); ${REQUIRED_TABLES_0011_0020.length}/${REQUIRED_TABLES_0011_0020.length} tables with RLS; Stage 1 & Stage 2 (0038–0041) buckets, indexes & security RPCs intact.`,
   );
 }
 
@@ -338,20 +768,63 @@ async function runFeatureAuthTests(sql) {
       }
       results.push("Moments & Close Circle privacy: PASS (public anon read preserved, Close Circle member B=1, outsider C=0, enumeration blocked)");
 
-      // 2. TWO-ACCOUNT DIRECT MESSAGE ISOLATION TEST
+      // 2. TWO-ACCOUNT DIRECT MESSAGE ISOLATION & STAGE 1 MESSAGE-REQUEST SECURITY TEST (0037)
       await actAs(userA);
       const [{ conv_id: convId }] = await tx`SELECT public.get_or_create_direct_conversation(${userB}::uuid) AS conv_id`;
+      // Non-mutual starts as pending message request: 1 text-only message allowed, 2nd or media blocked until accepted
       const [{ msg }] = await tx`SELECT public.send_private_message(${convId}::uuid, 'Two-account DM test') AS msg`;
+      await assertExpectThrow(tx, "pending requester sending 2nd message before acceptance", async () => {
+        await tx`SELECT public.send_private_message(${convId}::uuid, 'Second unaccepted message')`;
+      });
+      await assertExpectThrow(tx, "pending requester uploading DM attachment before acceptance", async () => {
+        await tx`
+          INSERT INTO storage.objects (bucket_id, name, owner, metadata)
+          VALUES ('dm-attachments', ${`${convId}/${userA}/pre-accept.webm`}, ${userA}::uuid, '{"mimetype":"audio/webm"}'::jsonb)
+        `;
+      });
+      await assertExpectThrow(tx, "pending requester self-accepting own message request", async () => {
+        await tx`SELECT public.accept_message_request(${convId}::uuid)`;
+      });
+      await assertExpectThrow(tx, "client tampering with private_messages.status directly", async () => {
+        await tx`UPDATE public.private_messages SET status = 'read' WHERE id = ${msg.id}::uuid`;
+      });
       const [{ cnt: aMsgs }] = await tx`SELECT count(*)::int AS cnt FROM public.private_messages WHERE conversation_id = ${convId}::uuid AND id = ${msg.id}::uuid`;
       const [{ cnt: aMems }] = await tx`SELECT count(*)::int AS cnt FROM public.conversation_members WHERE conversation_id = ${convId}::uuid`;
 
       await actAs(userB);
       const [{ cnt: bMsgs }] = await tx`SELECT count(*)::int AS cnt FROM public.private_messages WHERE conversation_id = ${convId}::uuid`;
       const [{ cnt: bMems }] = await tx`SELECT count(*)::int AS cnt FROM public.conversation_members WHERE conversation_id = ${convId}::uuid`;
+      const [{ summary: bInbox }] = await tx`SELECT public.get_my_conversations_summary(20, 0) AS summary`;
+      const bConvUnread = Array.isArray(bInbox)
+        ? (bInbox.find((c) => c.id === convId)?.unread_count ?? -1)
+        : -1;
+      // Reading a pending request before acceptance must NOT emit read receipts
+      await tx`SELECT public.mark_conversation_read(${convId}::uuid)`;
+      const [msgAfterPendingRead] = await tx`SELECT status FROM public.private_messages WHERE id = ${msg.id}::uuid`;
+      if (msgAfterPendingRead?.status === "read") {
+        throw new Error("Privacy violation: read receipt emitted on unaccepted message request");
+      }
+      // Recipient accepts request -> unlocks bidirectional chat & media/voice notes
+      await tx`SELECT public.accept_message_request(${convId}::uuid)`;
+      // Verify read_receipts_enabled=false suppresses read receipt while still updating last_read_at
+      await tx`
+        INSERT INTO public.user_privacy_preferences (user_id, read_receipts_enabled)
+        VALUES (${userB}::uuid, false)
+        ON CONFLICT (user_id) DO UPDATE SET read_receipts_enabled = false
+      `;
+      await tx`SELECT public.mark_conversation_read(${convId}::uuid)`;
+      const [msgAfterDisabledReceipts] = await tx`SELECT status FROM public.private_messages WHERE id = ${msg.id}::uuid`;
+      if (msgAfterDisabledReceipts?.status === "read") {
+        throw new Error("Privacy violation: read receipt emitted while read_receipts_enabled=false");
+      }
 
       await actAs(userC);
       const [{ cnt: cMsgs }] = await tx`SELECT count(*)::int AS cnt FROM public.private_messages WHERE conversation_id = ${convId}::uuid`;
       const [{ cnt: cMems }] = await tx`SELECT count(*)::int AS cnt FROM public.conversation_members WHERE conversation_id = ${convId}::uuid`;
+      const [{ summary: cInbox }] = await tx`SELECT public.get_my_conversations_summary(20, 0) AS summary`;
+      const cConvCount = Array.isArray(cInbox)
+        ? cInbox.filter((c) => c.id === convId).length
+        : -1;
       await assertExpectThrow(tx, "outsider sending to private DM", async () => {
         await tx`SELECT public.send_private_message(${convId}::uuid, 'Blocked')`;
       });
@@ -359,17 +832,129 @@ async function runFeatureAuthTests(sql) {
         await tx`SELECT public.is_conversation_member(${convId}::uuid, ${userB}::uuid)`;
       });
 
-      if (aMsgs !== 1 || aMems !== 2 || bMsgs !== 1 || bMems !== 2 || cMsgs !== 0 || cMems !== 0) {
-        throw new Error(`DM isolation mismatch: A=${aMsgs}/${aMems}, B=${bMsgs}/${bMems}, C=${cMsgs}/${cMems}`);
+      if (aMsgs !== 1 || aMems !== 2 || bMsgs !== 1 || bMems !== 2 || bConvUnread !== 1 || cMsgs !== 0 || cMems !== 0 || cConvCount !== 0) {
+        throw new Error(`DM isolation mismatch: A=${aMsgs}/${aMems}, B=${bMsgs}/${bMems} unread=${bConvUnread}, C=${cMsgs}/${cMems} inbox=${cConvCount}`);
       }
-      results.push("Direct Messages two-account isolation: PASS (A=1/2, B=1/2, outsider C=0/0, spoofed member probe blocked)");
+      results.push("Direct Messages two-account isolation, message-request lifecycle & read-receipt privacy (0037): PASS (A=1/2, B=1/2 unread=1, outsider C=0/0, 2nd pending msg/upload blocked, read_receipts_enabled enforced)");
 
-      // 3 & 4. HUB FORUMS & INSTITUTIONAL BROADCAST PERMISSIONS TEST
+      // 2c. STAGE 1 GROUP ADMIN SELF-PROMOTION, ONLY_ADMINS_CAN_POST & PROFILE_VISIBILITY TEST (0037)
+      await actAs(userA);
+      const [{ grp_id: grpId }] = await tx`
+        SELECT public.create_group_conversation('Stage 1 Security Group', 'Admin-only test', ARRAY[${userB}::uuid], true) AS grp_id
+      `;
+      await actAs(userB);
+      await assertExpectThrow(tx, "regular group member self-promoting to admin", async () => {
+        await tx`UPDATE public.conversation_members SET role = 'admin' WHERE conversation_id = ${grpId}::uuid AND user_id = ${userB}::uuid`;
+      });
+      await assertExpectThrow(tx, "regular group member bypassing only_admins_can_post via RPC", async () => {
+        await tx`SELECT public.send_private_message(${grpId}::uuid, 'Unauthorized member message')`;
+      });
+      await assertExpectThrow(tx, "regular group member bypassing only_admins_can_post via direct INSERT", async () => {
+        await tx`INSERT INTO public.private_messages (conversation_id, sender_id, content) VALUES (${grpId}::uuid, ${userB}::uuid, 'Direct insert bypass')`;
+      });
+      // Private profile unsolicited DM & Ping visibility check
+      await tx`UPDATE public.profiles SET profile_visibility = 'private' WHERE id = ${userB}::uuid`;
+      const [privPing] = await tx`
+        INSERT INTO public.pings (user_id, category, content)
+        VALUES (${userB}::uuid, 'progress', 'Private profile Ping')
+        RETURNING id
+      `;
+      await actAs(userC);
+      const [{ cnt: cSeesPrivPing }] = await tx`SELECT count(*)::int AS cnt FROM public.pings WHERE id = ${privPing.id}::uuid`;
+      await assertExpectThrow(tx, "non-mutual starting unsolicited DM to private profile", async () => {
+        await tx`SELECT public.get_or_create_direct_conversation(${userB}::uuid)`;
+      });
+      if (cSeesPrivPing !== 0) {
+        throw new Error(`profile_visibility RLS leak: non-mutual C saw ${cSeesPrivPing} private Pings`);
+      }
+      await actAs(userB);
+      await tx`UPDATE public.profiles SET profile_visibility = 'public' WHERE id = ${userB}::uuid`;
+      results.push("Stage 1 Group & Profile Visibility hardening (0037): PASS (self-promotion blocked, only_admins_can_post enforced on RPC+INSERT, private profile Pings & unsolicited DMs blocked)");
+
+      // 2b. PRIVATE DM STORAGE BUCKET RLS & VOICE MESSAGE PREVIEW TEST (0036)
+      const voiceObjName = `${convId}/${userA}/voice-note-rls-verify.webm`;
+      await actAs(userA);
+      await tx`
+        INSERT INTO storage.objects (bucket_id, name, owner, metadata)
+        VALUES ('dm-attachments', ${voiceObjName}, ${userA}::uuid, '{"mimetype":"audio/webm","size":45123}'::jsonb)
+      `;
+      await assertExpectThrow(tx, "member uploading into another member's sender folder", async () => {
+        await tx`
+          INSERT INTO storage.objects (bucket_id, name, owner, metadata)
+          VALUES ('dm-attachments', ${`${convId}/${userB}/spoof.webm`}, ${userA}::uuid, '{"mimetype":"audio/webm"}'::jsonb)
+        `;
+      });
+      await tx`SELECT public.send_private_message(${convId}::uuid, '', ${voiceObjName}, 'audio')`;
+      const [convAfterVoice] = await tx`SELECT last_message_preview FROM public.conversations WHERE id = ${convId}::uuid`;
+
+      await actAs(userB);
+      const [{ cnt: bReadVoice }] = await tx`
+        SELECT count(*)::int AS cnt FROM storage.objects
+        WHERE bucket_id = 'dm-attachments' AND name = ${voiceObjName}
+      `;
+      const bDeletedOther = await tx`
+        DELETE FROM storage.objects
+        WHERE bucket_id = 'dm-attachments' AND name = ${voiceObjName}
+        RETURNING id
+      `;
+
+      await actAs(userC);
+      const [{ cnt: cReadVoice }] = await tx`
+        SELECT count(*)::int AS cnt FROM storage.objects
+        WHERE bucket_id = 'dm-attachments' AND name = ${voiceObjName}
+      `;
+      await assertExpectThrow(tx, "non-member uploading into private DM conversation bucket path", async () => {
+        await tx`
+          INSERT INTO storage.objects (bucket_id, name, owner, metadata)
+          VALUES ('dm-attachments', ${`${convId}/${userC}/intrusion.webm`}, ${userC}::uuid, '{"mimetype":"audio/webm"}'::jsonb)
+        `;
+      });
+
+      await actAs(null);
+      const [{ cnt: anonReadVoice }] = await tx`
+        SELECT count(*)::int AS cnt FROM storage.objects
+        WHERE bucket_id = 'dm-attachments' AND name = ${voiceObjName}
+      `;
+
+      await actAs(userA);
+      const aDeletedOwn = await tx`
+        DELETE FROM storage.objects
+        WHERE bucket_id = 'dm-attachments' AND name = ${voiceObjName}
+        RETURNING id
+      `;
+
+      if (
+        convAfterVoice?.last_message_preview !== "Voice message" ||
+        bReadVoice !== 1 ||
+        bDeletedOther.length !== 0 ||
+        cReadVoice !== 0 ||
+        anonReadVoice !== 0 ||
+        aDeletedOwn.length !== 1
+      ) {
+        throw new Error(
+          `Private DM Storage RLS mismatch: preview=${convAfterVoice?.last_message_preview}, bRead=${bReadVoice}, bDelOther=${bDeletedOther.length}, cRead=${cReadVoice}, anonRead=${anonReadVoice}, aDelOwn=${aDeletedOwn.length}`,
+        );
+      }
+      results.push("Private DM Storage RLS & Voice preview (0036): PASS (member read=1, outsider/anon=0, folder spoof/non-member upload blocked, uploader-only delete enforced, preview='Voice message')");
+
+      // 3 & 4. HUB FORUMS, THREADS/REPLIES, INSTITUTIONAL BROADCASTS & SIGNALS TEST
       await actAs(userA);
       const [{ hub_json: hubJson }] = await tx`
-        SELECT public.create_hub('Verify Coord Hub', 'verify-coord-hub-0020', 'Tag', 'Desc', '', 'community', 'public', '[]'::jsonb) AS hub_json
+        SELECT public.create_hub('Verify Coord Hub', 'verify-coord-hub-0020', 'Tag', 'Desc', '', 'university', 'public', '[]'::jsonb) AS hub_json
       `;
       const hubId = hubJson.id;
+      await tx`SELECT public.update_hub(${hubId}::uuid, 'Verify Coord Hub', 'Updated tag', 'Desc', '', 'company', 'public', '[]'::jsonb)`;
+      const [{ cnt: seededForumCnt }] = await tx`SELECT count(*)::int AS cnt FROM public.hub_forums WHERE hub_id = ${hubId}::uuid`;
+      const [generalForum] = await tx`
+        SELECT id FROM public.hub_forums WHERE hub_id = ${hubId}::uuid AND slug = 'general' LIMIT 1
+      `;
+      const [annForum] = await tx`
+        SELECT id FROM public.hub_forums WHERE hub_id = ${hubId}::uuid AND slug = 'announcements' LIMIT 1
+      `;
+      if (seededForumCnt < 3 || !generalForum || !annForum) {
+        throw new Error(`Hub default forums missing: count=${seededForumCnt}`);
+      }
+
       const [memberForum] = await tx`
         INSERT INTO public.hub_forums (hub_id, slug, name, description, forum_type, access_level, created_by)
         VALUES (${hubId}::uuid, 'members-room', 'Members Room', 'Desc', 'general', 'members', ${userA}::uuid)
@@ -391,7 +976,13 @@ async function runFeatureAuthTests(sql) {
         RETURNING id
       `;
 
-      // Non-member User C cannot view member/staff broadcasts or join staff_only forum
+      // Create Signal & post official broadcast
+      const [{ sig_json: sigJson }] = await tx`
+        SELECT public.create_signal('Verify Signal', 'verify-signal-0022', 'Tag', 'Desc', 'university', 'https://pingbydot.example') AS sig_json
+      `;
+      const sigId = sigJson.id;
+
+      // Non-member User C cannot view member/staff broadcasts, join staff_only forum, or post in Signal chat before following
       await actAs(userC);
       const [{ cnt: cBcCnt }] = await tx`SELECT count(*)::int AS cnt FROM public.hub_broadcasts WHERE hub_id = ${hubId}::uuid`;
       await assertExpectThrow(tx, "non-member joining staff_only forum", async () => {
@@ -403,10 +994,28 @@ async function runFeatureAuthTests(sql) {
       await assertExpectThrow(tx, "non-staff publishing hub broadcast", async () => {
         await tx`INSERT INTO public.hub_broadcasts (hub_id, author_id, title, content, broadcast_type, target_audience) VALUES (${hubId}::uuid, ${userC}::uuid, 'Rogue', 'Body', 'alert', 'public')`;
       });
+      await assertExpectThrow(tx, "non-follower posting in signal chat", async () => {
+        await tx`INSERT INTO public.signal_messages (signal_id, sender_id, content) VALUES (${sigId}::uuid, ${userC}::uuid, 'Unfollowed spam')`;
+      });
 
-      // Active regular member User B joins Hub: sees all_members broadcast, NOT staff broadcast
+      // Active regular member User B joins Hub & follows Signal: can post/reply in General Forum & Signal chat, NOT announcement forum or staff broadcast
       await actAs(userB);
       await tx`SELECT public.join_hub(${hubId}::uuid, NULL)`;
+      const [forumThread] = await tx`
+        INSERT INTO public.hub_forum_posts (hub_id, forum_id, author_id, title, content)
+        VALUES (${hubId}::uuid, ${generalForum.id}::uuid, ${userB}::uuid, 'Hello Forum', 'First real thread')
+        RETURNING id
+      `;
+      await tx`
+        INSERT INTO public.hub_forum_posts (hub_id, forum_id, author_id, parent_id, content)
+        VALUES (${hubId}::uuid, ${generalForum.id}::uuid, ${userB}::uuid, ${forumThread.id}::uuid, 'Thread reply')
+      `;
+      await assertExpectThrow(tx, "regular member posting to announcement-only forum", async () => {
+        await tx`INSERT INTO public.hub_forum_posts (hub_id, forum_id, author_id, content) VALUES (${hubId}::uuid, ${annForum.id}::uuid, ${userB}::uuid, 'Unauthorized post')`;
+      });
+      await tx`SELECT public.toggle_follow_signal(${sigId}::uuid)`;
+      await tx`INSERT INTO public.signal_messages (signal_id, sender_id, content) VALUES (${sigId}::uuid, ${userB}::uuid, 'Follower question in Signal chat')`;
+
       const [{ cnt: bMemBcCnt }] = await tx`SELECT count(*)::int AS cnt FROM public.hub_broadcasts WHERE id = ${bcMembers.id}::uuid`;
       const [{ cnt: bStaffBcCnt }] = await tx`SELECT count(*)::int AS cnt FROM public.hub_broadcasts WHERE id = ${bcStaff.id}::uuid`;
       await tx`SELECT public.mark_hub_broadcast_read(${bcMembers.id}::uuid)`;
@@ -417,7 +1026,7 @@ async function runFeatureAuthTests(sql) {
       if (cBcCnt !== 0 || bMemBcCnt !== 1 || bStaffBcCnt !== 0) {
         throw new Error(`Hub broadcast permissions mismatch: cBc=${cBcCnt}, bMemBc=${bMemBcCnt}, bStaffBc=${bStaffBcCnt}`);
       }
-      results.push("Hub Forums & Institutional Broadcast permissions: PASS (outsider=0, member sees all_members=1 & staff=0, staff escalation blocked)");
+      results.push("Hub Forums, Thread Replies, Institutional Broadcasts & Signal Chat permissions: PASS (real seeded forums=3+, thread+reply ok, announcement post blocked, signal follower chat ok)");
 
       // 5. DOT WALLET AUTHORIZATION TEST
       await actAs(userA);
@@ -441,6 +1050,179 @@ async function runFeatureAuthTests(sql) {
         throw new Error(`DOT Wallet check failed: start=${summary?.wallet?.balance}, end=${checkin?.wallet?.balance}, crossRead=${bReadsAWallet}/${bReadsATx}`);
       }
       results.push("DOT Wallet authorization & ledger integrity: PASS (50->60, direct writes blocked, cross-user reads=0/0, duplicate checkin rejected)");
+
+      // 6. PHASE 1 ONBOARDING & OPTIONAL PATHWAYS CHECK
+      await actAs(null);
+      await assertExpectThrow(tx, "anon calling complete_my_onboarding", async () => {
+        await tx`SELECT public.complete_my_onboarding(_skip := true)`;
+      });
+      await actAs(userC);
+      const [onboardedC] = await tx`
+        SELECT onboarding_completed_at, participation_pathways, country, interests
+        FROM public.complete_my_onboarding(
+          _display_name := 'Verify Member C',
+          _participation_pathways := ARRAY['general', 'creator']::text[],
+          _skip := false,
+          _country := 'Canada',
+          _interests := ARRAY['technology', 'creativity']::text[],
+          _mark_complete := true
+        )
+      `;
+      await actAs(userA);
+      const [skippedA] = await tx`
+        SELECT onboarding_completed_at, participation_pathways
+        FROM public.complete_my_onboarding(_skip := true)
+      `;
+      if (
+        !onboardedC?.onboarding_completed_at ||
+        (onboardedC?.participation_pathways ?? []).length !== 2 ||
+        onboardedC?.country !== "Canada" ||
+        (onboardedC?.interests ?? []).length !== 2 ||
+        !skippedA?.onboarding_completed_at ||
+        (skippedA?.participation_pathways ?? []).length !== 0
+      ) {
+        throw new Error("Onboarding RPC check failed for pathway/interest selection or skip flow");
+      }
+      results.push("Onboarding & Optional Pathways: PASS (anon blocked, pathways optional, skip supported)");
+
+      // 5. Economic Activity Measurement Integrity & Authorization (0025)
+      await actAs(userA);
+      await assertExpectThrow(tx, "client cannot fabricate transaction_completed via record_network_event", () =>
+        tx`SELECT public.record_network_event('transaction_completed', 'settlement', 'fake', 'web_app', '{}'::jsonb, '{"amount":999}'::jsonb)`,
+      );
+      await assertExpectThrow(tx, "client cannot call server-only record_verified_economic_outcome", () =>
+        tx`SELECT public.record_verified_economic_outcome('cash_subscription', ${userA}::uuid, ${userB}::uuid, 'USD', 5000, 500, 'stripe', 'pi_forged_client')`,
+      );
+      const [evId] = await tx`
+        SELECT public.record_network_event(
+          'business_lead_generated',
+          'profile',
+          ${userB}::text,
+          'ping_cta',
+          '{"utm_source":"explore"}'::jsonb,
+          '{"amount":10000,"revenue":999,"ping_category":"offer"}'::jsonb,
+          'lead_probe_0025'
+        ) AS id
+      `;
+      const [storedEv] = await tx`
+        SELECT event_category, verification_tier, metadata
+        FROM public.economic_events
+        WHERE id = ${evId.id}::uuid
+      `;
+      if (
+        storedEv?.event_category !== "lead" ||
+        storedEv?.verification_tier !== "system_observed" ||
+        "amount" in (storedEv?.metadata ?? {}) ||
+        "revenue" in (storedEv?.metadata ?? {})
+      ) {
+        throw new Error("Economic event scrubbing/classification check failed");
+      }
+      results.push("Economic Measurement Integrity: PASS (revenue fabrication blocked, sensitive metadata scrubbed)");
+
+      // 6. Optional Verification Authorization & Non-Self-Approval (0026)
+      await actAs(userA);
+      await assertExpectThrow(tx, "client cannot directly insert into account_verifications", () =>
+        tx`INSERT INTO public.account_verifications (user_id, verification_domain, pathway_type, status) VALUES (${userA}::uuid, 'identity', 'identity_standard', 'verified')`,
+      );
+      const [submittedReq] = await tx`
+        SELECT id, status FROM public.submit_verification_request('professional', 'investor', 'Test Fund', 'https://example.com', 'Optional check')
+      `;
+      if (submittedReq?.status !== "pending") {
+        throw new Error("Verification submission must always force pending status");
+      }
+      await assertExpectThrow(tx, "non-admin cannot approve own verification", () =>
+        tx`SELECT public.review_verification_request(${submittedReq.id}::uuid, 'verified', 'self-approve attempt')`,
+      );
+      results.push("Verification Authorization: PASS (optional flow pending by default, self-approval and role escalation blocked)");
+
+      // 7. Stage 2 Private Hub Attachments, Restricted Moments & Chat Retention Authorization (0038 & 0039)
+      await actAs(userA);
+      const [{ hub_json: privHubJson }] = await tx`
+        SELECT public.create_hub('Verify Private Hub', 'verify-private-hub-0038', 'Tag', 'Desc', '', 'community', 'private', '[]'::jsonb) AS hub_json
+      `;
+      const privHubId = privHubJson.id;
+      const hubObjName = `${privHubId}/${userA}/private-doc.pdf`;
+      await tx`
+        INSERT INTO storage.objects (bucket_id, name, owner, metadata)
+        VALUES ('hub-attachments', ${hubObjName}, ${userA}::uuid, '{"mimetype":"application/pdf","size":128000}'::jsonb)
+      `;
+      await actAs(userC);
+      const [{ cnt: cReadPrivHub }] = await tx`
+        SELECT count(*)::int AS cnt FROM storage.objects
+        WHERE bucket_id = 'hub-attachments' AND name = ${hubObjName}
+      `;
+      await assertExpectThrow(tx, "non-member uploading to private hub-attachments", async () => {
+        await tx`
+          INSERT INTO storage.objects (bucket_id, name, owner, metadata)
+          VALUES ('hub-attachments', ${`${privHubId}/${userC}/rogue.pdf`}, ${userC}::uuid, '{"mimetype":"application/pdf"}'::jsonb)
+        `;
+      });
+
+      // Restricted close_circle Moment storage isolation (userB is in userA's Close Circle, userC is not)
+      await actAs(userA);
+      const ccObjName = `${userA}/close_circle/self/secret-moment.webp`;
+      await tx`
+        INSERT INTO storage.objects (bucket_id, name, owner, metadata)
+        VALUES ('private-moments', ${ccObjName}, ${userA}::uuid, '{"mimetype":"image/webp"}'::jsonb)
+      `;
+      await tx`
+        INSERT INTO public.moments (author_id, media_url, media_type, caption, audience)
+        VALUES (${userA}::uuid, ${`storage://private-moments/${ccObjName}`}, 'image', 'Private CC Moment', 'close_circle')
+      `;
+      await actAs(userB);
+      const [{ cnt: bReadCcObj }] = await tx`
+        SELECT count(*)::int AS cnt FROM storage.objects
+        WHERE bucket_id = 'private-moments' AND name = ${ccObjName}
+      `;
+      await actAs(userC);
+      const [{ cnt: cReadCcObj }] = await tx`
+        SELECT count(*)::int AS cnt FROM storage.objects
+        WHERE bucket_id = 'private-moments' AND name = ${ccObjName}
+      `;
+
+      // Chat Retention entitlement ceiling enforcement (unverified user cannot bypass 7d cap)
+      await actAs(userA);
+      await assertExpectThrow(tx, "unverified user setting 30d default chat retention directly", async () => {
+        await tx`SELECT public.set_my_default_chat_retention('30d')`;
+      });
+      await tx`SELECT public.set_my_default_chat_retention('24h_after_view')`;
+      await assertExpectThrow(tx, "unverified user setting 30d conversation retention", async () => {
+        await tx`SELECT public.set_conversation_retention_policy(${convId}::uuid, '30d')`;
+      });
+
+      if (cReadPrivHub !== 0 || bReadCcObj !== 1 || cReadCcObj !== 0) {
+        throw new Error(
+          `Stage 2 Storage RLS mismatch: cReadPrivHub=${cReadPrivHub}, bReadCcObj=${bReadCcObj}, cReadCcObj=${cReadCcObj}`,
+        );
+      }
+
+      // 8. Stage 2 Phase 1 P0 Security Remediation adversarial checks (0040)
+      await actAs(userC);
+      await assertExpectThrow(tx, "attacker direct INSERT into media_assets", async () => {
+        await tx`
+          INSERT INTO public.media_assets (owner_id, media_kind, bucket, object_key, source_url, status, size_bytes)
+          VALUES (${userC}::uuid, 'image', 'media', ${`${userA}/avatars/victim.jpg`}, 'storage://media/x', 'staging', 0)
+        `;
+      });
+      await assertExpectThrow(tx, "attacker registering victim storage object via register_my_media_asset", async () => {
+        await tx`
+          SELECT public.register_my_media_asset('dm-attachments', ${voiceObjName}, 'audio', 'audio/webm', NULL, ${convId}::uuid)
+        `;
+      });
+      await actAs(userA);
+      await assertExpectThrow(tx, "member inserting victim public URL in Hub message", async () => {
+        await tx`
+          INSERT INTO public.hub_messages (hub_id, sender_id, content, media_url)
+          VALUES (${privHubId}::uuid, ${userA}::uuid, 'Spoofed media', ${`https://exlttyafomvqfwgzzjrm.supabase.co/storage/v1/object/public/media/${userB}/avatar.jpg`})
+        `;
+      });
+      await assertExpectThrow(tx, "DM sender submitting victim public media URL", async () => {
+        await tx`
+          SELECT public.send_private_message(${convId}::uuid, 'Spoofed', ${`https://exlttyafomvqfwgzzjrm.supabase.co/storage/v1/object/public/media/${userB}/avatar.jpg`}, 'image')
+        `;
+      });
+
+      results.push("Stage 2 Storage RLS, Chat Retention & Phase 1 P0 Remediation (0038/0039/0040): PASS");
 
       throw new VerificationRollbackSignal(results);
     });

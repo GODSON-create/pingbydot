@@ -1,6 +1,9 @@
 import { ArrowUpRight } from "lucide-react";
+import { useAuth } from "@/lib/auth";
+import { recordNetworkEvent } from "@/lib/economic-events";
 
 export function AriseCallout({ compact = false }: { compact?: boolean }) {
+  const { user } = useAuth();
   return (
     <aside
       className={`bg-forest grain relative overflow-hidden rounded-3xl border border-border/60 text-[#f4f2e9] ${compact ? "p-5" : "p-8 sm:p-10"}`}
@@ -27,6 +30,17 @@ export function AriseCallout({ compact = false }: { compact?: boolean }) {
           href="https://JoinArise.cv"
           target="_blank"
           rel="noopener noreferrer"
+          onClick={() => {
+            if (user) {
+              void recordNetworkEvent({
+                eventType: "business_lead_generated",
+                targetType: "external_url",
+                targetId: "arise",
+                source: "arise_callout",
+                metadata: { destination_host: "joinarise.cv" },
+              });
+            }
+          }}
           className="inline-flex h-11 shrink-0 items-center gap-2 self-start rounded-full bg-lime px-5 font-semibold text-lime-foreground transition-transform hover:-translate-y-0.5 sm:self-auto"
         >
           Visit JoinArise.cv <ArrowUpRight className="size-4" />

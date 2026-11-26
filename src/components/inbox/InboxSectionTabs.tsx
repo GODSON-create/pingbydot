@@ -76,13 +76,14 @@ export function InboxSectionTabs({
           const meta = SECTION_META[sectionKey];
           const Icon = meta.icon;
           const isActive = activeSection === sectionKey;
-          const showBadge = sectionKey === "chats" && unreadChats > 0;
+          const search = sectionKey === "chats" ? {} : { section: sectionKey };
 
           return (
             <Link
               key={sectionKey}
               to="/inbox"
-              search={sectionKey === "chats" ? {} : { section: sectionKey }}
+              search={search as any}
+              data-inbox-section={sectionKey}
               aria-current={isActive ? "page" : undefined}
               className={cn(
                 "flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold transition-all whitespace-nowrap",
@@ -93,11 +94,13 @@ export function InboxSectionTabs({
             >
               <Icon className="size-3.5 shrink-0" />
               <span>{meta.label}</span>
-              {showBadge && (
+              {sectionKey === "chats" && unreadChats > 0 && (
                 <span
                   className={cn(
-                    "inline-flex min-w-4 h-4 px-1 items-center justify-center rounded-full text-[10px] font-bold tabular-nums",
-                    isActive ? "bg-primary text-primary-foreground" : "bg-primary/20 text-primary",
+                    "inline-flex min-w-4 h-4 px-1 items-center justify-center rounded-full text-[9px] font-bold tabular-nums",
+                    isActive
+                      ? "bg-background text-foreground"
+                      : "bg-primary text-primary-foreground",
                   )}
                 >
                   {unreadChats > 99 ? "99+" : unreadChats}

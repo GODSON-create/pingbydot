@@ -24,6 +24,7 @@ import { HUB_CATEGORIES, type HubCategory, type Hub } from "@/lib/hubs";
 import { InboxSectionTabs } from "@/components/inbox/InboxSectionTabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ResolvedMomentThumb } from "@/components/media/ResolvedPrivateMedia";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { pageHead } from "@/lib/site";
@@ -39,7 +40,7 @@ export const Route = createFileRoute("/hubs")({
     pageHead({
       title: "Hubs — Group Communication on PING",
       description:
-        "Discover and join collaborative group spaces for communities, universities, companies, incubators, and cohorts on PING.",
+        "Discover and join collaborative group spaces for communities, universities, companies, incubators, and teams on PING.",
       path: "/hubs",
     }),
   component: HubsLayout,
@@ -69,8 +70,18 @@ function HubCard({
     <article className="surface-card lift relative flex flex-col justify-between rounded-3xl p-5 sm:p-6">
       <div>
         <header className="flex items-start gap-3">
-          <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-secondary text-xl font-bold">
-            {cat?.emoji ?? "🏢"}
+          <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-secondary text-xl font-bold">
+            {hub.avatar_url ? (
+              <ResolvedMomentThumb
+                mediaUrl={hub.avatar_url}
+                mediaType="image"
+                alt={hub.name}
+                className="size-full object-cover"
+                fallback={<span>{cat?.emoji ?? "🏢"}</span>}
+              />
+            ) : (
+              (cat?.emoji ?? "🏢")
+            )}
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -124,8 +135,8 @@ function HubCard({
             {(hub.member_count ?? 0).toLocaleString()} members
           </span>
           <span>·</span>
-          <span className="inline-flex items-center gap-1">
-            <MessageSquare className="size-3" /> Group Chat
+          <span className="flex items-center gap-1">
+            <MessageSquare className="size-3.5" /> Group Chat
           </span>
         </div>
       </div>
@@ -160,28 +171,34 @@ function HubCard({
   );
 }
 
-export interface HubsDirectorySectionProps {
-  embeddedInInbox?: boolean | undefined;
-  initialCategory?: string | undefined;
-  initialQuery?: string | undefined;
-}
-
 export function HubsDirectorySection({
   embeddedInInbox = false,
   initialCategory,
   initialQuery,
-}: HubsDirectorySectionProps) {
+}: {
+  embeddedInInbox?: boolean;
+  initialCategory?: string | undefined;
+  initialQuery?: string | undefined;
+}) {
   const [searchTerm, setSearchTerm] = useState(initialQuery ?? "");
-  const [selectedCatValue, setSelectedCatValue] = useState<string | undefined>(initialCategory);
+  const [selectedCat, setSelectedCat] = useState<string | null>(initialCategory ?? null);
   const deferredSearch = useDeferredValue(searchTerm);
   const { user } = useAuth();
 
   useEffect(() => {
-    setSelectedCatValue(initialCategory);
+    if (initialCategory !== undefined) {
+      setSelectedCat(initialCategory || null);
+    }
   }, [initialCategory]);
 
-  const selectedCategory = HUB_CATEGORIES.some((c) => c.value === selectedCatValue)
-    ? (selectedCatValue as HubCategory)
+  useEffect(() => {
+    if (initialQuery !== undefined) {
+      setSearchTerm(initialQuery);
+    }
+  }, [initialQuery]);
+
+  const selectedCategory = HUB_CATEGORIES.some((c) => c.value === selectedCat)
+    ? (selectedCat as HubCategory)
     : null;
 
   const {
@@ -196,37 +213,49 @@ export function HubsDirectorySection({
   const myHubIds = new Set(myHubs.map((h) => h.hub.id));
 
   return (
-    <div className="space-y-8">
-      {!embeddedInInbox && <InboxSectionTabs activeSection="hubs" />}
-
-      {/* Hubs Group Communication Hero */}
-      <div className="relative overflow-hidden rounded-[2rem] bg-hero p-6 sm:p-10 border border-border flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/15 text-primary px-3 py-1 text-xs font-bold mb-3">
-            <Users className="size-3.5" /> Group Communication
+    <section
+      aria-label="Group Communication Hubs"
+      data-hubs-group-only="true"
+      className={cn(
+        "w-full min-w-0",
+        !embeddedInInbox && "mx-auto max-w-6xl px-4 sm:px-6 py-4 sm:py-8 pb-32 sm:pb-24 overflow-x-clip",
+      )}
+    >
+      <div className="relative overflow-hidden rounded-[2rem] bg-hero p-5 sm:p-9 mb-5 sm:mb-8 border border-border">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/15 text-primary border border-primary/25 px-3 py-1 text-xs font-bold mb-3">
+              <Users className="size-3.5" /> Group Communication
+            </div>
+            <h2 className="font-display text-2xl font-extrabold tracking-tight sm:text-4xl">
+              Hubs
+            </h2>
+            <p className="mt-1.5 max-w-2xl text-xs sm:text-sm text-muted-foreground">
+              Collaborative group spaces for communities, cohorts, teams, campuses, and companies —
+              discover eligible Hubs, join discussions, share media, and coordinate together in real
+              time.
+            </p>
           </div>
-          <h2 className="font-display text-3xl font-extrabold tracking-tight sm:text-5xl">Hubs</h2>
-          <p className="mt-2 max-w-2xl text-sm text-muted-foreground sm:text-base">
-            Discover and join collaborative group spaces for communities, builder cohorts, teams,
-            schools, and organizations — with live group messaging, shared media, and member
-            coordination.
-          </p>
+          <Button
+            asChild
+            variant="hero"
+            size="sm"
+            className="rounded-full gap-1.5 shrink-0 self-start sm:self-auto"
+          >
+            <Link to="/hubs/create">
+              <Plus className="size-4" /> Create a Hub
+            </Link>
+          </Button>
         </div>
-
-        <Button asChild variant="hero" size="sm" className="rounded-full gap-1.5 shrink-0">
-          <Link to="/hubs/create">
-            <Plus className="size-4" /> Create a Hub
-          </Link>
-        </Button>
       </div>
 
       {/* Search & Category Filter */}
-      <div className="space-y-4">
+      <div className="mb-5 sm:mb-8 space-y-3 sm:space-y-4">
         <div className="relative max-w-md">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input
             type="search"
-            placeholder="Search group Hubs by name, topic, or community…"
+            placeholder="Search groups, communities, campuses, or teams…"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="h-11 rounded-full pl-10 pr-4 bg-card"
@@ -236,11 +265,11 @@ export function HubsDirectorySection({
 
         <nav
           className="flex max-w-full min-w-0 gap-2 overflow-x-auto pb-2 scrollbar-none"
-          aria-label="Filter hubs by category"
+          aria-label="Filter hubs by group type"
         >
           <button
             type="button"
-            onClick={() => setSelectedCatValue(undefined)}
+            onClick={() => setSelectedCat(null)}
             className={cn(
               "shrink-0 rounded-full border px-4 py-2 text-xs font-semibold transition-colors",
               !selectedCategory
@@ -254,7 +283,7 @@ export function HubsDirectorySection({
             <button
               key={c.value}
               type="button"
-              onClick={() => setSelectedCatValue(c.value)}
+              onClick={() => setSelectedCat(c.value)}
               className={cn(
                 "shrink-0 rounded-full border px-4 py-2 text-xs font-semibold transition-colors",
                 selectedCategory === c.value
@@ -270,11 +299,11 @@ export function HubsDirectorySection({
 
       {/* Joined Hubs */}
       {myHubs.length > 0 && !selectedCategory && !deferredSearch && (
-        <section>
-          <h3 className="font-display text-lg font-bold mb-3 flex items-center gap-2">
+        <section className="mb-8">
+          <h3 className="font-display text-base font-bold mb-3 flex items-center gap-2">
             <Building2 className="size-4 text-primary" /> Your Joined Hubs
           </h3>
-          <div className="flex gap-3 overflow-x-auto pb-2">
+          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none">
             {myHubs.map((mh) => (
               <Link
                 key={mh.hub.id}
@@ -304,8 +333,10 @@ export function HubsDirectorySection({
         </div>
       ) : error ? (
         <div className="surface-card mx-auto max-w-md rounded-3xl p-8 text-center">
-          <p className="font-display text-lg font-bold">Couldn't load Hubs</p>
-          <p className="mt-1 text-xs text-muted-foreground">Check your connection and try again.</p>
+          <p className="font-display text-lg font-bold">Couldn&apos;t load Hubs</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Check your connection and try again.
+          </p>
           <Button onClick={() => refetch()} variant="outline" className="mt-4 rounded-full">
             Retry
           </Button>
@@ -323,40 +354,46 @@ export function HubsDirectorySection({
           ))}
         </div>
       ) : (
-        <div className="surface-card mx-auto max-w-lg rounded-3xl p-10 text-center">
-          <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-lime text-lime-foreground">
-            <Users className="size-7" />
+        <div className="surface-card mx-auto max-w-lg rounded-3xl p-6 sm:p-10 text-center">
+          <div className="mx-auto flex size-12 sm:size-14 items-center justify-center rounded-2xl bg-lime text-lime-foreground">
+            <Users className="size-6 sm:size-7" />
           </div>
-          <h3 className="mt-4 font-display text-xl font-bold">
+          <h3 className="mt-3 sm:mt-4 font-display text-lg sm:text-xl font-bold">
             {deferredSearch || selectedCategory ? "No matching Hubs found" : "No public Hubs yet"}
           </h3>
-          <p className="mt-2 text-xs text-muted-foreground">
+          <p className="mt-1.5 sm:mt-2 text-xs text-muted-foreground">
             {deferredSearch || selectedCategory
               ? "Try clearing your search or selecting another group category."
-              : "Create a group Hub to collaborate and chat with your community in real time."}
+              : "Create a group Hub for your community, team, or organization to chat and share media together."}
           </p>
-          <Button asChild variant="hero" className="mt-5 rounded-full">
+          <Button asChild variant="hero" className="mt-4 sm:mt-5 rounded-full">
             <Link to="/hubs/create">Create a Hub</Link>
           </Button>
         </div>
       )}
-    </div>
+    </section>
   );
 }
 
 function HubsDirectoryRoutePage() {
-  const { category: catParam, q: qParam, view } = Route.useSearch();
+  const { category, q, view } = Route.useSearch();
   const navigate = useNavigate();
 
+  // Preserve compatibility for legacy /hubs?view=moments links without mixing Moments into Hubs
   useEffect(() => {
     if (view === "moments") {
       navigate({ to: "/explore", search: { filter: "moments" }, replace: true });
     }
   }, [view, navigate]);
 
+  if (view === "moments") {
+    return null;
+  }
+
   return (
-    <div className="mx-auto max-w-6xl w-full min-w-0 px-4 sm:px-6 py-6 pb-24 overflow-x-clip">
-      <HubsDirectorySection initialCategory={catParam} initialQuery={qParam} />
+    <div className="mx-auto max-w-6xl w-full min-w-0 px-4 sm:px-6 py-4 sm:py-8 pb-32 sm:pb-24 space-y-5 overflow-x-clip">
+      <InboxSectionTabs activeSection="hubs" />
+      <HubsDirectorySection embeddedInInbox initialCategory={category} initialQuery={q} />
     </div>
   );
 }
