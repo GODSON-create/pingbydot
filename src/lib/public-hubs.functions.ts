@@ -6,8 +6,14 @@ import { HUB_PAGE_SIZE, HUB_SELECT } from "@/lib/hubs";
 import { PUBLIC_PING_SELECT } from "@/lib/public-pings.functions";
 
 function publicClient() {
-  const url = process.env["SUPABASE_URL"];
-  const key = process.env["SUPABASE_PUBLISHABLE_KEY"];
+  const url =
+    process.env["SUPABASE_URL"] ||
+    process.env["VITE_SUPABASE_URL"] ||
+    import.meta.env["VITE_SUPABASE_URL"];
+  const key =
+    process.env["SUPABASE_PUBLISHABLE_KEY"] ||
+    process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ||
+    import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"];
   if (!url || !key) throw new Error("Hubs are temporarily unavailable.");
   return createClient<Database>(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },

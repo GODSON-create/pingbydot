@@ -18,8 +18,15 @@ export const Route = createFileRoute("/sitemap.xml")({
         const entries: SitemapEntry[] = sitemapStaticPaths(router).map((path) => ({ path }));
 
         const { createClient } = await import("@supabase/supabase-js");
-        const key = process.env["SUPABASE_PUBLISHABLE_KEY"]!;
-        const supabase = createClient(process.env["SUPABASE_URL"]!, key, {
+        const url =
+          process.env["SUPABASE_URL"] ||
+          process.env["VITE_SUPABASE_URL"] ||
+          import.meta.env["VITE_SUPABASE_URL"]!;
+        const key =
+          process.env["SUPABASE_PUBLISHABLE_KEY"] ||
+          process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ||
+          import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"]!;
+        const supabase = createClient(url, key, {
           auth: { persistSession: false, autoRefreshToken: false },
           global: {
             fetch: (input, init) => {

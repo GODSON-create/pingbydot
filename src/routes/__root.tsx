@@ -152,7 +152,7 @@ function RootComponent() {
     initializeNativeApp((path) => navigate({ to: path as any }));
   }, [navigate]);
   const { queryClient } = Route.useRouteContext();
-  const { pathname } = useLocation();
+  const { pathname, href = "" } = useLocation();
   const { helpOpen, setHelpOpen } = useKeyboardShortcuts();
   return (
     <QueryClientProvider client={queryClient}>
@@ -179,8 +179,8 @@ function RootComponent() {
               {!(
                 pathname.startsWith("/messages") ||
                 (pathname.startsWith("/inbox") &&
-                  !location.href.includes("section=hubs") &&
-                  !location.href.includes("section=signals"))
+                  !href.includes("section=hubs") &&
+                  !href.includes("section=signals"))
               ) && (
                 <div className="pb-24 lg:pb-0">
                   <SiteFooter />

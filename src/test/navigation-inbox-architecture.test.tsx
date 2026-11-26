@@ -52,7 +52,7 @@ vi.mock("@tanstack/react-router", () => ({
       </a>
     );
   },
-  useLocation: () => ({ pathname: mockPathname, searchStr: "" }),
+  useLocation: () => ({ pathname: mockPathname, href: mockPathname, searchStr: "" }),
   useNavigate: () => vi.fn(),
   useChildMatches: () => [],
   Outlet: () => <div data-testid="route-outlet" />,
