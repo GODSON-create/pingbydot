@@ -25,6 +25,7 @@ vi.mock("@tanstack/react-router", async () => {
       useSearch: () => ({ tab: "foryou" }),
       useLoaderData: () => [],
     }),
+    useNavigate: () => vi.fn(),
     Link: ({
       children,
       to,
@@ -60,11 +61,40 @@ vi.mock("@/integrations/supabase/client", () => ({
       signInWithOAuth: vi.fn(),
     },
     rpc: vi.fn(),
+    from: () => ({
+      select: vi.fn().mockReturnThis(),
+      neq: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      or: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+    }),
   },
 }));
 
 vi.mock("@/components/moments/MomentsTray", () => ({
   MomentsTray: () => <div data-testid="moments-tray">Moments Tray</div>,
+}));
+
+vi.mock("@/components/moments/DiscoverableMomentsFeed", () => ({
+  DiscoverableMomentsFeed: () => <div data-testid="discoverable-moments-feed" />,
+}));
+
+vi.mock("@/components/spotlight/SpotlightFeedStrip", () => ({
+  SpotlightFeedStrip: () => null,
+}));
+
+vi.mock("@/lib/signals", () => ({
+  signalsQuery: () => ({ queryKey: ["signals"], queryFn: async () => [] }),
+}));
+
+vi.mock("@/lib/mutes", () => ({
+  mutedUsersQuery: () => ({ queryKey: ["muted-users"], queryFn: async () => [] }),
+}));
+
+vi.mock("@/lib/social", () => ({
+  followedTopicsQuery: () => ({ queryKey: ["followed-topics"], queryFn: async () => [] }),
+  useToggleFollowTopic: () => ({ mutate: vi.fn() }),
 }));
 
 vi.mock("@/components/AriseCallout", () => ({
@@ -96,6 +126,7 @@ vi.mock("@/lib/hub-queries", () => ({
 vi.mock("@/lib/messages", () => ({
   userConversationsQuery: () => ({ queryKey: ["conversations"], queryFn: async () => [] }),
   blockedUsersQuery: () => ({ queryKey: ["blocked-users"], queryFn: async () => [] }),
+  useGetOrCreateDirectConversation: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 const sonnerPropsSpy = vi.fn();
@@ -207,15 +238,15 @@ describe("Phase 1 QA Remediations", () => {
     });
     expect(screen.queryByTestId("moments-tray")).toBeNull();
 
-    // 3. Skipping welcome reveals Home feed immediately
+    // 3. Skipping welcome reveals Explore discovery home immediately
     fireEvent.click(screen.getByRole("button", { name: /^Skip$/i }));
     await waitFor(() => {
       expect(screen.getByTestId("moments-tray")).toBeTruthy();
-      expect(screen.getByText("For You")).toBeTruthy();
+      expect(screen.getByRole("heading", { name: /^Explore$/i })).toBeTruthy();
     });
     view.unmount();
 
-    // 4. Returning authenticated user goes directly into Home feed even with fresh storage
+    // 4. Returning authenticated user goes directly into Explore discovery home even with fresh storage
     window.localStorage.clear();
     authState.user = { id: "user-123" };
     authState.profile = { id: "user-123", username: "alex", display_name: "Alex" };
@@ -227,7 +258,7 @@ describe("Phase 1 QA Remediations", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("moments-tray")).toBeTruthy();
-      expect(screen.getByText(/Hey Alex, what's new\?/i)).toBeTruthy();
+      expect(screen.getByRole("heading", { name: /^Explore$/i })).toBeTruthy();
     });
     expect(screen.queryByText(/Slide 1 of 3/i)).toBeNull();
   }, 30000);

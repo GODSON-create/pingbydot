@@ -200,15 +200,21 @@ describe("Phase 9: Full Acceptance Tests (16 Independent Criteria)", () => {
     expect(isAuthorizedPublisher(user3.id)).toBe(false);
   });
 
-  it("11. The Home page surfaces real Hubs and Signals", () => {
+  it("11. The landing Explore discovery home surfaces real Hubs, Signals, and Moments", () => {
     const indexPath = path.resolve(__dirname, "../routes/index.tsx");
     const indexSource = fs.readFileSync(indexPath, "utf8");
+    const exploreViewPath = path.resolve(
+      __dirname,
+      "../components/explore/ExploreDiscoveryView.tsx",
+    );
+    const exploreViewSource = fs.readFileSync(exploreViewPath, "utf8");
 
     // Real Supabase queries
     expect(indexSource).toContain("feedQuery");
-    expect(indexSource).toContain("MomentsTray");
-    expect(indexSource).toContain("/hubs");
-    expect(indexSource).toContain("/signals");
+    expect(indexSource).toContain("ExploreDiscoveryView");
+    expect(exploreViewSource).toContain("MomentsTray");
+    expect(exploreViewSource).toContain("/hubs");
+    expect(exploreViewSource).toContain("/signals");
   });
 
   it("12. Light and Dark themes remain readable (WCAG AAA/AA)", () => {

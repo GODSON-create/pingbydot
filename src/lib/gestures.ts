@@ -1,5 +1,5 @@
 /** Pure gesture rules, kept separate from the DOM so boundaries are testable. */
-export const TOP_LEVEL_PATHS = ["/", "/explore"] as const;
+export const TOP_LEVEL_PATHS = ["/explore", "/clips"] as const;
 
 /** Native back/forward edge gestures (iOS Safari, Android) live in this outer strip; we never start there. */
 export const SYSTEM_EDGE_PX = 20;
@@ -18,8 +18,12 @@ export type SwipeInput = {
 };
 export type SwipeResult = "next" | "prev" | "back" | null;
 
+function canonicalTopLevelPath(pathname: string): string {
+  return pathname === "/" ? "/explore" : pathname;
+}
+
 export const isTopLevel = (pathname: string) =>
-  (TOP_LEVEL_PATHS as readonly string[]).includes(pathname);
+  (TOP_LEVEL_PATHS as readonly string[]).includes(canonicalTopLevelPath(pathname));
 
 export function classifySwipe({ startX, dx, dy, dt, width, pathname }: SwipeInput): SwipeResult {
   if (dt > SWIPE_MAX_MS) return null;
@@ -31,7 +35,7 @@ export function classifySwipe({ startX, dx, dy, dt, width, pathname }: SwipeInpu
 }
 
 export function neighbourPath(pathname: string, dir: "next" | "prev"): string | null {
-  const i = (TOP_LEVEL_PATHS as readonly string[]).indexOf(pathname);
+  const i = (TOP_LEVEL_PATHS as readonly string[]).indexOf(canonicalTopLevelPath(pathname));
   if (i < 0) return null;
   const j = dir === "next" ? i + 1 : i - 1;
   return TOP_LEVEL_PATHS[j] ?? null;

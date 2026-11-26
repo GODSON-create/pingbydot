@@ -25,28 +25,33 @@ describe("Phase 1 Master Programme — Navigation, Reliability, Account Controls
     window.sessionStorage.clear();
   });
 
-  it("1. enforces the unified five-destination navigation (HOME | EXPLORE | CREATE | INBOX | PROFILE) across desktop, tablet, and mobile", () => {
+  it("1. enforces the unified five-destination navigation (EXPLORE | CLIPS | CREATE | INBOX | PROFILE) across desktop, tablet, and mobile", () => {
     const bottomNav = readRel("src/components/layout/BottomNav.tsx");
-    expect(bottomNav).toContain("<span>Home</span>");
+    expect(bottomNav).not.toContain("<span>Home</span>");
     expect(bottomNav).toContain("<span>Explore</span>");
+    expect(bottomNav).toContain("<span>Clips</span>");
     expect(bottomNav).toContain(">Create</span>");
     expect(bottomNav).toContain("<span>Inbox</span>");
     expect(bottomNav).toContain("<span>Profile</span>");
 
     const desktopSidebar = readRel("src/components/layout/DesktopSidebar.tsx");
-    expect(desktopSidebar).toContain('label: "Home"');
+    expect(desktopSidebar).not.toContain('label: "Home"');
     expect(desktopSidebar).toContain('label: "Explore"');
+    expect(desktopSidebar).toContain('label: "Clips"');
     expect(desktopSidebar).toContain('label: "Inbox"');
     expect(desktopSidebar).toContain('label: "Profile"');
     expect(desktopSidebar).toContain("Create");
 
     const siteHeader = readRel("src/components/layout/SiteHeader.tsx");
+    expect(siteHeader).toContain("Explore");
+    expect(siteHeader).toContain("Clips");
     expect(siteHeader).toContain("Inbox");
     expect(siteHeader).toMatch(/>\s*Profile\s*</);
 
     const createModal = readRel("src/components/layout/CreateStackModal.tsx");
     expect(createModal).toContain("Create a Ping");
     expect(createModal).toContain("Create a Moment");
+    expect(createModal).toContain("Publish a Clip");
     expect(createModal).toContain("Create a Signal");
     expect(createModal).toContain("Create a Hub");
     expect(createModal).toContain("Go Live");

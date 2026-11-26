@@ -1,7 +1,6 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import {
   Bell,
-  Home,
   Compass,
   Building2,
   Inbox,
@@ -47,7 +46,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useNotificationsState, useSignOut } from "./SiteHeader";
-import { isInboxPath } from "./BottomNav";
+import { isClipsPath, isExplorePath, isInboxPath } from "./BottomNav";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -66,6 +65,8 @@ export function DesktopSidebar() {
   const signOut = useSignOut();
 
   const { pathname, searchStr } = location;
+  const inExplore = isExplorePath(pathname);
+  const inClips = isClipsPath(pathname);
   const inInbox = isInboxPath(pathname);
   const inChatWorkspace =
     pathname.startsWith("/messages") ||
@@ -108,12 +109,11 @@ export function DesktopSidebar() {
     params?: { username: string };
     search?: Record<string, string>;
     label: string;
-    icon: typeof Home;
-    exact?: boolean;
+    icon: typeof Compass;
     badge?: number;
   }> = [
-    { to: "/", label: "Home", icon: Home, exact: true },
     { to: "/explore", label: "Explore", icon: Compass },
+    { to: "/clips", label: "Clips", icon: Clapperboard },
     {
       to: "/inbox",
       search: {},
@@ -179,11 +179,14 @@ export function DesktopSidebar() {
           <nav className="mt-7 space-y-1" aria-label="Desktop Main Navigation">
             {primaryItems.map((item) => {
               const targetPath = item.params ? `/@${item.params.username}` : item.to;
-              const isActive = item.exact
-                ? pathname === targetPath
-                : item.to === "/inbox"
-                  ? inInbox
-                  : pathname === targetPath || pathname.startsWith(`${targetPath}/`);
+              const isActive =
+                item.to === "/explore"
+                  ? inExplore
+                  : item.to === "/clips"
+                    ? inClips
+                    : item.to === "/inbox"
+                      ? inInbox
+                      : pathname === targetPath || pathname.startsWith(`${targetPath}/`);
               const Icon = item.icon;
 
               return (
@@ -377,11 +380,6 @@ export function DesktopSidebar() {
                 <DropdownMenuItem asChild className="rounded-xl">
                   <Link to="/spotlight" onClick={closeOverlays} className="flex items-center gap-2">
                     <Flame className="size-4 text-amber-500" /> Ping Spotlight
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild className="rounded-xl">
-                  <Link to="/clips" onClick={closeOverlays} className="flex items-center gap-2">
-                    <Clapperboard className="size-4 text-primary" /> Ping Clips
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild className="rounded-xl">

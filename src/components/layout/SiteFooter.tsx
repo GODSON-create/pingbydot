@@ -21,7 +21,10 @@ export function SiteFooter() {
         <nav className="flex flex-col gap-2 text-sm" aria-label="Product">
           <span className="font-display font-bold">Product</span>
           <Link to="/explore" className="text-muted-foreground hover:text-foreground">
-            Explore Pings
+            Explore
+          </Link>
+          <Link to="/clips" className="text-muted-foreground hover:text-foreground">
+            Clips
           </Link>
           <Link to="/inbox" search={{}} className="text-muted-foreground hover:text-foreground">
             Inbox

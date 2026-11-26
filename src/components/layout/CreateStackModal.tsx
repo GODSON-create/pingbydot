@@ -11,6 +11,7 @@ import {
 import { useAuth } from "@/lib/auth";
 import { PingMark } from "@/components/BrandLogo";
 import { MomentComposer } from "@/components/moments/MomentComposer";
+import { ClipComposerDialog } from "@/components/clips/ClipComposerDialog";
 import { GoLiveDialog } from "@/components/live/GoLiveDialog";
 
 interface CreateStackModalProps {
@@ -23,11 +24,13 @@ export function CreateStackModal({ open, onOpenChange }: CreateStackModalProps) 
   const navigate = useNavigate();
   const location = useLocation();
   const [momentOpen, setMomentOpen] = useState(false);
+  const [clipOpen, setClipOpen] = useState(false);
   const [liveOpen, setLiveOpen] = useState(false);
 
   // Close secondary modals immediately whenever the user navigates.
   useEffect(() => {
     setMomentOpen(false);
+    setClipOpen(false);
     setLiveOpen(false);
   }, [location.pathname, location.searchStr]);
 
@@ -118,7 +121,7 @@ export function CreateStackModal({ open, onOpenChange }: CreateStackModalProps) 
               onClick={() =>
                 requireAuthOrRun("/clips", () => {
                   onOpenChange(false);
-                  navigate({ to: "/clips" });
+                  setClipOpen(true);
                 })
               }
               className="group relative flex w-full items-start gap-4 rounded-3xl border border-border bg-secondary/45 p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/60 hover:bg-secondary/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -282,6 +285,11 @@ export function CreateStackModal({ open, onOpenChange }: CreateStackModalProps) 
       </Dialog>
 
       <MomentComposer open={momentOpen} onOpenChange={setMomentOpen} />
+      <ClipComposerDialog
+        open={clipOpen}
+        onOpenChange={setClipOpen}
+        navigateToClipOnSuccess
+      />
       <GoLiveDialog open={liveOpen} onOpenChange={setLiveOpen} />
     </>
   );
