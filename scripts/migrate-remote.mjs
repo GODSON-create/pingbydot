@@ -819,7 +819,7 @@ async function runFeatureAuthTests(sql) {
       await actAs(userA);
       await tx`
         INSERT INTO storage.objects (bucket_id, name, owner, metadata)
-        VALUES ('dm-attachments', ${voiceObjName}, ${userA}::uuid, '{"mimetype":"audio/webm"}'::jsonb)
+        VALUES ('dm-attachments', ${voiceObjName}, ${userA}::uuid, '{"mimetype":"audio/webm","size":45123}'::jsonb)
       `;
       await assertExpectThrow(tx, "member uploading into another member's sender folder", async () => {
         await tx`
@@ -1087,7 +1087,7 @@ async function runFeatureAuthTests(sql) {
       const hubObjName = `${privHubId}/${userA}/private-doc.pdf`;
       await tx`
         INSERT INTO storage.objects (bucket_id, name, owner, metadata)
-        VALUES ('hub-attachments', ${hubObjName}, ${userA}::uuid, '{"mimetype":"application/pdf"}'::jsonb)
+        VALUES ('hub-attachments', ${hubObjName}, ${userA}::uuid, '{"mimetype":"application/pdf","size":128000}'::jsonb)
       `;
       await actAs(userC);
       const [{ cnt: cReadPrivHub }] = await tx`
@@ -1138,7 +1138,34 @@ async function runFeatureAuthTests(sql) {
           `Stage 2 Storage RLS mismatch: cReadPrivHub=${cReadPrivHub}, bReadCcObj=${bReadCcObj}, cReadCcObj=${cReadCcObj}`,
         );
       }
-      results.push("Stage 2 Storage RLS & Chat Retention (0038/0039): PASS (hub-attachments & private-moments isolated, unverified retention cap enforced)");
+
+      // 8. Stage 2 Phase 1 P0 Security Remediation adversarial checks (0040)
+      await actAs(userC);
+      await assertExpectThrow(tx, "attacker direct INSERT into media_assets", async () => {
+        await tx`
+          INSERT INTO public.media_assets (owner_id, media_kind, bucket, object_key, source_url, status, size_bytes)
+          VALUES (${userC}::uuid, 'image', 'media', ${`${userA}/avatars/victim.jpg`}, 'storage://media/x', 'staging', 0)
+        `;
+      });
+      await assertExpectThrow(tx, "attacker registering victim storage object via register_my_media_asset", async () => {
+        await tx`
+          SELECT public.register_my_media_asset('dm-attachments', ${voiceObjName}, 'audio', 'audio/webm', NULL, ${convId}::uuid)
+        `;
+      });
+      await actAs(userA);
+      await assertExpectThrow(tx, "member inserting victim public URL in Hub message", async () => {
+        await tx`
+          INSERT INTO public.hub_messages (hub_id, sender_id, content, media_url)
+          VALUES (${privHubId}::uuid, ${userA}::uuid, 'Spoofed media', ${`https://exlttyafomvqfwgzzjrm.supabase.co/storage/v1/object/public/media/${userB}/avatar.jpg`})
+        `;
+      });
+      await assertExpectThrow(tx, "DM sender submitting victim public media URL", async () => {
+        await tx`
+          SELECT public.send_private_message(${convId}::uuid, 'Spoofed', ${`https://exlttyafomvqfwgzzjrm.supabase.co/storage/v1/object/public/media/${userB}/avatar.jpg`}, 'image')
+        `;
+      });
+
+      results.push("Stage 2 Storage RLS, Chat Retention & Phase 1 P0 Remediation (0038/0039/0040): PASS");
 
       throw new VerificationRollbackSignal(results);
     });

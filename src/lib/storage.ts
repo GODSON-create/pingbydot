@@ -336,9 +336,14 @@ async function uploadToSupabaseBucket(
 }
 
 /**
- * Best-effort registration into `public.media_assets` so retention quotas, orphan
- * cleanup, and storage observability have authoritative byte sizes without blocking
- * uploads on environments where migration 0038 is not yet deployed.
+ * Registers uploaded media via the server-authorized `register_my_media_asset` RPC.
+ *
+ * Security invariants (Phase 1 — Migration 0040):
+ * - NEVER inserts directly into `public.media_assets`.
+ * - NEVER sends client-supplied `size_bytes`, `provider`, `status`, or `derivative_keys`
+ *   (all derived authoritatively server-side from `storage.objects.metadata`).
+ * - Awaited before upload helpers return so upload-to-message handoff is race-safe;
+ *   gracefully no-ops if migration 0040 is not yet deployed on an older environment.
  */
 export async function recordMediaAssetMetadata(params: {
   ownerId: string;
@@ -354,33 +359,31 @@ export async function recordMediaAssetMetadata(params: {
   hubId?: string;
   momentId?: string;
 }): Promise<void> {
+  // R2 metadata is registered strictly server-side via service_role (`register_server_media_asset`)
+  if (params.provider === "cloudflare_r2") return;
+
   try {
-    const fromFn = (supabase as unknown as { from?: unknown }).from;
-    if (typeof fromFn !== "function") return;
-    const sha256 = await computeFileSha256(params.file);
+    const rpcFn = (supabase as unknown as { rpc?: unknown }).rpc;
+    if (typeof rpcFn !== "function") return;
+    const sha256 =
+      params.file.size <= 10 * 1024 * 1024 ? await computeFileSha256(params.file) : null;
     const kind = detectMediaKind({ type: params.file.type, name: params.fileName });
     const mime =
       resolveNormalizedMime({ type: params.file.type, name: params.fileName }) ||
       "application/octet-stream";
 
-    await (supabase as any).from("media_assets").insert({
-      owner_id: params.ownerId,
-      media_kind: kind,
-      provider: params.provider,
-      bucket: params.bucket,
-      object_key: params.objectKey,
-      visibility: params.visibility,
-      source_url: params.sourceUrl,
-      mime_type: mime,
-      content_sha256: sha256,
-      size_bytes: params.file.size,
-      status: params.status ?? "staging",
-      conversation_id: params.conversationId ?? null,
-      hub_id: params.hubId ?? null,
-      moment_id: params.momentId ?? null,
+    await (supabase as any).rpc("register_my_media_asset", {
+      p_bucket: params.bucket,
+      p_object_key: params.objectKey,
+      p_media_kind: kind,
+      p_mime_type: mime,
+      p_content_sha256: sha256,
+      p_conversation_id: params.conversationId ?? null,
+      p_hub_id: params.hubId ?? null,
+      p_moment_id: params.momentId ?? null,
     });
   } catch {
-    // Non-blocking: preserves full functionality before migration 0038 is applied remotely
+    // Non-blocking fallback: preserves full functionality before migration 0040 is deployed remotely
   }
 }
 
@@ -567,7 +570,7 @@ export async function uploadUserMedia(
   });
 
   if (options.ownerId) {
-    void recordMediaAssetMetadata({
+    await recordMediaAssetMetadata({
       ownerId: options.ownerId,
       provider: result.provider === "cloudflare_r2" ? "cloudflare_r2" : "supabase_storage",
       bucket: MEDIA_BUCKET,
@@ -642,7 +645,7 @@ export async function uploadPrivateDmMedia(
   });
 
   if (options.ownerId) {
-    void recordMediaAssetMetadata({
+    await recordMediaAssetMetadata({
       ownerId: options.ownerId,
       provider: result.provider === "cloudflare_r2" ? "cloudflare_r2" : "supabase_storage",
       bucket: DM_MEDIA_BUCKET,
@@ -699,7 +702,7 @@ export async function uploadPrivateHubMedia(
     ...(options.onProgress ? { onProgress: options.onProgress } : {}),
   });
 
-  void recordMediaAssetMetadata({
+  await recordMediaAssetMetadata({
     ownerId: senderUserId,
     provider: result.provider === "cloudflare_r2" ? "cloudflare_r2" : "supabase_storage",
     bucket: HUB_MEDIA_BUCKET,
@@ -755,7 +758,7 @@ export async function uploadPrivateMomentMedia(
     ...(options.onProgress ? { onProgress: options.onProgress } : {}),
   });
 
-  void recordMediaAssetMetadata({
+  await recordMediaAssetMetadata({
     ownerId: authorId,
     provider: result.provider === "cloudflare_r2" ? "cloudflare_r2" : "supabase_storage",
     bucket: PRIVATE_MOMENTS_BUCKET,

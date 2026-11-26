@@ -58,6 +58,44 @@ export interface ChatRetentionSweepOptions {
   orphanOlderThanHours?: number;
 }
 
+const ALLOWED_DELETION_BUCKETS = new Set<string>([
+  "media",
+  "dm-attachments",
+  "hub-attachments",
+  "private-moments",
+]);
+
+/**
+ * Defense-in-depth validation inside the deletion worker so invalid bucket names,
+ * path traversals, encoded traversals, or external URLs can never reach storage APIs.
+ */
+export function isSafeDeletionTarget(bucket: string, objectKey: string): boolean {
+  if (!ALLOWED_DELETION_BUCKETS.has(bucket)) return false;
+  if (!objectKey || objectKey.trim() !== objectKey) return false;
+  if (objectKey.length < 3 || objectKey.length > 360) return false;
+  if (
+    /^[a-z][a-z0-9+.-]*:/i.test(objectKey) ||
+    objectKey.startsWith("/") ||
+    objectKey.endsWith("/") ||
+    objectKey.includes("//") ||
+    objectKey.includes("\\") ||
+    objectKey.includes("..") ||
+    objectKey.includes("?") ||
+    objectKey.includes("#") ||
+    /%2e|%2f|%5c|%00/i.test(objectKey) ||
+    // eslint-disable-next-line no-control-regex
+    /[\s\x00-\x1f\x7f]/.test(objectKey)
+  ) {
+    return false;
+  }
+
+  const parts = objectKey.split("/");
+  if (parts.some((seg) => !seg || seg === "." || seg === "..")) return false;
+  if (bucket === "dm-attachments" || bucket === "hub-attachments") return parts.length >= 3;
+  if (bucket === "private-moments") return parts.length >= 4;
+  return parts.length >= 2;
+}
+
 /**
  * Executes one bounded, idempotent scheduled retention + deletion sweep.
  */
@@ -95,9 +133,24 @@ export async function runChatRetentionSweep(
   // 3. Claim pending & retryable storage deletion jobs and delete primary + derivative objects
   const jobs = await deps.claimDeletionJobs(deletionBatchSize);
   for (const job of jobs) {
-    const allKeys = Array.from(
-      new Set([job.object_key, ...(job.derivative_keys ?? [])].filter(Boolean)),
+    if (!isSafeDeletionTarget(job.bucket, job.object_key)) {
+      const errMsg = `Rejected unsafe deletion target: ${job.bucket}/${job.object_key}`;
+      await deps.completeDeletionJob(job.id, false, errMsg);
+      failedObjects += 1;
+      errors.push(errMsg);
+      continue;
+    }
+
+    const parts = job.object_key.split("/");
+    const requiredPrefix =
+      job.bucket === "dm-attachments" || job.bucket === "hub-attachments"
+        ? `${parts[0]}/${parts[1]}/`
+        : `${parts[0]}/`;
+
+    const safeDerivatives = (job.derivative_keys ?? []).filter(
+      (dk) => isSafeDeletionTarget(job.bucket, dk) && dk.startsWith(requiredPrefix),
     );
+    const allKeys = Array.from(new Set([job.object_key, ...safeDerivatives].filter(Boolean)));
     try {
       const del = await deps.deleteStorageKeys(job.provider, job.bucket, allKeys);
       if (del.ok) {

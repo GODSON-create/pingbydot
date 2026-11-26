@@ -228,6 +228,33 @@ pass(
   `Stage 2 (0038 & 0039) storage & chat retention markers verified (${required0038Markers.length + required0039Markers.length}/${required0038Markers.length + required0039Markers.length})`,
 );
 
+// 5. Stage 2 Phase 1 P0 Security Remediation (0040) checks
+const sql0040 = readMig("0040_stage2_phase1_security_remediation.sql");
+const required0040Markers = [
+  "CREATE OR REPLACE FUNCTION public.is_allowed_storage_bucket(",
+  "CREATE OR REPLACE FUNCTION public.validate_storage_object_scope(",
+  "CREATE OR REPLACE FUNCTION public.lookup_authoritative_storage_object(",
+  "REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.media_assets FROM PUBLIC, anon, authenticated;",
+  "CREATE OR REPLACE FUNCTION public.guard_media_assets_write()",
+  "CREATE OR REPLACE FUNCTION public.is_storage_object_actively_referenced(",
+  "CREATE OR REPLACE FUNCTION public.register_my_media_asset(",
+  "CREATE OR REPLACE FUNCTION public.register_server_media_asset(",
+  "CREATE OR REPLACE FUNCTION public.guard_hub_message_write()",
+  "CREATE OR REPLACE FUNCTION public.mark_hub_message_media_ready()",
+  "CREATE OR REPLACE FUNCTION public.mark_moment_media_ready()",
+  "pg_advisory_xact_lock(hashtextextended('ping_save_quota:' || v_caller::text, 0))",
+  "Aborted: storage object is actively referenced by live content",
+  "storage.foldername(storage.objects.name)",
+  "CREATE OR REPLACE FUNCTION public.is_storage_object_pending_deletion(",
+];
+
+for (const marker of required0040Markers) {
+  if (!sql0040.includes(marker)) {
+    fail(`0040 missing required Phase 1 security remediation marker: ${marker}`);
+  }
+}
+pass(`Stage 2 Phase 1 (0040) P0 security remediation markers verified (${required0040Markers.length}/${required0040Markers.length})`);
+
 for (const line of checks) {
   console.log(`  PASS: ${line}`);
 }
