@@ -548,7 +548,7 @@ describe("Phase 1 Workstream 3: Core Network Reliability", () => {
         return { data: [], error: null };
       };
 
-      renderWithApp(<MessagesWorkspace basePath="/signals" conversationId="conv-missing-2" />);
+      renderWithApp(<MessagesWorkspace basePath="/inbox" conversationId="conv-missing-2" />);
       await waitFor(() => {
         expect(screen.getByText("Conversation unavailable")).toBeInTheDocument();
         expect(screen.getByRole("button", { name: "Back to inbox" })).toBeInTheDocument();

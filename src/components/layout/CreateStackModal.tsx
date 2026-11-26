@@ -162,7 +162,7 @@ export function CreateStackModal({ open, onOpenChange }: CreateStackModalProps) 
                   <ArrowUpRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-foreground" />
                 </div>
                 <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                  Launch a structured broadcast or opportunity channel.
+                  Establish an official institutional broadcast channel.
                 </p>
               </div>
             </button>
@@ -247,7 +247,7 @@ export function CreateStackModal({ open, onOpenChange }: CreateStackModalProps) 
                   <ArrowUpRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-foreground" />
                 </div>
                 <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                  Build a community, forum, or collaborative space.
+                  Start a collaborative group communication space.
                 </p>
               </div>
             </button>

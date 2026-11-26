@@ -4,7 +4,7 @@ import path from "node:path";
 import { UPGRADE_TIERS, canClaimDailyCheckin } from "@/lib/economy";
 import { buildDailySeries } from "@/lib/analytics";
 import { INTENT_FORMATS, parseStructuredPing, serializeStructuredPing } from "@/lib/validation";
-import { isCommunityPath } from "@/components/layout/BottomNav";
+import { isInboxPath } from "@/components/layout/BottomNav";
 
 const ROOT = path.resolve(__dirname, "../..");
 const readRel = (rel: string) => fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -71,26 +71,24 @@ describe("PING Human Coordination Redesign, Economy, and Navigation Architecture
     expect(parsed.desiredOutcome).toBe("Ship v1 prototype in Q2");
   });
 
-  it("enforces 5 primary navigation items (Home, Explore, Create, Hubs, Inbox) and 4 contextual Community navigation items", () => {
-    expect(isCommunityPath("/")).toBe(false);
-    expect(isCommunityPath("/explore")).toBe(false);
-    expect(isCommunityPath("/messages")).toBe(false);
-    expect(isCommunityPath("/hubs")).toBe(true);
-    expect(isCommunityPath("/hubs/stanford-ai")).toBe(true);
-    expect(isCommunityPath("/signals")).toBe(true);
+  it("enforces 5 primary navigation items (Home, Explore, Create, Inbox, Profile) with unified Inbox routing", () => {
+    expect(isInboxPath("/")).toBe(false);
+    expect(isInboxPath("/explore")).toBe(false);
+    expect(isInboxPath("/inbox")).toBe(true);
+    expect(isInboxPath("/messages")).toBe(true);
+    expect(isInboxPath("/hubs")).toBe(true);
+    expect(isInboxPath("/hubs/stanford-ai")).toBe(true);
+    expect(isInboxPath("/signals")).toBe(true);
+    expect(isInboxPath("/signals/mit-news")).toBe(true);
 
     const navSrc = readRel("src/components/layout/BottomNav.tsx");
     expect(navSrc).toContain('data-nav-mode="primary"');
-    expect(navSrc).toContain('data-nav-mode="community"');
+    expect(navSrc).not.toContain('data-nav-mode="community"');
     expect(navSrc).toContain("<span>Home</span>");
     expect(navSrc).toContain("<span>Explore</span>");
     expect(navSrc).toContain(">Create</span>");
-    expect(navSrc).toContain("<span>Hubs</span>");
     expect(navSrc).toContain("<span>Inbox</span>");
-    expect(navSrc).toContain("<span>Back</span>");
-    expect(navSrc).toContain("<span>Hub</span>");
-    expect(navSrc).toContain("<span>Signal</span>");
-    expect(navSrc).toContain("<span>Moment</span>");
+    expect(navSrc).toContain("<span>Profile</span>");
   });
 
   it("wires the unified Create Stack modal with Ping, Moment, Signal, Hub, and Go Live", () => {
@@ -117,17 +115,24 @@ describe("PING Human Coordination Redesign, Economy, and Navigation Architecture
     expect(exploreSrc).toContain("Recommended communities");
   });
 
-  it("incorporates Forums and Institutional Broadcasts into Hub while keeping Signal distinct", () => {
+  it("keeps Chats, group-only Hubs, and institutional Signals clearly separated while preserving forum tables/components", () => {
     const forumsSrc = readRel("src/components/hubs/HubForumsAndBroadcasts.tsx");
     expect(forumsSrc).toContain("Official Hub Broadcasts");
-    expect(forumsSrc).toContain("Publish Institutional Broadcast");
-    expect(forumsSrc).toContain("Create Hub Forum");
+    expect(forumsSrc).toContain("hub_forum_posts");
 
-    const workspaceSrc = readRel("src/components/messages/MessagesWorkspace.tsx");
-    expect(workspaceSrc).toContain("Community Destination · Signal");
-    expect(workspaceSrc).toContain("bg-gold/15 text-gold border border-gold/30");
+    const inboxSrc = readRel("src/routes/inbox.tsx");
+    expect(inboxSrc).toContain("InboxSectionTabs");
+    expect(inboxSrc).toContain("MessagesWorkspace");
+    expect(inboxSrc).toContain("HubsDirectorySection");
+    expect(inboxSrc).toContain("SignalsDirectorySection");
+
     const signalsSrc = readRel("src/routes/signals.tsx");
-    expect(signalsSrc).toContain("MessagesWorkspace");
+    expect(signalsSrc).toContain("SignalsDirectorySection");
+    expect(signalsSrc).not.toContain("MessagesWorkspace");
+
+    const hubDetailSrc = readRel("src/routes/hubs.$slug.tsx");
+    expect(hubDetailSrc).toContain("Group Chat");
+    expect(hubDetailSrc).not.toContain("HubForumsAndBroadcasts");
   });
 
   it("wires top-right menu drawer on profile page to DOT balance, wallet, verification, settings, and tabs", () => {

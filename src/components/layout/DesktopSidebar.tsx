@@ -1,11 +1,10 @@
-import { Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { Link, useLocation } from "@tanstack/react-router";
 import {
   Bell,
   Home,
   Compass,
   Building2,
-  Radio,
-  MessageSquare,
+  Inbox,
   Settings,
   Plus,
   ShieldCheck,
@@ -14,7 +13,6 @@ import {
   Laptop,
   LogOut,
   User,
-  Users,
   MoreVertical,
   BarChart3,
   Coins,
@@ -26,7 +24,6 @@ import {
   Sparkles,
   Code2,
   Download,
-  ArrowLeft,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -50,7 +47,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useNotificationsState, useSignOut } from "./SiteHeader";
-import { isCommunityPath } from "./BottomNav";
+import { isInboxPath } from "./BottomNav";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -66,23 +63,16 @@ export function DesktopSidebar() {
     toggleSidebarCollapsed,
   } = useNavOverlay();
   const location = useLocation();
-  const navigate = useNavigate();
   const signOut = useSignOut();
 
   const { pathname, searchStr } = location;
-  const inChatWorkspace = pathname.startsWith("/messages") || pathname === "/signals";
-  const inCommunity =
-    pathname.startsWith("/hubs") ||
-    pathname.startsWith("/signals/channels") ||
-    pathname.startsWith("/signals/create") ||
-    (pathname.startsWith("/signals/") && pathname !== "/signals");
+  const inInbox = isInboxPath(pathname);
+  const inChatWorkspace =
+    pathname.startsWith("/messages") ||
+    (pathname === "/inbox" &&
+      !searchStr.includes("section=hubs") &&
+      !searchStr.includes("section=signals"));
   const effectiveCollapsed = sidebarCollapsed ?? inChatWorkspace;
-  const isCommunityMoments = pathname === "/hubs" && searchStr.includes("view=moments");
-  const isSignalChannels =
-    pathname.startsWith("/signals/channels") ||
-    pathname.startsWith("/signals/create") ||
-    (pathname.startsWith("/signals/") && pathname !== "/signals");
-  const isSignalChats = pathname === "/signals";
 
   const labelInline = effectiveCollapsed ? "hidden" : "hidden xl:inline truncate";
   const labelInlineBlock = effectiveCollapsed ? "hidden" : "hidden xl:inline-block truncate";
@@ -124,14 +114,23 @@ export function DesktopSidebar() {
   }> = [
     { to: "/", label: "Home", icon: Home, exact: true },
     { to: "/explore", label: "Explore", icon: Compass },
-    { to: "/hubs", label: "Hubs", icon: Users },
     {
-      to: user ? "/messages" : "/login",
-      ...(user ? {} : { search: { next: "/messages" } }),
+      to: "/inbox",
+      search: {},
       label: "Inbox",
-      icon: MessageSquare,
+      icon: Inbox,
       ...(unreadMessages > 0 ? { badge: unreadMessages } : {}),
     },
+    ...(user && profile
+      ? [
+          {
+            to: "/@{$username}",
+            params: { username: profile.username },
+            label: "Profile",
+            icon: User,
+          },
+        ]
+      : [{ to: user ? "/settings" : "/login", label: "Profile", icon: User }]),
   ];
 
   const ThemeIcon = theme === "system" ? Laptop : resolvedTheme === "dark" ? Moon : Sun;
@@ -177,166 +176,60 @@ export function DesktopSidebar() {
             </button>
           </div>
 
-          {inCommunity ? (
-            /* Contextual 4-Item Community Navigation on Desktop */
-            <nav className="mt-7 space-y-1" aria-label="Community Navigation">
-              <button
-                type="button"
-                onClick={() => navigate({ to: "/" })}
-                className={cn(
-                  "relative flex w-full items-center gap-3.5 h-11 rounded-2xl px-3.5 transition-all text-sm font-semibold text-muted-foreground hover:bg-secondary/80 hover:text-foreground",
-                  rowAlign,
-                )}
-                title="Back to main navigation"
-              >
-                <ArrowLeft className="size-5 shrink-0" />
-                <span className={labelInlineBlock}>Back</span>
-              </button>
+          <nav className="mt-7 space-y-1" aria-label="Desktop Main Navigation">
+            {primaryItems.map((item) => {
+              const targetPath = item.params ? `/@${item.params.username}` : item.to;
+              const isActive = item.exact
+                ? pathname === targetPath
+                : item.to === "/inbox"
+                  ? inInbox
+                  : pathname === targetPath || pathname.startsWith(`${targetPath}/`);
+              const Icon = item.icon;
 
-              <Link
-                to="/hubs"
-                search={{}}
-                onClick={closeOverlays}
-                aria-current={
-                  pathname.startsWith("/hubs") && !isCommunityMoments ? "page" : undefined
-                }
-                className={cn(
-                  "relative flex items-center gap-3.5 h-11 rounded-2xl px-3.5 transition-all text-sm font-semibold",
-                  rowAlign,
-                  pathname.startsWith("/hubs") && !isCommunityMoments
-                    ? "bg-primary/15 text-primary border border-primary/25 shadow-soft"
-                    : "text-muted-foreground hover:bg-secondary/80 hover:text-foreground",
-                )}
-                title="Hub"
-              >
-                <Building2 className="size-5 shrink-0" />
-                <span className={labelInlineBlock}>Hub</span>
-              </Link>
-
-              <Link
-                to="/signals"
-                onClick={closeOverlays}
-                aria-current={isSignalChats ? "page" : undefined}
-                className={cn(
-                  "relative flex items-center gap-3 h-11 rounded-2xl px-3.5 transition-all text-sm font-semibold",
-                  rowBetween,
-                  isSignalChats
-                    ? "bg-primary/15 text-primary border border-primary/25 shadow-soft"
-                    : "text-muted-foreground hover:bg-secondary/80 hover:text-foreground",
-                )}
-                title="Signal — 1-on-1 Chats"
-              >
-                <span className="flex items-center gap-3.5 min-w-0">
-                  <MessageSquare className="size-5 shrink-0" />
-                  <span className={labelInlineBlock}>Signal</span>
-                </span>
-                {unreadMessages > 0 ? (
-                  <span
-                    className={cn(
-                      "inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold tabular-nums",
-                      effectiveCollapsed
-                        ? "absolute top-1.5 right-1.5"
-                        : "xl:static absolute top-1.5 right-1.5",
-                    )}
-                  >
-                    {unreadMessages > 99 ? "99+" : unreadMessages}
+              return (
+                <Link
+                  key={item.label}
+                  to={item.to as any}
+                  params={item.params as any}
+                  search={item.search as any}
+                  onClick={closeOverlays}
+                  aria-current={isActive ? "page" : undefined}
+                  className={cn(
+                    "relative flex items-center gap-3 h-11 rounded-2xl px-3.5 transition-all text-sm font-semibold group",
+                    rowBetween,
+                    isActive
+                      ? "bg-primary/15 text-primary border border-primary/25 shadow-soft"
+                      : "text-muted-foreground hover:bg-secondary/80 hover:text-foreground",
+                  )}
+                  title={item.label}
+                >
+                  <span className="flex items-center gap-3.5 min-w-0">
+                    <Icon
+                      className={cn(
+                        "size-5 shrink-0 transition-transform group-hover:scale-105",
+                        isActive
+                          ? "text-primary"
+                          : "text-muted-foreground group-hover:text-foreground",
+                      )}
+                    />
+                    <span className={labelInlineBlock}>{item.label}</span>
                   </span>
-                ) : null}
-              </Link>
-
-              <Link
-                to="/signals/channels"
-                onClick={closeOverlays}
-                aria-current={isSignalChannels ? "page" : undefined}
-                className={cn(
-                  "relative flex items-center gap-3.5 h-11 rounded-2xl px-3.5 transition-all text-sm font-semibold",
-                  rowAlign,
-                  isSignalChannels
-                    ? "bg-primary/15 text-primary border border-primary/25 shadow-soft"
-                    : "text-muted-foreground hover:bg-secondary/80 hover:text-foreground",
-                )}
-                title="Institutional Signal Channels"
-              >
-                <Radio className="size-5 shrink-0" />
-                <span className={labelInlineBlock}>Channels</span>
-              </Link>
-
-              <Link
-                to="/hubs"
-                search={{ view: "moments" }}
-                onClick={closeOverlays}
-                aria-current={isCommunityMoments ? "page" : undefined}
-                className={cn(
-                  "relative flex items-center gap-3.5 h-11 rounded-2xl px-3.5 transition-all text-sm font-semibold",
-                  rowAlign,
-                  isCommunityMoments
-                    ? "bg-primary/15 text-primary border border-primary/25 shadow-soft"
-                    : "text-muted-foreground hover:bg-secondary/80 hover:text-foreground",
-                )}
-                title="Community Moments"
-              >
-                <Sparkles className="size-5 shrink-0" />
-                <span className={labelInlineBlock}>Moment</span>
-              </Link>
-            </nav>
-          ) : (
-            <nav className="mt-7 space-y-1" aria-label="Desktop Main Navigation">
-              {primaryItems.map((item) => {
-                const targetPath = item.params ? `/@${item.params.username}` : item.to;
-                const isActive = item.exact
-                  ? pathname === targetPath
-                  : item.to === "/hubs"
-                    ? isCommunityPath(pathname) && pathname !== "/signals"
-                    : item.label === "Inbox"
-                      ? pathname.startsWith("/messages") || pathname === "/signals"
-                      : pathname === targetPath || pathname.startsWith(`${targetPath}/`);
-                const Icon = item.icon;
-
-                return (
-                  <Link
-                    key={item.label}
-                    to={item.to as any}
-                    params={item.params as any}
-                    search={item.search as any}
-                    onClick={closeOverlays}
-                    aria-current={isActive ? "page" : undefined}
-                    className={cn(
-                      "relative flex items-center gap-3 h-11 rounded-2xl px-3.5 transition-all text-sm font-semibold group",
-                      rowBetween,
-                      isActive
-                        ? "bg-primary/15 text-primary border border-primary/25 shadow-soft"
-                        : "text-muted-foreground hover:bg-secondary/80 hover:text-foreground",
-                    )}
-                    title={item.label}
-                  >
-                    <span className="flex items-center gap-3.5 min-w-0">
-                      <Icon
-                        className={cn(
-                          "size-5 shrink-0 transition-transform group-hover:scale-105",
-                          isActive
-                            ? "text-primary"
-                            : "text-muted-foreground group-hover:text-foreground",
-                        )}
-                      />
-                      <span className={labelInlineBlock}>{item.label}</span>
+                  {item.badge && item.badge > 0 ? (
+                    <span
+                      className={cn(
+                        "inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold tabular-nums",
+                        effectiveCollapsed
+                          ? "absolute top-1.5 right-1.5"
+                          : "xl:static absolute top-1.5 right-1.5",
+                      )}
+                    >
+                      {item.badge > 99 ? "99+" : item.badge}
                     </span>
-                    {item.badge && item.badge > 0 ? (
-                      <span
-                        className={cn(
-                          "inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold tabular-nums",
-                          effectiveCollapsed
-                            ? "absolute top-1.5 right-1.5"
-                            : "xl:static absolute top-1.5 right-1.5",
-                        )}
-                      >
-                        {item.badge > 99 ? "99+" : item.badge}
-                      </span>
-                    ) : null}
-                  </Link>
-                );
-              })}
-            </nav>
-          )}
+                  ) : null}
+                </Link>
+              );
+            })}
+          </nav>
 
           {/* 3. PRIMARY ACTION: CREATE STACK */}
           <div className="mt-5">

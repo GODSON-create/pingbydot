@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo } from "react";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   Bell,
   Plus,
   LogOut,
   Settings,
   User,
+  Users,
   Building2,
+  Inbox,
   Radio,
   MessageSquare,
   Sun,
@@ -50,6 +52,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { FounderAvatar } from "@/components/ping/Avatar";
 import { BrandLogo } from "@/components/BrandLogo";
+import { isInboxPath } from "./BottomNav";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -173,9 +176,14 @@ const navLink =
 export function SiteHeader() {
   const { user, profile, ready } = useAuth();
   const { theme, resolvedTheme, setTheme } = useTheme();
+  const { pathname } = useLocation();
   const { openOverlay, closeOverlays, isOpen, onOpenChangeFor } = useNavOverlay();
   const focusedWorkspace = useFocusedWorkspace();
   const signOut = useSignOut();
+  const inInbox = isInboxPath(pathname);
+  const isProfileActive =
+    (Boolean(user && profile) && pathname === `/@${profile!.username}`) ||
+    (!user && pathname === "/login");
 
   useInboxRealtime(user?.id);
 
@@ -242,17 +250,13 @@ export function SiteHeader() {
               Explore
             </Link>
             <Link
-              to="/hubs"
-              className={navLink}
-              activeProps={{ className: "text-foreground bg-secondary" }}
-            >
-              Hubs
-            </Link>
-            <Link
-              to={user ? "/messages" : "/login"}
-              search={user ? {} : ({ next: "/messages" } as any)}
-              className={`${navLink} relative inline-flex items-center gap-1.5`}
-              activeProps={{ className: "text-foreground bg-secondary" }}
+              to="/inbox"
+              search={{}}
+              aria-current={inInbox ? "page" : undefined}
+              className={cn(
+                `${navLink} relative inline-flex items-center gap-1.5`,
+                inInbox && "text-foreground bg-secondary",
+              )}
             >
               Inbox
               {unreadMessages > 0 && (
@@ -261,6 +265,24 @@ export function SiteHeader() {
                 </span>
               )}
             </Link>
+            {user && profile ? (
+              <Link
+                to="/@{$username}"
+                params={{ username: profile.username }}
+                aria-current={isProfileActive ? "page" : undefined}
+                className={cn(navLink, isProfileActive && "text-foreground bg-secondary")}
+              >
+                Profile
+              </Link>
+            ) : (
+              <Link
+                to={user ? "/settings" : "/login"}
+                aria-current={isProfileActive ? "page" : undefined}
+                className={cn(navLink, isProfileActive && "text-foreground bg-secondary")}
+              >
+                Profile
+              </Link>
+            )}
           </nav>
 
           <div className="flex items-center gap-1.5 sm:gap-2">
@@ -281,25 +303,6 @@ export function SiteHeader() {
                 />
               )}
             </button>
-
-            {/* Mobile Profile Avatar Shortcut (secondary destination kept out of 5-item BottomNav) */}
-            {ready && user && profile && (
-              <Link
-                to="/@{$username}"
-                params={{ username: profile.username }}
-                onClick={closeOverlays}
-                className="flex size-9 items-center justify-center rounded-full hover:bg-secondary transition-all md:hidden"
-                aria-label="My Profile"
-                title="My Profile"
-              >
-                <FounderAvatar
-                  name={profile.display_name || profile.username}
-                  src={profile.avatar_url}
-                  size="sm"
-                  className="size-7 text-[10px]"
-                />
-              </Link>
-            )}
 
             {/* Quick Theme Toggle */}
             <button
@@ -409,23 +412,23 @@ export function SiteHeader() {
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem asChild className="rounded-xl">
-                        <Link to="/hubs" onClick={closeOverlays}>
-                          <Building2 /> Community Hubs
-                        </Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem asChild className="rounded-xl">
-                        <Link to="/signals" onClick={closeOverlays}>
-                          <MessageSquare /> Signal (1-on-1 Chats)
-                        </Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem asChild className="rounded-xl">
-                        <Link to="/signals/channels" onClick={closeOverlays}>
-                          <Radio /> Signal Channels
+                        <Link to="/inbox" search={{}} onClick={closeOverlays}>
+                          <Inbox /> Inbox
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild className="rounded-xl">
                         <Link to="/messages" onClick={closeOverlays}>
-                          <MessageSquare /> Direct Messages
+                          <MessageSquare /> Chats
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild className="rounded-xl">
+                        <Link to="/inbox" search={{ section: "hubs" }} onClick={closeOverlays}>
+                          <Users /> Hubs
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild className="rounded-xl">
+                        <Link to="/inbox" search={{ section: "signals" }} onClick={closeOverlays}>
+                          <Radio /> Signals
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild className="rounded-xl">

@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Building2, MessageSquare, Plus, Radio, Search, Sparkles, X } from "lucide-react";
+import { MessageSquare, Plus, Search, X } from "lucide-react";
 import { useDeferredValue, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { QueryErrorCard } from "@/components/QueryErrorCard";
+import { InboxSectionTabs } from "@/components/inbox/InboxSectionTabs";
 import { ConversationList } from "@/components/messages/ConversationList";
 import { DirectMessageChat } from "@/components/messages/DirectMessageChat";
 import { NewGroupChatDialog } from "@/components/messages/NewGroupChatDialog";
@@ -157,16 +158,16 @@ export function NewDirectMessageDialog({
 }
 
 export function MessagesWorkspace({
-  basePath = "/signals",
+  basePath = "/inbox",
   conversationId,
   userIdParam,
-  showCommunityHeader = false,
+  embeddedInInbox = false,
   redirectUnauthenticated = false,
 }: {
-  basePath?: "/messages" | "/signals";
+  basePath?: "/inbox" | "/messages";
   conversationId?: string | undefined;
   userIdParam?: string | undefined;
-  showCommunityHeader?: boolean;
+  embeddedInInbox?: boolean;
   redirectUnauthenticated?: boolean;
 }) {
   const { user, ready } = useAuth();
@@ -296,70 +297,31 @@ export function MessagesWorkspace({
     }
   };
 
-  const communitySwitcher =
-    showCommunityHeader && !activeConversationId ? (
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2.5 border-b border-border/60 pb-2.5">
-        <div className="inline-flex lg:hidden max-w-full items-center gap-1 overflow-x-auto scrollbar-none rounded-full bg-secondary/80 p-1">
-          <Link
-            to="/hubs"
-            search={{}}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Building2 className="size-3.5" /> Hub
-          </Link>
-          <Link
-            to="/signals"
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-foreground text-background shadow-sm px-3.5 py-1.5 text-xs font-semibold transition-colors"
-          >
-            <Radio className="size-3.5" /> Signal
-          </Link>
-          <Link
-            to="/hubs"
-            search={{ view: "moments" }}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Sparkles className="size-3.5" /> Moment
-          </Link>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2 ml-auto">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/15 px-3 py-1 text-xs font-semibold text-primary">
-            <MessageSquare className="size-3.5" />
-            Community Destination · Signal
-          </span>
-          <span className="inline-flex items-center gap-1 rounded-full bg-gold/15 text-gold border border-gold/30 px-2.5 py-0.5 text-[11px] font-bold">
-            1-on-1 Chats
-          </span>
-          <Link
-            to="/signals/channels"
-            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold text-foreground hover:bg-secondary transition-colors"
-          >
-            <Radio className="size-3.5 text-primary" />
-            Institutional Channels
-          </Link>
-        </div>
-      </div>
-    ) : null;
+  const inboxHeader = !embeddedInInbox ? (
+    <div className={cn("mb-3", activeConversationId && "hidden lg:block")}>
+      <InboxSectionTabs activeSection="chats" />
+    </div>
+  ) : null;
 
   if (ready && !user && !redirectUnauthenticated) {
     return (
-      <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 py-8 pb-24">
-        {communitySwitcher}
+      <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 py-6 pb-24">
+        {inboxHeader}
         <section className="surface-card rounded-[2rem] p-8 sm:p-12 text-center border border-border/70">
           <div className="mx-auto flex size-16 items-center justify-center rounded-3xl bg-primary/15 text-primary">
             <MessageSquare className="size-8" />
           </div>
-          <h1 className="mt-4 font-display text-2xl sm:text-3xl font-extrabold">
-            Signal — 1-on-1 Chats &amp; Conversations
-          </h1>
+          <h2 className="mt-4 font-display text-2xl sm:text-3xl font-extrabold">
+            Inbox · Private &amp; Group Chats
+          </h2>
           <p className="mt-2 mx-auto max-w-md text-sm text-muted-foreground">
-            Private direct conversations with anyone on PING. Sign in to view your chats or message
-            people across the network.
+            Direct messages, private group conversations, message requests, attachments, and voice
+            notes on PING. Sign in to access your chats.
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <Button asChild variant="hero" className="rounded-full px-6">
               <Link to="/login" search={{ next: basePath }}>
-                Sign in to open Signal Chats
+                Sign in to open Chats
               </Link>
             </Button>
             <Button asChild variant="outline" className="rounded-full px-6">
@@ -378,13 +340,13 @@ export function MessagesWorkspace({
         keyboardOpen
           ? "px-2 sm:px-4 lg:px-6 pt-2 pb-1 h-[calc(100dvh-1rem)]"
           : activeConversationId
-            ? "px-2 sm:px-4 lg:px-6 pt-2 pb-2 h-[calc(100dvh-0.75rem)] md:h-[calc(100dvh-4.75rem)] lg:h-[calc(100dvh-0.75rem)]"
-            : showCommunityHeader
-              ? "px-3 sm:px-4 lg:px-6 pt-3 pb-2 h-[calc(100dvh-9.25rem)] md:h-[calc(100dvh-4.75rem)] lg:h-[calc(100dvh-0.75rem)]"
-              : "px-2 sm:px-4 lg:px-6 pt-2 pb-2 h-[calc(100dvh-9.25rem)] md:h-[calc(100dvh-4.75rem)] lg:h-[calc(100dvh-0.75rem)]",
+            ? "px-2 sm:px-4 lg:px-6 pt-2 pb-2 h-[calc(100dvh-0.75rem)] md:h-[calc(100dvh-4.75rem)] lg:h-[calc(100dvh-5.75rem)]"
+            : embeddedInInbox
+              ? "px-2 sm:px-4 lg:px-6 pt-3 pb-2 h-[calc(100dvh-13rem)] md:h-[calc(100dvh-9.5rem)] lg:h-[calc(100dvh-6rem)]"
+              : "px-3 sm:px-4 lg:px-6 pt-3 pb-2 h-[calc(100dvh-9.25rem)] md:h-[calc(100dvh-4.75rem)] lg:h-[calc(100dvh-0.75rem)]",
       )}
     >
-      {communitySwitcher}
+      {inboxHeader}
 
       <div className="relative flex-1 min-h-0 flex gap-4">
         {/* 1. LEFT CONVERSATION LIST (Hidden on mobile if a chat is active, or on laptop when Peer Profile drawer is open) */}
@@ -519,13 +481,10 @@ export function MessagesWorkspace({
                 <MessageSquare className="size-8" />
               </div>
               <h3 className="font-display font-extrabold text-lg text-foreground mb-1">
-                {showCommunityHeader
-                  ? "Signal · 1-on-1 Conversations"
-                  : "Your Private Conversations"}
+                Your Conversations
               </h3>
               <p className="text-xs text-muted-foreground max-w-sm mb-6">
-                Select a conversation from the left or start a new 1-to-1 chat with any founder on
-                Ping.
+                Select a conversation from the left or start a new direct or group chat on Ping.
               </p>
               <div className="flex flex-wrap items-center justify-center gap-2.5">
                 <Button

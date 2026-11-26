@@ -22,9 +22,6 @@ import {
   Clock,
   Shield,
   Settings,
-  Pencil,
-  MessageSquare,
-  Send,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -36,9 +33,6 @@ import {
   signalFollowingQuery,
   signalPublisherQuery,
   signalPublishersListQuery,
-  signalMessagesQuery,
-  useSendSignalMessage,
-  useDeleteSignalMessage,
   useSignalFollow,
   useCreateSignalPost,
   useDeleteSignalPost,
@@ -807,19 +801,7 @@ function SignalDetailPage() {
   const followMutation = useSignalFollow(signal?.id ?? "", user?.id);
   const deletePostMutation = useDeleteSignalPost(signal?.id ?? "");
 
-  const [channelTab, setChannelTab] = useState<"broadcasts" | "chat">("broadcasts");
-  const [chatDraft, setChatDraft] = useState("");
-  const {
-    data: channelMessages = [],
-    isLoading: chatLoading,
-    isError: isChatError,
-    error: chatError,
-    refetch: refetchChat,
-  } = useQuery(signalMessagesQuery(signal?.id ?? ""));
-  const sendChannelMessage = useSendSignalMessage(signal?.id ?? "");
-  const deleteChannelMessage = useDeleteSignalMessage(signal?.id ?? "");
-
-  // Real-time subscription for channel broadcasts & subscriber discussion chat
+  // Real-time subscription for official institutional broadcasts & subscriber count updates
   useEffect(() => {
     if (!signal?.id) return;
 
@@ -844,18 +826,6 @@ function SignalDetailPage() {
                 : "New official broadcast received!",
             );
           }
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "signal_messages",
-          filter: `signal_id=eq.${signal.id}`,
-        },
-        () => {
-          qc.invalidateQueries({ queryKey: ["signal-messages", signal.id] });
         },
       )
       .on(
@@ -923,472 +893,329 @@ function SignalDetailPage() {
           The signal channel @{slug} does not exist or may have been unlisted.
         </p>
         <Button asChild variant="hero" className="mt-6 rounded-2xl">
-          <Link to="/signals/channels">Explore Signal Channels</Link>
+          <Link to="/inbox" search={{ section: "signals" }}>
+            Explore All Signals
+          </Link>
         </Button>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Link
-          to="/signals/channels"
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="size-3.5" />
-          Back to Signal Channels
-        </Link>
-        <Link
-          to="/signals"
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
-        >
-          <MessageSquare className="size-3.5" />
-          Open 1-on-1 Chats
-        </Link>
-      </div>
+    <div
+      data-signal-channel-broadcast-only="true"
+      className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12 pb-24"
+    >
+      <Link
+        to="/inbox"
+        search={{ section: "signals" }}
+        className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <ArrowLeft className="size-3.5" />
+        Back to Signals
+      </Link>
 
       {/* Signal Channel Identity Header */}
-      <header className="surface-card mt-4 rounded-3xl p-6 sm:p-8 border border-border/60">
-        <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex items-start gap-4">
-            {signal.avatar_url ? (
-              <ResolvedMomentThumb
-                mediaUrl={signal.avatar_url}
-                mediaType="image"
-                alt={signal.name}
-                className="size-16 rounded-2xl object-cover border border-border/50 shrink-0"
-                fallback={
-                  <div className="flex size-16 items-center justify-center rounded-2xl bg-primary/10 text-primary shrink-0">
-                    <Radio className="size-8" />
-                  </div>
-                }
-              />
-            ) : (
-              <div className="flex size-16 items-center justify-center rounded-2xl bg-primary/10 text-primary shrink-0">
-                <Radio className="size-8" />
-              </div>
-            )}
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="font-display text-2xl font-extrabold sm:text-3xl text-foreground">
-                  {signal.name}
-                </h1>
-                {signal.verified ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-gold/15 text-gold border border-gold/30 px-2.5 py-0.5 text-xs font-bold">
-                    <CheckCircle className="size-3.5" />
-                    Verified Institution
-                  </span>
-                ) : signal.verification_status === "pending" ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-bold text-amber-700 dark:text-amber-400">
-                    <Clock className="size-3.5" />
-                    Verification Pending Review
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                    <Shield className="size-3.5" />
-                    Unverified
-                  </span>
-                )}
-              </div>
-
-              {signal.tagline && (
-                <p className="mt-1.5 text-sm font-semibold text-foreground/90">{signal.tagline}</p>
-              )}
-
-              {signal.description && (
-                <p className="mt-2 text-sm text-muted-foreground max-w-2xl leading-relaxed">
-                  {signal.description}
-                </p>
-              )}
-
-              <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
-                <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-3 py-1 font-semibold capitalize text-secondary-foreground">
-                  {signal.institution_type}
-                </span>
-                <span className="font-medium text-muted-foreground">
-                  <strong>{signal.follower_count.toLocaleString()}</strong> subscribers
-                </span>
-                {signal.website_url && (
-                  <a
-                    href={signal.website_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
-                  >
-                    <Globe className="size-3.5" />
-                    Website
-                  </a>
-                )}
-                {!signal.verified && signal.verification_status !== "pending" && isSignalAdmin && (
-                  <button
-                    type="button"
-                    onClick={() => setVerifyDialogOpen(true)}
-                    className="inline-flex items-center gap-1 text-primary hover:underline font-semibold"
-                  >
-                    <ShieldCheck className="size-3.5" />
-                    Request Verification
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Action buttons */}
-          <div className="flex items-center gap-2 shrink-0">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleShare}
-              className="rounded-xl gap-1.5"
-              title="Share Signal"
-            >
-              <Share2 className="size-4" />
-              Share
-            </Button>
-
-            <Button
-              variant={isFollowing ? "outline" : "hero"}
-              size="sm"
-              onClick={handleFollowToggle}
-              disabled={followMutation.isPending}
-              className="rounded-xl gap-1.5"
-            >
-              {isFollowing ? (
-                <>
-                  <BellOff className="size-4" />
-                  Subscribed
-                </>
-              ) : (
-                <>
-                  <Bell className="size-4" />
-                  Subscribe
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
-
-        {/* Publisher controls banner */}
-        {isPublisher && (
-          <div className="mt-6 pt-6 border-t border-border/60 flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-2 text-xs font-semibold text-primary">
-              <Sparkles className="size-4" />
-              <span>
-                You have {publisherData?.role === "admin" ? "Admin" : "Publisher"} privileges on
-                this Signal channel
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              {isSignalAdmin && (
-                <>
-                  <Button
-                    onClick={() => setEditDialogOpen(true)}
-                    variant="outline"
-                    size="sm"
-                    className="rounded-xl gap-1.5"
-                  >
-                    <Settings className="size-4" />
-                    Edit Channel
-                  </Button>
-                  <Button
-                    onClick={() => setPublishersDialogOpen(true)}
-                    variant="outline"
-                    size="sm"
-                    className="rounded-xl gap-1.5"
-                  >
-                    <Users className="size-4" />
-                    Publishers
-                  </Button>
-                </>
-              )}
-              <Button
-                onClick={() => setBroadcastDialogOpen(true)}
-                variant="hero"
-                size="sm"
-                className="rounded-xl gap-1.5"
-              >
-                <Plus className="size-4" />
-                New Broadcast
-              </Button>
-            </div>
+      <header className="surface-card mt-4 overflow-hidden rounded-3xl border border-border/60">
+        {signal.cover_url && (
+          <div className="h-36 sm:h-48 w-full overflow-hidden border-b border-border/50 bg-secondary/40">
+            <ResolvedMomentThumb
+              mediaUrl={signal.cover_url}
+              mediaType="image"
+              alt={`${signal.name} cover`}
+              className="h-full w-full object-cover"
+            />
           </div>
         )}
-      </header>
+        <div className="p-6 sm:p-8">
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex items-start gap-4">
+              {signal.avatar_url ? (
+                <ResolvedMomentThumb
+                  mediaUrl={signal.avatar_url}
+                  mediaType="image"
+                  alt={signal.name}
+                  className="size-16 rounded-2xl object-cover border border-border/50 shrink-0"
+                  fallback={
+                    <div className="flex size-16 items-center justify-center rounded-2xl bg-primary/10 text-primary shrink-0">
+                      <Radio className="size-8" />
+                    </div>
+                  }
+                />
+              ) : (
+                <div className="flex size-16 items-center justify-center rounded-2xl bg-primary/10 text-primary shrink-0">
+                  <Radio className="size-8" />
+                </div>
+              )}
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h1 className="font-display text-2xl font-extrabold sm:text-3xl text-foreground">
+                    {signal.name}
+                  </h1>
+                  {signal.verified ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-gold/15 text-gold border border-gold/30 px-2.5 py-0.5 text-xs font-bold">
+                      <CheckCircle className="size-3.5" />
+                      Verified Institution
+                    </span>
+                  ) : signal.verification_status === "pending" ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-bold text-amber-700 dark:text-amber-400">
+                      <Clock className="size-3.5" />
+                      Verification Pending Review
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                      <Shield className="size-3.5" />
+                      Unverified
+                    </span>
+                  )}
+                </div>
 
-      {/* Channel Surface Tabs: Official Broadcasts vs Live Subscriber Chat */}
-      <div className="mt-6 flex items-center gap-2 border-b border-border/60 pb-3">
-        <button
-          type="button"
-          onClick={() => setChannelTab("broadcasts")}
-          className={cn(
-            "inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold transition-colors",
-            channelTab === "broadcasts"
-              ? "bg-foreground text-background shadow-sm"
-              : "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-          )}
-        >
-          <Radio className="size-3.5" />
-          Official Broadcasts ({posts.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setChannelTab("chat")}
-          className={cn(
-            "inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold transition-colors",
-            channelTab === "chat"
-              ? "bg-foreground text-background shadow-sm"
-              : "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-          )}
-        >
-          <MessageSquare className="size-3.5" />
-          Channel Discussion ({channelMessages.length})
-        </button>
-      </div>
+                {signal.tagline && (
+                  <p className="mt-1.5 text-sm font-semibold text-foreground/90">
+                    {signal.tagline}
+                  </p>
+                )}
 
-      {channelTab === "chat" ? (
-        <section className="mt-6 space-y-4" aria-label="Signal Channel Subscriber Discussion">
-          {!user ? (
-            <div className="surface-card rounded-3xl p-6 text-center border border-border/70">
-              <p className="text-sm font-semibold text-foreground">
-                Sign in and subscribe to join live Signal channel discussions
-              </p>
-              <Button asChild variant="hero" size="sm" className="mt-3 rounded-full">
-                <Link to="/login" search={{ next: `/signals/${signal.slug}` }}>
-                  Sign in to participate
-                </Link>
-              </Button>
+                {signal.description && (
+                  <p className="mt-2 text-sm text-muted-foreground max-w-2xl leading-relaxed">
+                    {signal.description}
+                  </p>
+                )}
+
+                <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-3 py-1 font-semibold capitalize text-secondary-foreground">
+                    {signal.institution_type.replace("_", " ")}
+                  </span>
+                  <span className="font-medium text-muted-foreground">
+                    <strong>{signal.follower_count.toLocaleString()}</strong> subscribers
+                  </span>
+                  <span className="font-medium text-muted-foreground">
+                    <strong>{posts.length.toLocaleString()}</strong>{" "}
+                    {posts.length === 1 ? "broadcast" : "broadcasts"}
+                  </span>
+                  {isFollowing && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 font-semibold text-primary">
+                      <Bell className="size-3" />
+                      Broadcast alerts on
+                    </span>
+                  )}
+                  {signal.website_url && (
+                    <a
+                      href={signal.website_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
+                    >
+                      <Globe className="size-3.5" />
+                      Website
+                    </a>
+                  )}
+                  {!signal.verified && signal.verification_status !== "pending" && isSignalAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => setVerifyDialogOpen(true)}
+                      className="inline-flex items-center gap-1 text-primary hover:underline font-semibold"
+                    >
+                      <ShieldCheck className="size-3.5" />
+                      Request Verification
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
-          ) : !isFollowing && !isPublisher && !isSignalAdmin ? (
-            <div className="surface-card rounded-3xl p-6 text-center border border-border/70">
-              <p className="text-sm font-semibold text-foreground">
-                Subscribe to {signal.name} to post in Channel Discussion
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Channel subscribers and publishers can coordinate live below.
-              </p>
+
+            {/* Action buttons */}
+            <div className="flex items-center gap-2 shrink-0">
               <Button
-                type="button"
-                variant="hero"
+                variant="outline"
+                size="sm"
+                onClick={handleShare}
+                className="rounded-xl gap-1.5"
+                title="Share Signal"
+              >
+                <Share2 className="size-4" />
+                Share
+              </Button>
+
+              <Button
+                variant={isFollowing ? "outline" : "hero"}
                 size="sm"
                 onClick={handleFollowToggle}
                 disabled={followMutation.isPending}
-                className="mt-3 rounded-full gap-1.5"
+                className="rounded-xl gap-1.5"
               >
-                <Bell className="size-3.5" />
-                Subscribe to Join Chat
+                {isFollowing ? (
+                  <>
+                    <BellOff className="size-4" />
+                    Subscribed
+                  </>
+                ) : (
+                  <>
+                    <Bell className="size-4" />
+                    Subscribe
+                  </>
+                )}
               </Button>
             </div>
-          ) : (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                sendChannelMessage.mutate(
-                  { content: chatDraft },
-                  {
-                    onSuccess: () => setChatDraft(""),
-                    onError: (err: any) =>
-                      toast.error(err?.message || "Failed to send channel message."),
-                  },
-                );
-              }}
-              className="surface-card rounded-3xl p-4 border border-border/80 flex flex-col sm:flex-row gap-2"
-            >
-              <Input
-                value={chatDraft}
-                onChange={(e) => setChatDraft(e.target.value)}
-                placeholder={`Message ${signal.name} channel…`}
-                maxLength={2000}
-                className="rounded-2xl bg-card text-sm flex-1"
-              />
-              <Button
-                type="submit"
-                variant="hero"
-                disabled={sendChannelMessage.isPending || !chatDraft.trim()}
-                className="rounded-2xl gap-1.5"
-              >
-                <Send className="size-4" />
-                {sendChannelMessage.isPending ? "Sending…" : "Send"}
-              </Button>
-            </form>
-          )}
+          </div>
 
-          {chatLoading ? (
-            <div className="h-32 rounded-3xl bg-muted/40 animate-pulse" />
-          ) : isChatError ? (
-            <QueryErrorCard
-              compact
-              title="Couldn't load channel discussion"
-              error={chatError}
-              onRetry={() => void refetchChat()}
-            />
-          ) : channelMessages.length === 0 ? (
-            <div className="surface-card rounded-3xl p-8 text-center border border-border/60">
-              <MessageSquare className="mx-auto size-9 text-muted-foreground/40" />
-              <p className="mt-3 font-display text-base font-bold text-foreground">
-                No channel discussion messages yet
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Subscribers and publishers can start the conversation here.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {channelMessages.map((msg) => {
-                const senderName = msg.sender?.display_name || msg.sender?.username || "Subscriber";
-                const canDeleteMsg =
-                  isSignalAdmin || (Boolean(user?.id) && msg.sender_id === user?.id);
-                return (
-                  <article
-                    key={msg.id}
-                    className="surface-card rounded-2xl p-4 border border-border/70 space-y-1.5"
-                  >
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="font-bold text-foreground">
-                        {senderName}{" "}
-                        {msg.sender?.username && (
-                          <span className="font-normal text-muted-foreground">
-                            @{msg.sender.username}
-                          </span>
-                        )}
-                      </span>
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <span>{new Date(msg.created_at).toLocaleString()}</span>
-                        {canDeleteMsg && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              deleteChannelMessage.mutate(msg.id, {
-                                onError: (err: any) =>
-                                  toast.error(err?.message || "Could not delete message."),
-                              })
-                            }
-                            aria-label="Delete message"
-                            className="rounded p-1 hover:text-destructive"
-                          >
-                            <Trash2 className="size-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <p className="whitespace-pre-wrap text-sm text-foreground/90">{msg.content}</p>
-                  </article>
-                );
-              })}
-            </div>
-          )}
-        </section>
-      ) : (
-        /* Broadcast Feed */
-        <section className="mt-6">
-          {(() => {
-            const postCategories = [
-              { value: "all", label: "All" },
-              { value: "announcement", label: "Announcement" },
-              { value: "alert", label: "Alert" },
-              { value: "update", label: "Update" },
-              { value: "opportunity", label: "Opportunity" },
-              { value: "event", label: "Event" },
-            ] as const;
-            const filteredPosts =
-              selectedPostCategory === "all"
-                ? posts
-                : posts.filter((p) => (p.category || "announcement") === selectedPostCategory);
-
-            return (
-              <>
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <h2 className="font-display text-xl font-bold flex items-center gap-2">
-                    <Radio className="size-5 text-primary" />
-                    Official Broadcasts
-                  </h2>
-                  <span className="text-xs text-muted-foreground">
-                    {filteredPosts.length} {filteredPosts.length === 1 ? "bulletin" : "bulletins"}
-                  </span>
-                </div>
-
-                {/* Category Filter Pills */}
-                <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-                  {postCategories.map((c) => (
-                    <button
-                      key={c.value}
-                      type="button"
-                      onClick={() => setSelectedPostCategory(c.value)}
-                      className={cn(
-                        "shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors",
-                        selectedPostCategory === c.value
-                          ? "bg-foreground text-background"
-                          : "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-                      )}
+          {/* Publisher controls banner */}
+          {isPublisher && (
+            <div className="mt-6 pt-6 border-t border-border/60 flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-2 text-xs font-semibold text-primary">
+                <Sparkles className="size-4" />
+                <span>
+                  You have {publisherData?.role === "admin" ? "Admin" : "Publisher"} privileges on
+                  this Signal channel
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {isSignalAdmin && (
+                  <>
+                    <Button
+                      onClick={() => setEditDialogOpen(true)}
+                      variant="outline"
+                      size="sm"
+                      className="rounded-xl gap-1.5"
                     >
-                      {c.label}
-                    </button>
-                  ))}
-                </div>
+                      <Settings className="size-4" />
+                      Edit Channel
+                    </Button>
+                    <Button
+                      onClick={() => setPublishersDialogOpen(true)}
+                      variant="outline"
+                      size="sm"
+                      className="rounded-xl gap-1.5"
+                    >
+                      <Users className="size-4" />
+                      Publishers
+                    </Button>
+                  </>
+                )}
+                <Button
+                  onClick={() => setBroadcastDialogOpen(true)}
+                  variant="hero"
+                  size="sm"
+                  className="rounded-xl gap-1.5"
+                >
+                  <Plus className="size-4" />
+                  New Broadcast
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </header>
 
-                <div className="mt-4 space-y-4">
-                  {postsLoading ? (
-                    <div className="space-y-3">
-                      {[1, 2, 3].map((i) => (
-                        <div key={i} className="h-40 rounded-3xl bg-muted/40 animate-pulse" />
-                      ))}
-                    </div>
-                  ) : isPostsError ? (
-                    <QueryErrorCard
-                      title="Couldn't load broadcasts"
-                      description="A connection issue prevented loading broadcasts for this channel."
-                      error={postsError}
-                      onRetry={() => void refetchPosts()}
+      {/* Pure Institutional Broadcast Feed */}
+      <section className="mt-8" aria-label="Official Institutional Broadcasts">
+        {(() => {
+          const postCategories = [
+            { value: "all", label: "All" },
+            { value: "announcement", label: "Announcement" },
+            { value: "alert", label: "Alert" },
+            { value: "update", label: "Update" },
+            { value: "opportunity", label: "Opportunity" },
+            { value: "event", label: "Event" },
+          ] as const;
+          const filteredPosts =
+            selectedPostCategory === "all"
+              ? posts
+              : posts.filter((p) => (p.category || "announcement") === selectedPostCategory);
+
+          return (
+            <>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <h2 className="font-display text-xl font-bold flex items-center gap-2">
+                  <Radio className="size-5 text-primary" />
+                  Official Broadcasts
+                </h2>
+                <span className="text-xs text-muted-foreground">
+                  {filteredPosts.length} {filteredPosts.length === 1 ? "bulletin" : "bulletins"}
+                </span>
+              </div>
+
+              {/* Category Filter Pills */}
+              <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+                {postCategories.map((c) => (
+                  <button
+                    key={c.value}
+                    type="button"
+                    onClick={() => setSelectedPostCategory(c.value)}
+                    className={cn(
+                      "shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors",
+                      selectedPostCategory === c.value
+                        ? "bg-foreground text-background"
+                        : "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+                    )}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-4 space-y-4">
+                {postsLoading ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="h-40 rounded-3xl bg-muted/40 animate-pulse" />
+                    ))}
+                  </div>
+                ) : isPostsError ? (
+                  <QueryErrorCard
+                    title="Couldn't load broadcasts"
+                    description="A connection issue prevented loading broadcasts for this channel."
+                    error={postsError}
+                    onRetry={() => void refetchPosts()}
+                  />
+                ) : filteredPosts.length === 0 ? (
+                  <div className="surface-card rounded-3xl p-10 text-center border border-border/60">
+                    <Radio className="mx-auto size-10 text-muted-foreground/40" />
+                    <p className="mt-3 font-display font-semibold text-foreground">
+                      {selectedPostCategory === "all"
+                        ? "No broadcasts published yet"
+                        : `No ${selectedPostCategory} broadcasts yet`}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Stay tuned for official updates and announcements from {signal.name}.
+                    </p>
+                    {isPublisher && selectedPostCategory === "all" && (
+                      <Button
+                        onClick={() => setBroadcastDialogOpen(true)}
+                        variant="hero"
+                        size="sm"
+                        className="mt-4 rounded-xl"
+                      >
+                        Publish first broadcast
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  filteredPosts.map((post) => (
+                    <SignalPostCard
+                      key={post.id}
+                      post={post}
+                      isPublisher={isPublisher}
+                      currentUserId={user?.id}
+                      canDelete={
+                        isSignalAdmin || (Boolean(user?.id) && post.author_id === user?.id)
+                      }
+                      deleting={deletePostMutation.isPending}
+                      onDelete={() => {
+                        deletePostMutation.mutate(post.id, {
+                          onSuccess: () => toast.success("Broadcast deleted."),
+                          onError: (err: any) =>
+                            toast.error(err?.message || "Could not delete broadcast."),
+                        });
+                      }}
                     />
-                  ) : filteredPosts.length === 0 ? (
-                    <div className="surface-card rounded-3xl p-10 text-center border border-border/60">
-                      <Radio className="mx-auto size-10 text-muted-foreground/40" />
-                      <p className="mt-3 font-display font-semibold text-foreground">
-                        {selectedPostCategory === "all"
-                          ? "No broadcasts published yet"
-                          : `No ${selectedPostCategory} broadcasts yet`}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Stay tuned for official updates and announcements from {signal.name}.
-                      </p>
-                      {isPublisher && selectedPostCategory === "all" && (
-                        <Button
-                          onClick={() => setBroadcastDialogOpen(true)}
-                          variant="hero"
-                          size="sm"
-                          className="mt-4 rounded-xl"
-                        >
-                          Publish first broadcast
-                        </Button>
-                      )}
-                    </div>
-                  ) : (
-                    filteredPosts.map((post) => (
-                      <SignalPostCard
-                        key={post.id}
-                        post={post}
-                        isPublisher={isPublisher}
-                        currentUserId={user?.id}
-                        canDelete={
-                          isSignalAdmin || (Boolean(user?.id) && post.author_id === user?.id)
-                        }
-                        deleting={deletePostMutation.isPending}
-                        onDelete={() => {
-                          deletePostMutation.mutate(post.id, {
-                            onSuccess: () => toast.success("Broadcast deleted."),
-                            onError: (err: any) =>
-                              toast.error(err?.message || "Could not delete broadcast."),
-                          });
-                        }}
-                      />
-                    ))
-                  )}
-                </div>
-              </>
-            );
-          })()}
-        </section>
-      )}
+                  ))
+                )}
+              </div>
+            </>
+          );
+        })()}
+      </section>
 
       {/* Composer Dialog */}
       {isPublisher && (

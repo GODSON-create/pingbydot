@@ -1,9 +1,11 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { QueryErrorCard } from "@/components/QueryErrorCard";
-import { useState, useDeferredValue } from "react";
+import { useState, useDeferredValue, useEffect } from "react";
 import { z } from "zod";
 import {
+  ArrowLeft,
+  Bell,
   Users,
   Pin,
   Lock,
@@ -11,14 +13,11 @@ import {
   Share2,
   ExternalLink,
   ShieldAlert,
-  UserCheck,
   UserPlus,
-  UserX,
   LogOut,
   MoreVertical,
   Check,
   Settings,
-  Pencil,
   Trash2,
   Plus,
   Clock,
@@ -80,8 +79,8 @@ import {
 import { HubShareModal } from "@/components/hubs/HubShareModal";
 import { HubChat } from "@/components/hubs/HubChat";
 import { HubEventsSection } from "@/components/hubs/HubEventsSection";
-import { HubForumsAndBroadcasts } from "@/components/hubs/HubForumsAndBroadcasts";
 import { ResolvedMomentThumb } from "@/components/media/ResolvedPrivateMedia";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { pageHead } from "@/lib/site";
 
@@ -804,10 +803,40 @@ function HubDetail() {
   const activeIntent = HUB_INTENTS.some((i) => i.value === intentParam)
     ? (intentParam as HubIntent)
     : null;
-  const validTabs = ["forums", "chat", "feed", "events", "members", "about"] as const;
+  const validTabs = ["chat", "feed", "events", "members", "about"] as const;
   const activeTab = validTabs.includes(tabParam as (typeof validTabs)[number])
     ? (tabParam as (typeof validTabs)[number])
-    : "forums";
+    : "chat";
+
+  const hubNotifStorageKey = `ping_hub_notifications_${slug}_${user?.id ?? "guest"}`;
+  const [hubNotificationsEnabled, setHubNotificationsEnabled] = useState(true);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const saved = window.localStorage.getItem(hubNotifStorageKey);
+      if (saved === "0") setHubNotificationsEnabled(false);
+      else setHubNotificationsEnabled(true);
+    } catch {
+      // Ignore storage access errors
+    }
+  }, [hubNotifStorageKey]);
+
+  const toggleHubNotifications = (checked: boolean) => {
+    setHubNotificationsEnabled(checked);
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem(hubNotifStorageKey, checked ? "1" : "0");
+      } catch {
+        // Ignore storage access errors
+      }
+    }
+    toast.success(
+      checked
+        ? `Hub alerts enabled for ${hub?.name ?? "this Hub"} on this device.`
+        : `Hub alerts muted for ${hub?.name ?? "this Hub"} on this device.`,
+    );
+  };
 
   // Hub data query
   const {
@@ -941,7 +970,15 @@ function HubDetail() {
     <div className="pb-24">
       {/* Cover Banner */}
       <section className="bg-hero">
-        <div className="mx-auto max-w-5xl px-5 pb-8 pt-10">
+        <div className="mx-auto max-w-5xl px-5 pb-8 pt-6 sm:pt-10">
+          <Link
+            to="/inbox"
+            search={{ section: "hubs" }}
+            className="mb-4 inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="size-3.5" />
+            Back to Hubs
+          </Link>
           {/* Invitation Acceptance Banner */}
           {inviteTokenParam && (
             <div className="mb-6 rounded-3xl border border-primary/30 bg-primary/10 p-5 sm:p-6 shadow-sm">
@@ -1132,8 +1169,8 @@ function HubDetail() {
         </div>
       </section>
 
-      {/* Tabs Layout */}
-      <section className="mx-auto max-w-5xl px-5 mt-6">
+      {/* Tabs Layout — Pure Group Communication */}
+      <section className="mx-auto max-w-5xl px-5 mt-6" data-hub-group-only="true">
         <Tabs
           value={activeTab}
           onValueChange={(v) =>
@@ -1142,21 +1179,18 @@ function HubDetail() {
               params: { slug: hub.slug },
               search: (prev) => ({
                 ...prev,
-                tab: v === "forums" ? undefined : v,
+                tab: v === "chat" ? undefined : v,
               }),
               replace: true,
             })
           }
         >
           <TabsList className="h-11 rounded-full p-1 bg-secondary/80 overflow-x-auto max-w-full">
-            <TabsTrigger value="forums" className="rounded-full px-5 text-sm font-semibold">
-              Forums & Broadcasts
-            </TabsTrigger>
             <TabsTrigger value="chat" className="rounded-full px-5 text-sm font-semibold">
-              Group Room
+              Group Chat
             </TabsTrigger>
             <TabsTrigger value="feed" className="rounded-full px-5 text-sm font-semibold">
-              Feed ({hub.ping_count ?? 0})
+              Shared Pings ({hub.ping_count ?? 0})
             </TabsTrigger>
             <TabsTrigger value="events" className="rounded-full px-5 text-sm font-semibold">
               Events
@@ -1165,16 +1199,11 @@ function HubDetail() {
               Members ({(hub.member_count ?? 0).toLocaleString()})
             </TabsTrigger>
             <TabsTrigger value="about" className="rounded-full px-5 text-sm font-semibold">
-              About & Governance
+              Hub Info
             </TabsTrigger>
           </TabsList>
 
-          {/* TAB: FORUMS & INSTITUTIONAL BROADCASTS */}
-          <TabsContent value="forums" className="mt-6">
-            <HubForumsAndBroadcasts hub={hub} isMember={isMember} isStaff={isStaff} />
-          </TabsContent>
-
-          {/* TAB 0: LIVE CHAT */}
+          {/* TAB 1: GROUP CHAT */}
           <TabsContent value="chat" className="mt-6">
             <HubChat hubId={hub.id} isMember={isMember} isPrivate={isPrivate} isStaff={isStaff} />
           </TabsContent>
@@ -1415,8 +1444,47 @@ function HubDetail() {
             </div>
           </TabsContent>
 
-          {/* TAB 3: ABOUT & RESOURCES */}
+          {/* TAB 5: HUB INFO, MEMBERSHIP & NOTIFICATIONS */}
           <TabsContent value="about" className="mt-6 space-y-6">
+            {user && isMember && (
+              <div className="surface-card rounded-3xl p-6 sm:p-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border border-border/70">
+                <div>
+                  <h2 className="font-display text-lg font-bold flex items-center gap-2">
+                    <Bell className="size-4 text-primary" /> Membership &amp; Notifications
+                  </h2>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Role: <strong className="capitalize text-foreground">{membership?.role}</strong>{" "}
+                    · Device-local alert preference for this Hub.
+                  </p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="hub-notif-toggle" className="text-xs font-semibold cursor-pointer">
+                      Hub Alerts
+                    </Label>
+                    <Switch
+                      id="hub-notif-toggle"
+                      checked={hubNotificationsEnabled}
+                      onCheckedChange={toggleHubNotifications}
+                      aria-label="Toggle Hub notifications on this device"
+                    />
+                  </div>
+                  {!isOwner && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => leaveMutation.mutate()}
+                      disabled={leaveMutation.isPending}
+                      className="rounded-full text-xs hover:border-destructive hover:text-destructive"
+                    >
+                      <LogOut className="size-3.5" /> Leave Hub
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+
             {hub.description && (
               <div className="surface-card rounded-3xl p-6 sm:p-8">
                 <h2 className="font-display text-xl font-bold">About this Hub</h2>

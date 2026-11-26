@@ -116,7 +116,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         name: "description",
         content:
-          "Social, communication, discovery, and economic network for everyone. Share Pings, Moments, join Hubs, and message 1-on-1 in Signal.",
+          "Social, communication, discovery, and economic network for everyone. Share Pings and Moments, and communicate across Chats, Hubs, and institutional Signals in Inbox.",
       },
       { property: "og:title", content: "Ping — Build in public. Share your story." },
       {
@@ -230,8 +230,12 @@ function RootShellContent() {
 
   const focusedWorkspace = useFocusedWorkspace();
   const hideBottomBar = shouldHideBottomNav(pathname) || focusedWorkspace;
+  const inInboxChats =
+    pathname === "/inbox" &&
+    !searchStr.includes("section=hubs") &&
+    !searchStr.includes("section=signals");
   const hideFooter =
-    pathname.startsWith("/messages") || pathname === "/signals" || shouldHideBottomNav(pathname);
+    pathname.startsWith("/messages") || inInboxChats || shouldHideBottomNav(pathname);
 
   return (
     <>
@@ -297,9 +301,9 @@ function RootShellContent() {
               </kbd>
             </div>
             <div className="flex items-center justify-between py-1 border-b border-border/40">
-              <span className="text-muted-foreground">Go to Messages</span>
+              <span className="text-muted-foreground">Go to Inbox (Chats)</span>
               <kbd className="px-2 py-0.5 rounded bg-secondary border border-border font-mono font-bold">
-                G M
+                G I
               </kbd>
             </div>
             <div className="flex items-center justify-between py-1 border-b border-border/40">

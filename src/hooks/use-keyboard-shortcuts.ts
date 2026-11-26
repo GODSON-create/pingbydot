@@ -64,15 +64,15 @@ export function useKeyboardShortcuts() {
         if (e.key === "h" || e.key === "H") {
           e.preventDefault();
           navigate({ to: "/" });
-        } else if (e.key === "m" || e.key === "M") {
+        } else if (e.key === "i" || e.key === "I" || e.key === "m" || e.key === "M") {
           e.preventDefault();
-          navigate({ to: "/messages" });
+          navigate({ to: "/inbox", search: {} });
         } else if (e.key === "s" || e.key === "S") {
           e.preventDefault();
-          navigate({ to: "/signals" });
+          navigate({ to: "/inbox", search: { section: "signals" } });
         } else if (e.key === "b" || e.key === "B") {
           e.preventDefault();
-          navigate({ to: "/hubs" });
+          navigate({ to: "/inbox", search: { section: "hubs" } });
         }
       }
     };

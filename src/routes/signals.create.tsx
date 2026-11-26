@@ -291,11 +291,12 @@ function CreateSignalPage() {
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
       <Link
-        to="/signals"
+        to="/inbox"
+        search={{ section: "signals" }}
         className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
       >
         <ArrowLeft className="size-3.5" />
-        Back to Signals directory
+        Back to Signals
       </Link>
 
       <div className="mt-4 flex items-center gap-3">
@@ -446,7 +447,9 @@ function CreateSignalPage() {
 
         <div className="pt-2 flex items-center justify-end gap-3">
           <Button asChild variant="outline" className="rounded-xl">
-            <Link to="/signals">Cancel</Link>
+            <Link to="/inbox" search={{ section: "signals" }}>
+              Cancel
+            </Link>
           </Button>
           <Button type="submit" variant="hero" disabled={isSubmitting} className="rounded-xl">
             {isSubmitting ? "Registering…" : "Register Signal Channel"}

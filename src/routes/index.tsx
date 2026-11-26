@@ -79,7 +79,7 @@ export const Route = createFileRoute("/")({
     pageHead({
       title: "Ping by DOT — Connect, Share, Discover Hubs & Signals",
       description:
-        "Social, communication, discovery, and economic network for everyone. Share Pings, publish Moments, join Hubs, and chat 1-on-1 in Signal.",
+        "Social, communication, discovery, and economic network for everyone. Share Pings and Moments, and communicate via Chats, Hubs, and institutional Signals.",
       path: "/",
       card: "summary_large_image",
     }),
@@ -874,15 +874,15 @@ function HomeFeedContent() {
             </div>
           </section>
 
-          {/* 4. SIGNAL — 1-ON-1 CHATS & CONVERSATIONS */}
-          <section aria-labelledby="signals-discovery-heading">
+          {/* 4. INBOX — RECENT CHATS & SIGNALS QUICK ACCESS */}
+          <section aria-labelledby="inbox-discovery-heading">
             <div className="flex items-center justify-between mb-3">
               <h2
-                id="signals-discovery-heading"
+                id="inbox-discovery-heading"
                 className="font-display text-lg font-bold flex items-center gap-2 text-foreground"
               >
                 <MessageSquare className="size-5 text-primary" />
-                <span>Signal · 1-on-1 Chats</span>
+                <span>Inbox · Chats</span>
               </h2>
               <Button
                 asChild
@@ -890,7 +890,9 @@ function HomeFeedContent() {
                 size="sm"
                 className="h-7 text-xs px-2 text-primary font-semibold"
               >
-                <Link to="/signals">Open Signal</Link>
+                <Link to="/inbox" search={{}}>
+                  Open Inbox
+                </Link>
               </Button>
             </div>
 
@@ -911,11 +913,14 @@ function HomeFeedContent() {
                   <div className="space-y-2">
                     {conversations.slice(0, 3).map((conv) => {
                       const peer = conv.other_member;
-                      const peerName = peer?.display_name || peer?.username || "Founder";
+                      const peerName =
+                        conv.type === "group"
+                          ? conv.title || "Group Chat"
+                          : peer?.display_name || peer?.username || "Founder";
                       return (
                         <Link
                           key={conv.id}
-                          to="/signals"
+                          to="/inbox"
                           search={{ conversationId: conv.id }}
                           className="flex items-center gap-2.5 rounded-xl border border-border/60 bg-secondary/35 p-2.5 hover:bg-secondary/70 transition-colors"
                         >
@@ -930,23 +935,45 @@ function HomeFeedContent() {
                       );
                     })}
                   </div>
-                  <Button
-                    asChild
-                    variant="hero"
-                    size="sm"
-                    className="w-full rounded-xl text-xs h-8"
-                  >
-                    <Link to="/signals">Open 1-on-1 Chats</Link>
-                  </Button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      asChild
+                      variant="hero"
+                      size="sm"
+                      className="w-full rounded-xl text-xs h-8"
+                    >
+                      <Link to="/inbox" search={{}}>
+                        Open Chats
+                      </Link>
+                    </Button>
+                    <Button
+                      asChild
+                      variant="outline"
+                      size="sm"
+                      className="w-full rounded-xl text-xs h-8"
+                    >
+                      <Link to="/signals">Signals</Link>
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <div className="text-center text-xs text-muted-foreground">
                   <MessageSquare className="mx-auto size-8 text-muted-foreground/40 mb-2" />
-                  <p className="font-semibold text-foreground">Private 1-on-1 Conversations</p>
-                  <p className="mt-1">Message anyone directly inside Signal across Ping.</p>
-                  <Button asChild variant="hero" size="sm" className="mt-3 rounded-xl text-xs h-7">
-                    <Link to="/signals">Open Signal Chats</Link>
-                  </Button>
+                  <p className="font-semibold text-foreground">Chats, Hubs &amp; Signals</p>
+                  <p className="mt-1">
+                    Message people directly, join group Hubs, or follow institutional Signals inside
+                    Inbox.
+                  </p>
+                  <div className="mt-3 flex items-center justify-center gap-2">
+                    <Button asChild variant="hero" size="sm" className="rounded-xl text-xs h-7">
+                      <Link to="/inbox" search={{}}>
+                        Open Inbox
+                      </Link>
+                    </Button>
+                    <Button asChild variant="outline" size="sm" className="rounded-xl text-xs h-7">
+                      <Link to="/signals">Signals</Link>
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>

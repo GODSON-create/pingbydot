@@ -23,11 +23,14 @@ export function SiteFooter() {
           <Link to="/explore" className="text-muted-foreground hover:text-foreground">
             Explore Pings
           </Link>
+          <Link to="/inbox" search={{}} className="text-muted-foreground hover:text-foreground">
+            Inbox
+          </Link>
           <Link to="/hubs" className="text-muted-foreground hover:text-foreground">
-            Community Hubs
+            Hubs (Groups)
           </Link>
           <Link to="/signals" className="text-muted-foreground hover:text-foreground">
-            Signal (1-on-1 Chats)
+            Signals (Broadcasts)
           </Link>
           <Link to="/create" className="text-muted-foreground hover:text-foreground">
             Create a Ping

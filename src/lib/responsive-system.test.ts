@@ -18,10 +18,6 @@ describe("Visual System & Responsive Experience Audit (375px, 768px, 1024px, 144
     const indexTsx = fs.readFileSync(path.resolve(__dirname, "../routes/index.tsx"), "utf8");
     const hubsTsx = fs.readFileSync(path.resolve(__dirname, "../routes/hubs.tsx"), "utf8");
     const signalsTsx = fs.readFileSync(path.resolve(__dirname, "../routes/signals.tsx"), "utf8");
-    const messagesWorkspaceTsx = fs.readFileSync(
-      path.resolve(__dirname, "../components/messages/MessagesWorkspace.tsx"),
-      "utf8",
-    );
     const signalsSlugTsx = fs.readFileSync(
       path.resolve(__dirname, "../routes/signals.$slug.tsx"),
       "utf8",
@@ -35,9 +31,8 @@ describe("Visual System & Responsive Experience Audit (375px, 768px, 1024px, 144
     expect(indexTsx).toContain("bg-gold/15 text-gold border border-gold/30");
     // Hubs directory verified badge
     expect(hubsTsx).toContain("bg-gold/15 text-gold border border-gold/30");
-    // Signals tab (1-on-1 chats workspace) gold badge
-    expect(signalsTsx).toContain("MessagesWorkspace");
-    expect(messagesWorkspaceTsx).toContain("bg-gold/15 text-gold border border-gold/30");
+    // Signals institutional directory verified badge
+    expect(signalsTsx).toContain("bg-gold/15 text-gold border border-gold/30");
     // Signals slug verified badge
     expect(signalsSlugTsx).toContain("bg-gold/15 text-gold border border-gold/30");
     // Hubs slug verified badge

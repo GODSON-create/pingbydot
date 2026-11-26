@@ -20,6 +20,7 @@ import { Route as DownloadRouteImport } from './routes/download'
 import { Route as ExploreRouteImport } from './routes/explore'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as HubsRouteImport } from './routes/hubs'
+import { Route as InboxRouteImport } from './routes/inbox'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MediaRouteImport } from './routes/media'
 import { Route as MessagesRouteImport } from './routes/messages'
@@ -120,6 +121,11 @@ const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
 const HubsRoute = HubsRouteImport.update({
   id: '/hubs',
   path: '/hubs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InboxRoute = InboxRouteImport.update({
+  id: '/inbox',
+  path: '/inbox',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -365,6 +371,7 @@ export interface FileRoutesByFullPath {
   '/explore': typeof ExploreRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/hubs': typeof HubsRouteWithChildren
+  '/inbox': typeof InboxRoute
   '/login': typeof LoginRoute
   '/media': typeof MediaRoute
   '/messages': typeof MessagesRoute
@@ -423,6 +430,7 @@ export interface FileRoutesByTo {
   '/explore': typeof ExploreRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/hubs': typeof HubsRouteWithChildren
+  '/inbox': typeof InboxRoute
   '/login': typeof LoginRoute
   '/media': typeof MediaRoute
   '/messages': typeof MessagesRoute
@@ -483,6 +491,7 @@ export interface FileRoutesById {
   '/explore': typeof ExploreRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/hubs': typeof HubsRouteWithChildren
+  '/inbox': typeof InboxRoute
   '/login': typeof LoginRoute
   '/media': typeof MediaRoute
   '/messages': typeof MessagesRoute
@@ -543,6 +552,7 @@ export interface FileRouteTypes {
     | '/explore'
     | '/forgot-password'
     | '/hubs'
+    | '/inbox'
     | '/login'
     | '/media'
     | '/messages'
@@ -601,6 +611,7 @@ export interface FileRouteTypes {
     | '/explore'
     | '/forgot-password'
     | '/hubs'
+    | '/inbox'
     | '/login'
     | '/media'
     | '/messages'
@@ -660,6 +671,7 @@ export interface FileRouteTypes {
     | '/explore'
     | '/forgot-password'
     | '/hubs'
+    | '/inbox'
     | '/login'
     | '/media'
     | '/messages'
@@ -720,6 +732,7 @@ export interface RootRouteChildren {
   ExploreRoute: typeof ExploreRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   HubsRoute: typeof HubsRouteWithChildren
+  InboxRoute: typeof InboxRoute
   LoginRoute: typeof LoginRoute
   MediaRoute: typeof MediaRoute
   MessagesRoute: typeof MessagesRoute
@@ -826,6 +839,13 @@ declare module '@tanstack/react-router' {
       path: '/hubs'
       fullPath: '/hubs'
       preLoaderRoute: typeof HubsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inbox': {
+      id: '/inbox'
+      path: '/inbox'
+      fullPath: '/inbox'
+      preLoaderRoute: typeof InboxRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -1239,6 +1259,7 @@ const rootRouteChildren: RootRouteChildren = {
   ExploreRoute: ExploreRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   HubsRoute: HubsRouteWithChildren,
+  InboxRoute: InboxRoute,
   LoginRoute: LoginRoute,
   MediaRoute: MediaRoute,
   MessagesRoute: MessagesRoute,

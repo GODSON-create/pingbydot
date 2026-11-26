@@ -302,8 +302,8 @@ describe("Objective A — Moments Media Resolution, Playback, Caching & Resilien
         "src",
         "https://cdn.ping.test/sign/private-moments/clip-refreshed.mp4",
       );
+      expect(playSpy).toHaveBeenCalled();
     });
-    expect(playSpy).toHaveBeenCalled();
 
     playSpy.mockRestore();
     pauseSpy.mockRestore();

@@ -717,30 +717,31 @@ function Explore() {
                 Recommended communities
               </h2>
               <p className="text-xs text-muted-foreground">
-                Organizational Hubs, universities, incubators, and topic Forums.
+                Collaborative group Hubs for teams, campuses, organizations, and communities.
               </p>
             </div>
             <Link
-              to="/hubs"
+              to="/inbox"
+              search={{ section: "hubs" }}
               className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
             >
-              Open Community Hub <ArrowRight className="size-3.5" />
+              Open Hubs in Inbox <ArrowRight className="size-3.5" />
             </Link>
           </div>
 
           {isCommunitiesError ? (
             <QueryErrorCard
               compact
-              title="Couldn't load Community Hubs"
+              title="Couldn't load Hubs"
               error={communitiesError}
               onRetry={() => void refetchCommunities()}
             />
           ) : communities.length === 0 ? (
             <div className="surface-card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-3xl p-6">
               <div>
-                <p className="font-display text-base font-bold">Launch the first Community Hub</p>
+                <p className="font-display text-base font-bold">Launch the first Hub</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Create a dedicated space with topic Forums and institutional broadcasts.
+                  Start a dedicated group Hub for real-time team and community conversations.
                 </p>
               </div>
               <Button asChild variant="hero" size="sm" className="rounded-full shrink-0">

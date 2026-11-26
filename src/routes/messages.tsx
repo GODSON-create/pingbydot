@@ -18,8 +18,8 @@ export const Route = createFileRoute("/messages")({
   }),
   head: () =>
     pageHead({
-      title: "Direct Messages — Ping by DOT",
-      description: "Private, secure one-to-one conversations on Ping by DOT.",
+      title: "Chats — Inbox on Ping by DOT",
+      description: "Private direct and group conversations inside your Ping Inbox.",
       path: "/messages",
     }),
   component: MessagesPage,
@@ -33,7 +33,6 @@ function MessagesPage() {
       basePath="/messages"
       conversationId={search.conversationId}
       userIdParam={search.userId}
-      redirectUnauthenticated
     />
   );
 }

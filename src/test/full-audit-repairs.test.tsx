@@ -169,7 +169,7 @@ describe("Full-System Audit Repairs: Navigation, Creation Flows, Media & Privacy
     expect(sidebarSrc).toContain("hidden lg:flex");
     expect(sidebarSrc).toContain("w-20 xl:w-64");
     expect(sidebarSrc).toContain("effectiveCollapsed");
-    expect(sidebarSrc).toContain('pathname !== "/signals"');
+    expect(sidebarSrc).toContain("isInboxPath(pathname)");
 
     const workspaceSrc = readRel("src/components/messages/MessagesWorkspace.tsx");
     expect(workspaceSrc).toContain('isOpen("chat-peer-profile")');

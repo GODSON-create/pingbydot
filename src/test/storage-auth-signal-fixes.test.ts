@@ -55,7 +55,11 @@ describe("Media storage, auth redirect safety, hub error mapping, and Signal 1-o
     );
   });
 
-  it("wires the Signal tab (/signals) to the shared 1-on-1 chats workspace", () => {
+  it("wires Inbox (/inbox & /messages) to Chats workspace and keeps /signals pure institutional broadcasts", () => {
+    const inboxSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "src/routes/inbox.tsx"),
+      "utf8",
+    );
     const signalsSrc = fs.readFileSync(
       path.resolve(process.cwd(), "src/routes/signals.tsx"),
       "utf8",
@@ -65,14 +69,14 @@ describe("Media storage, auth redirect safety, hub error mapping, and Signal 1-o
       "utf8",
     );
 
-    expect(signalsSrc).toContain("MessagesWorkspace");
-    expect(signalsSrc).toContain('basePath="/signals"');
-    expect(signalsSrc).toContain("showCommunityHeader");
+    expect(inboxSrc).toContain("MessagesWorkspace");
+    expect(inboxSrc).toContain('basePath="/inbox"');
+    expect(inboxSrc).toContain("InboxSectionTabs");
     expect(workspaceSrc).toContain("userConversationsQuery");
     expect(workspaceSrc).toContain("DirectMessageChat");
-    expect(workspaceSrc).toContain("Community Destination · Signal");
-    expect(workspaceSrc).toContain("1-on-1 Chats");
-    expect(workspaceSrc).toContain("Institutional Channels");
+    expect(signalsSrc).toContain("SignalsDirectorySection");
+    expect(signalsSrc).toContain("Official Institutional Broadcasts");
+    expect(signalsSrc).not.toContain("MessagesWorkspace");
   });
 
   it("preflights OAuth providers and preserves SSR hydration parity on root shell & home feed", () => {
