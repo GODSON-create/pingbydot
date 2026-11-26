@@ -16,8 +16,14 @@ export const readPublicPings = createServerFn({ method: "GET" })
     }),
   )
   .handler(async ({ data }) => {
-    const url = process.env["SUPABASE_URL"];
-    const key = process.env["SUPABASE_PUBLISHABLE_KEY"];
+    const url =
+      process.env["SUPABASE_URL"] ||
+      process.env["VITE_SUPABASE_URL"] ||
+      import.meta.env["VITE_SUPABASE_URL"];
+    const key =
+      process.env["SUPABASE_PUBLISHABLE_KEY"] ||
+      process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ||
+      import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"];
     if (!url || !key) throw new Error("Public reading is temporarily unavailable.");
     const client = createClient<Database>(url, key, {
       auth: { persistSession: false, autoRefreshToken: false },

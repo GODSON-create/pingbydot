@@ -12,8 +12,14 @@ export const readPublicComments = createServerFn({ method: "GET" })
     z.object({ pingId: z.string().uuid(), page: z.number().int().min(0).max(10000).default(0) }),
   )
   .handler(async ({ data }) => {
-    const url = process.env["SUPABASE_URL"];
-    const key = process.env["SUPABASE_PUBLISHABLE_KEY"];
+    const url =
+      process.env["SUPABASE_URL"] ||
+      process.env["VITE_SUPABASE_URL"] ||
+      import.meta.env["VITE_SUPABASE_URL"];
+    const key =
+      process.env["SUPABASE_PUBLISHABLE_KEY"] ||
+      process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ||
+      import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"];
     if (!url || !key) throw new Error("Replies are temporarily unavailable.");
     const client = createClient<Database>(url, key, {
       auth: { persistSession: false, autoRefreshToken: false },
