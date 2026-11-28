@@ -1,366 +1,187 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Build Africa Challenge — Have an idea? Let's help you build it. Join Ping. Share your idea. Learn on DOT. If selected, build with GRIOT AI. One-year objective: 100 million people in one connected builder network." />
-  <title>Build Africa Challenge — Join Ping. Learn on DOT. Build with GRIOT AI.</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#07110e">
+  <meta name="description" content="Ping is the social network for builders. Connect with people, share ideas, discover opportunities and build solutions across Africa and beyond.">
+  <meta property="og:title" content="Ping — The social network for builders">
+  <meta property="og:description" content="Find your people. Share ideas. Build what matters.">
+  <meta property="og:type" content="website">
+  <title>Ping — The Social Network for Builders</title>
+  <link rel="icon" href="https://justping.lovable.app/favicon.ico">
+  <link rel="stylesheet" href="./corporate.css">
 </head>
 <body>
-
-  <div class="site-stage" id="home">
-
-    <!-- Top Navigation -->
-    <header class="site-header">
-      <a href="#home" class="brand-link">
-        <span class="brand-mark">BA</span>
-        <span>Build Africa Challenge</span>
-      </a>
-
-      <nav class="primary-nav" aria-label="Main Navigation">
-        <a href="#home" class="nav-item active">Home</a>
-        <a href="#how-it-works" class="nav-item">How It Works</a>
-        <a href="#products" class="nav-item">Products</a>
-        <a href="#network-strategy" class="nav-item">Network Strategy</a>
-        <a href="#challenge" class="nav-item">The Challenge</a>
-        <a href="#roadmap" class="nav-item">Roadmap</a>
-        <a href="#faq" class="nav-item">FAQ</a>
-      </nav>
-
-      <a href="https://justping.lovable.app/" target="_blank" rel="noopener" class="header-cta">
-        Join Ping ↗
-      </a>
-    </header>
-
-    <!-- ======================================================================
-         HOME / HERO SECTION
-         ====================================================================== -->
-    <section class="hero-section">
-      <span class="hero-eyebrow">BUILD AFRICA CHALLENGE</span>
-
-      <h1 class="hero-title">
-        Have an idea? <span class="highlight">Let's help you build it.</span>
-      </h1>
-
-      <p class="hero-lead">
-        Join Ping. Share your idea. Learn on DOT. If selected, build with GRIOT AI.
-      </p>
-
-      <p class="hero-sublead">
-        Our one-year objective is to bring <strong>100 million people</strong> into one connected builder network.
-      </p>
-
-      <div class="hero-actions">
-        <a href="https://justping.lovable.app/" target="_blank" rel="noopener" class="btn-primary">
-          Join Ping to Start ↗
-        </a>
-        <a href="#how-it-works" class="btn-secondary">
-          See How Participation Works
-        </a>
-      </div>
-
-      <!-- Simple Three-Product Journey -->
-      <div class="journey-loop-bar" role="group" aria-label="Connected three-product journey">
-        <button type="button" class="journey-loop-pill active" data-select-product="ping">
-          <span>Ping</span>
-        </button>
-        <span class="journey-loop-arrow">→</span>
-        <button type="button" class="journey-loop-pill" data-select-product="dot">
-          <span>DOT</span>
-        </button>
-        <span class="journey-loop-arrow">→</span>
-        <button type="button" class="journey-loop-pill" data-select-product="griot">
-          <span>GRIOT AI</span>
-        </button>
-        <span class="journey-loop-arrow">→</span>
-        <button type="button" class="journey-loop-pill" data-select-product="ping">
-          <span>Ping</span>
-        </button>
-      </div>
-
-      <!-- Three Differentiated Product Cards -->
-      <div class="product-trio-grid">
-
-        <article class="product-summary-card surface-obsidian" data-select-product="ping">
-          <div class="product-card-top">
-            <div class="product-card-kicker">
-              <span>PING — JOIN AND CONNECT</span>
-              <span>↗</span>
-            </div>
-            <h2 class="product-card-name">Ping</h2>
-            <p class="product-card-desc">
-              Discover opportunities, join communities, share ideas, connect with builders and publish progress.
-            </p>
-          </div>
-          <div class="product-card-footer">
-            <span>Connects people & distributes opportunities</span>
-            <span class="mono">justping.lovable.app</span>
-          </div>
-        </article>
-
-        <article class="product-summary-card surface-stone" data-select-product="dot">
-          <div class="product-card-top">
-            <div class="product-card-kicker">
-              <span>DOT — LEARN AND DEVELOP</span>
-              <span>↗</span>
-            </div>
-            <h2 class="product-card-name">DOT</h2>
-            <p class="product-card-desc">
-              Access courses, learning paths, resources, learning progress, a credit wallet and qualifying perks.
-            </p>
-          </div>
-          <div class="product-card-footer">
-            <span>Develops knowledge & capabilities</span>
-            <span class="mono">dotlive.lovable.app</span>
-          </div>
-        </article>
-
-        <article class="product-summary-card surface-emerald" data-select-product="griot">
-          <div class="product-card-top">
-            <div class="product-card-kicker">
-              <span>GRIOT AI — PLAN AND BUILD</span>
-              <span>↗</span>
-            </div>
-            <h2 class="product-card-name">GRIOT AI</h2>
-            <p class="product-card-desc">
-              A project execution workspace that helps selected builders structure projects, organise tasks, schedule work, track milestones and improve execution.
-            </p>
-          </div>
-          <div class="product-card-footer">
-            <span>Turns knowledge & ideas into execution</span>
-            <span>Merit-Selected</span>
-          </div>
-        </article>
-
-      </div>
-    </section>
-
-    <!-- ======================================================================
-         HOW PARTICIPATION WORKS (6 Steps)
-         ====================================================================== -->
-    <section class="page-section soft-bg" id="how-it-works">
-      <div class="section-heading-block">
-        <span class="section-label">How Participation Works</span>
-        <h2 class="section-title">Six steps from joining Ping to building your project</h2>
-        <p class="section-description">
-          One shared identity connects your participation on Ping, your learning on DOT, and your project execution in GRIOT AI.
-        </p>
-      </div>
-
-      <div class="steps-six-grid" id="how-steps-mount">
-        <article class="how-step-card">
-          <div>
-            <div class="how-step-top"><span class="how-step-number tabular">1</span><span class="how-step-product">Ping</span></div>
-            <h3 class="how-step-title">Join Ping and verify your account.</h3>
-            <p class="how-step-desc">Create your primary builder profile on Ping, complete account verification, and receive your permanent DOT ID.</p>
-          </div>
-        </article>
-        <article class="how-step-card">
-          <div>
-            <div class="how-step-top"><span class="how-step-number tabular">2</span><span class="how-step-product">Ping</span></div>
-            <h3 class="how-step-title">Share your idea and participate.</h3>
-            <p class="how-step-desc">Register for the Challenge using your Ping profile, submit your idea, and engage with the builder community.</p>
-          </div>
-        </article>
-        <article class="how-step-card">
-          <div>
-            <div class="how-step-top"><span class="how-step-number tabular">3</span><span class="how-step-product">Ping → DOT</span></div>
-            <h3 class="how-step-title">Earn eligible DOT credits progressively.</h3>
-            <p class="how-step-desc">Unlock learning credits step by step as you verify your account, complete learning milestones, and demonstrate project progress.</p>
-          </div>
-        </article>
-        <article class="how-step-card">
-          <div>
-            <div class="how-step-top"><span class="how-step-number tabular">4</span><span class="how-step-product">DOT</span></div>
-            <h3 class="how-step-title">Learn and develop on DOT.</h3>
-            <p class="how-step-desc">Open DOT with your linked identity, activate your credit wallet, and take structured courses, learning paths, and assessments.</p>
-          </div>
-        </article>
-        <article class="how-step-card">
-          <div>
-            <div class="how-step-top"><span class="how-step-number tabular">5</span><span class="how-step-product">GRIOT AI</span></div>
-            <h3 class="how-step-title">Qualify for GRIOT AI through eligibility and merit-based selection.</h3>
-            <p class="how-step-desc">Meet programme eligibility requirements and pass merit-based review to earn access to the GRIOT AI execution workspace.</p>
-          </div>
-        </article>
-        <article class="how-step-card">
-          <div>
-            <div class="how-step-top"><span class="how-step-number tabular">6</span><span class="how-step-product">GRIOT AI → Ping</span></div>
-            <h3 class="how-step-title">Build your project and share progress on Ping.</h3>
-            <p class="how-step-desc">Structure your project, complete tasks and milestones in GRIOT AI, and publish your approved progress back on Ping.</p>
-          </div>
-        </article>
-      </div>
-    </section>
-
-    <!-- ======================================================================
-         THE THREE PRODUCTS (With Live Product Viewports)
-         ====================================================================== -->
-    <section class="page-section" id="products">
-      <div class="section-heading-block">
-        <span class="section-label">The Three Products</span>
-        <h2 class="section-title">Explore Ping, DOT, and GRIOT AI live</h2>
-        <p class="section-description">
-          Switch between the three products below to see what each platform does and interact with its live experience.
-        </p>
-      </div>
-
-      <div class="products-showcase-shell">
-        <div class="products-tab-bar">
-          <div class="product-selector-group" role="tablist">
-            <button type="button" class="product-selector-btn active" data-product-tab="ping">
-              PING — JOIN AND CONNECT
-            </button>
-            <button type="button" class="product-selector-btn" data-product-tab="dot">
-              DOT — LEARN AND DEVELOP
-            </button>
-            <button type="button" class="product-selector-btn" data-product-tab="griot">
-              GRIOT AI — PLAN AND BUILD
-            </button>
-          </div>
-
-          <div id="product-external-link-mount">
-            <a href="https://justping.lovable.app/" target="_blank" rel="noopener" class="header-cta" style="background:var(--accent-lime);color:var(--bg-obsidian);">
-              Open justping.lovable.app in New Tab ↗
-            </a>
-          </div>
-        </div>
-
-        <div class="product-split-layout">
-          <div class="product-info-panel" id="product-info-mount">
-            <div>
-              <span class="product-tagline-label">PING — JOIN AND CONNECT</span>
-              <h3 class="product-info-title">Ping</h3>
-              <p class="product-info-summary">Discover opportunities, join communities, share ideas, connect with builders and publish progress.</p>
-            </div>
-          </div>
-
-          <div class="live-browser-shell">
-            <div class="live-browser-bar" id="live-browser-bar-mount"></div>
-            <div class="live-viewport-window" id="live-viewport-mount"></div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ======================================================================
-         NETWORK STRATEGY & RETENTION / SUCCESS
-         ====================================================================== -->
-    <section class="page-section soft-bg" id="network-strategy">
-      <div class="section-heading-block">
-        <span class="section-label">Network Strategy & Retention</span>
-        <h2 class="section-title">Three connected products, not isolated applications</h2>
-        <p class="section-description">
-          Identity, learning progress, project activity and approved progress sharing connect the experience. Each product remains independently useful.
-        </p>
-      </div>
-
-      <div id="network-strategy-mount">
-        <div class="steps-six-grid" style="margin-bottom:24px;">
-          <article class="how-step-card">
-            <div>
-              <span class="how-step-product" style="display:inline-block;margin-bottom:12px;">Ping</span>
-              <h3 class="how-step-title">Ping connects people and distributes opportunities</h3>
-              <p class="how-step-desc">Why builders return: discovery, communities, connections, opportunities and progress.</p>
-            </div>
-          </article>
-          <article class="how-step-card">
-            <div>
-              <span class="how-step-product" style="display:inline-block;margin-bottom:12px;">DOT</span>
-              <h3 class="how-step-title">DOT develops people's knowledge and capabilities</h3>
-              <p class="how-step-desc">Why builders return: courses, learning paths, assessments, resources and learning progress.</p>
-            </div>
-          </article>
-          <article class="how-step-card">
-            <div>
-              <span class="how-step-product" style="display:inline-block;margin-bottom:12px;">GRIOT AI</span>
-              <h3 class="how-step-title">GRIOT AI helps people turn knowledge and ideas into execution</h3>
-              <p class="how-step-desc">Why builders return: project workspaces, tasks, schedules, milestones and execution history.</p>
-            </div>
-          </article>
-        </div>
-      </div>
-    </section>
-
-    <!-- ======================================================================
-         THE CHALLENGE
-         ====================================================================== -->
-    <section class="page-section" id="challenge">
-      <div class="section-heading-block">
-        <span class="section-label">The Challenge</span>
-        <h2 class="section-title">Participation, verification, progressive credits, and selection</h2>
-        <p class="section-description">
-          Build Africa Challenge is a builder development programme rewarding real learning and demonstrated execution.
-        </p>
-      </div>
-
-      <div class="challenge-bento-grid" id="challenge-mount">
-        <article class="challenge-box">
-          <h3>Account Verification Tiers</h3>
-          <p>Platform verification confirms your builder identity on Ping and triggers permanent DOT ID issuance. Standard: Free, Builder Plus: ₦3,000, Builder Pro: ₦30,000.</p>
-        </article>
-        <article class="challenge-box">
-          <h3>GRIOT AI Eligibility & Merit-Based Selection</h3>
-          <p>Two gates: Programme Eligibility and Merit-Based Selection. Access cannot be purchased and is not promised to every participant. Spotlight on Ping is also strictly merit-based without an application button.</p>
-        </article>
-      </div>
-    </section>
-
-    <!-- ======================================================================
-         ROADMAP
-         ====================================================================== -->
-    <section class="page-section soft-bg" id="roadmap">
-      <div class="section-heading-block">
-        <span class="section-label">Roadmap</span>
-        <h2 class="section-title">Five steps to the December 2026 launch</h2>
-        <p class="section-description">
-          How we are connecting the Build Africa Challenge experience in dependency order.
-        </p>
-      </div>
-
-      <div class="roadmap-list" id="roadmap-mount">
-        <article class="roadmap-item"><span class="roadmap-step-badge">Stage 01</span><h3>Connect Ping and DOT identities</h3></article>
-        <article class="roadmap-item"><span class="roadmap-step-badge">Stage 02</span><h3>Make DOT Learn and its credit wallet ready</h3></article>
-        <article class="roadmap-item"><span class="roadmap-step-badge">Stage 03</span><h3>Build the GRIOT AI project workspace</h3></article>
-        <article class="roadmap-item"><span class="roadmap-step-badge">Stage 04</span><h3>Connect the complete Challenge journey</h3></article>
-        <article class="roadmap-item"><span class="roadmap-step-badge">Stage 05</span><h3>Test and launch</h3></article>
-      </div>
-    </section>
-
-    <!-- ======================================================================
-         FAQ
-         ====================================================================== -->
-    <section class="page-section" id="faq">
-      <div class="section-heading-block">
-        <span class="section-label">Frequently Asked Questions</span>
-        <h2 class="section-title">Simple answers for builders</h2>
-        <p class="section-description">
-          Clear answers about accounts, credits, selection, and participation.
-        </p>
-      </div>
-
-      <div class="faq-list" id="faq-mount"></div>
-    </section>
-
-    <!-- Footer -->
-    <footer class="site-footer">
-      <div>
-        <strong style="color:var(--ink-primary);">Build Africa Challenge</strong> • Ping, DOT and GRIOT AI • 100M Connected Builder Network Objective
-      </div>
-      <div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap;">
-        <a href="https://justping.lovable.app/" target="_blank" rel="noopener" style="color:var(--emerald-900);font-weight:700;text-decoration:none;">Ping (justping.lovable.app) ↗</a>
-        <a href="https://dotlive.lovable.app/" target="_blank" rel="noopener" style="color:var(--emerald-900);font-weight:700;text-decoration:none;">DOT (dotlive.lovable.app) ↗</a>
-        <a href="#home" style="color:var(--ink-secondary);font-weight:600;text-decoration:none;">Back to top ↑</a>
-      </div>
-    </footer>
-
+<header class="site-header">
+  <div class="shell header-inner">
+    <a class="brand" href="#top" aria-label="Ping home"><span class="brand-mark">p.</span>ping</a>
+    <nav class="nav" aria-label="Main navigation">
+      <a href="#why-ping">Why Ping</a><a href="#ecosystem">Ecosystem</a><a href="#growth">Growth</a><a href="#pricing">Pricing</a><a href="#about">Founder</a><a href="#investment">Investment</a>
+    </nav>
+    <div class="header-actions"><a class="btn btn-ghost" href="#about">Our story</a><a class="btn btn-primary" href="https://justping.lovable.app/download?ref=corporate-site&site=godson-create.github.io/pingbydot&utm_source=corporate-site&utm_medium=website&utm_campaign=public-launch">Get Ping ↗</a><button class="menu-toggle" id="menu-toggle" aria-expanded="false" aria-controls="mobile-nav">Menu</button></div>
+    <nav class="mobile-nav" id="mobile-nav" aria-label="Mobile navigation"><a href="#why-ping">Why Ping</a><a href="#ecosystem">Ecosystem</a><a href="#growth">Growth</a><a href="#pricing">Pricing</a><a href="#about">Founder</a><a href="#investment">Investment</a><a href="https://justping.lovable.app/download?ref=corporate-site&site=godson-create.github.io/pingbydot&utm_source=corporate-site&utm_medium=website&utm_campaign=public-launch">Download Ping ↗</a></nav>
   </div>
-
-  <script src="data.js"></script>
-  <script src="app.js"></script>
+</header>
+<main id="top">
+<section class="hero">
+  <div class="shell hero-grid">
+    <div class="hero-copy">
+      <span class="eyebrow">A network built around what you create</span>
+      <h1>The social network <span>for builders.</span></h1>
+      <p>Ideas are everywhere. The people, knowledge and tools to turn them into reality are scattered. Ping brings builders into one network to connect, communicate, collaborate and create solutions that matter.</p>
+      <div class="hero-actions"><a class="btn btn-primary" href="https://justping.lovable.app/download?ref=corporate-site&site=godson-create.github.io/pingbydot&utm_source=corporate-site&utm_medium=website&utm_campaign=public-launch">Download / Install Ping ↗</a><a class="btn btn-ghost" href="#ecosystem">Explore the network ↓</a></div>
+      <div class="launch-note"><span class="live-dot"></span> Beta is live · Public launch target: December 2026</div>
+    </div>
+    <div class="hero-visual" aria-label="Illustration of a builder network">
+      <div class="orbit"></div>
+      <div class="hero-card">
+        <div class="hero-card-top"><span>THE BUILDER NETWORK</span><span>● CONNECTED</span></div>
+        <div class="ping-symbol">p.</div>
+        <h3>Build with people who build.</h3>
+        <p>One place to find collaborators, share progress, discover opportunities and move ideas forward.</p>
+        <div class="mini-feed">
+          <div class="mini-post"><span class="avatar">AM</span><div><strong>Amara M.</strong><small>Looking for a product co-founder</small></div><span class="mini-tag">CONNECT</span></div>
+          <div class="mini-post"><span class="avatar">TK</span><div><strong>Tunde K.</strong><small>Sharing a prototype update</small></div><span class="mini-tag">BUILD</span></div>
+          <div class="mini-post"><span class="avatar">ZN</span><div><strong>Zainab N.</strong><small>Found a new opportunity</small></div><span class="mini-tag">DISCOVER</span></div>
+        </div>
+      </div>
+      <div class="hero-float">Ideas → Execution</div>
+    </div>
+  </div>
+</section>
+<section class="metrics">
+  <div class="shell metric-grid">
+    <div class="metric"><strong>100+</strong><span>Registered beta users</span></div>
+    <div class="metric"><strong>~20</strong><span>Currently active users</span></div>
+    <div class="metric"><strong>3</strong><span>Countries represented</span></div>
+    <div class="metric"><strong>Pre-revenue</strong><span>Current commercial stage</span></div>
+  </div>
+</section>
+<section class="section" id="why-ping">
+  <div class="shell two-col">
+    <div class="story-copy">
+      <span class="eyebrow">The problem worth solving</span>
+      <h2>Africa has builders. <span class="accent">They need a better way to find each other.</span></h2>
+      <p class="lead">Talent is not the missing ingredient. The missing piece is connected infrastructure that helps people move from isolated ambition to shared progress.</p>
+      <div class="problem-list">
+        <div class="problem-row"><span class="problem-icon">↗</span><span>Potential collaborators are spread across disconnected social platforms and private groups.</span></div>
+        <div class="problem-row"><span class="problem-icon">↗</span><span>Opportunities, knowledge and practical support are difficult to discover in one place.</span></div>
+        <div class="problem-row"><span class="problem-icon">↗</span><span>Good ideas often struggle to find the people and execution support needed to become real solutions.</span></div>
+      </div>
+    </div>
+    <div class="story-panel">
+      <span class="eyebrow">Our thesis</span>
+      <h3>Connection should lead somewhere.</h3>
+      <p>Ping is designed around productive intent: help people find the right community, start useful conversations, share what they are building and access a wider system for learning and execution. The goal is not simply more screen time. It is more meaningful work made possible through a connected network.</p>
+    </div>
+  </div>
+</section>
+<section class="section" id="ecosystem">
+  <div class="shell">
+    <div class="section-head"><span class="eyebrow">The connected ecosystem</span><h2>One network. Three ways to move ideas forward.</h2><p>Ping is the connection and distribution layer. DOT develops builder capability. GRIOT AI helps turn plans into structured execution.</p></div>
+    <div class="ecosystem">
+      <article class="eco-card"><span class="eco-kicker">01 / CONNECT</span><h3>Ping</h3><p>The social network for builders. Discover people and opportunities, join communities, communicate and share progress.</p><a href="https://justping.lovable.app/">Explore Ping ↗</a></article>
+      <article class="eco-card"><span class="eco-kicker">02 / DEVELOP</span><h3>DOT</h3><p>A learning and development platform for practical skills, venture-building knowledge, structured learning and progress.</p><a href="https://dotlive.lovable.app/">Explore DOT ↗</a></article>
+      <article class="eco-card"><span class="eco-kicker">03 / EXECUTE</span><h3>GRIOT AI</h3><p>An AI-assisted project execution environment to structure ideas, organise work, plan milestones and move projects forward.</p><a href="https://griot-ai.onrender.com/">Explore GRIOT AI ↗</a></article>
+    </div>
+    <div class="loop"><b>Ping</b><i>→</i><b>DOT</b><i>→</i><b>GRIOT AI</b><i>→</i><b>Ping</b><span>Learn, build, share progress, and bring others into the work.</span></div>
+  </div>
+</section>
+<section class="section" id="growth">
+  <div class="shell">
+    <div class="section-head"><span class="eyebrow">The growth ambition</span><h2>From an early network to <span class="accent">one million verified builders.</span></h2><p>The next phase is about turning early product validation into continental distribution. These are management targets and an illustrative operating scenario, not achieved results or guaranteed outcomes.</p></div>
+    <div class="growth-layout">
+      <div class="growth-stat">
+        <span class="eyebrow">Six-month target</span><div class="big">1M</div><strong>verified subscribers</strong><p>With a wider acquisition ambition of 10 million registered users.</p>
+        <div class="milestone-list"><div class="milestone"><strong>Month 1</strong><span>100,000 verified</span></div><div class="milestone"><strong>Month 2</strong><span>500,000 verified</span></div><div class="milestone"><strong>Month 3</strong><span>1,000,000 verified</span></div><div class="milestone"><strong>Months 4–6</strong><span>Maintain 1,000,000</span></div></div>
+      </div>
+      <div class="chart-card"><h3>Verified subscriber growth</h3><p>Illustrative target trajectory · users</p>
+        <div class="chart-wrap"><svg viewBox="0 0 640 340" role="img" aria-label="Line chart showing verified subscribers growing from 100 thousand in month one to 500 thousand in month two and one million in month three, remaining at one million through month six.">
+          <defs><linearGradient id="growthFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#83d9a0" stop-opacity=".3"/><stop offset="1" stop-color="#83d9a0" stop-opacity="0"/></linearGradient></defs>
+          <g stroke="#24392c" stroke-width="1"><path d="M58 42H610M58 105H610M58 168H610M58 231H610M58 294H610"/></g>
+          <g fill="#91a69a" font-size="12"><text x="8" y="46">1.0M</text><text x="8" y="109">750k</text><text x="8" y="172">500k</text><text x="8" y="235">250k</text><text x="24" y="298">0</text></g>
+          <path d="M72 269L177 168L282 42L387 42L492 42L597 42L597 294L72 294Z" fill="url(#growthFill)"/>
+          <path d="M72 269L177 168L282 42L387 42L492 42L597 42" fill="none" stroke="#9de5b4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+          <g fill="#e3c27d" stroke="#0b1812" stroke-width="3"><circle cx="72" cy="269" r="6"/><circle cx="177" cy="168" r="6"/><circle cx="282" cy="42" r="6"/><circle cx="387" cy="42" r="6"/><circle cx="492" cy="42" r="6"/><circle cx="597" cy="42" r="6"/></g>
+          <g fill="#dce9df" font-size="12" text-anchor="middle"><text x="72" y="322">M1</text><text x="177" y="322">M2</text><text x="282" y="322">M3</text><text x="387" y="322">M4</text><text x="492" y="322">M5</text><text x="597" y="322">M6</text></g>
+          <g fill="#e3c27d" font-size="12" font-weight="700"><text x="57" y="252">100k</text><text x="158" y="151">500k</text><text x="295" y="28">1M</text></g>
+        </svg></div>
+        <div class="chart-legend"><span><i class="legend-dot"></i>Verified subscriber target</span><span><i class="legend-dot gold-dot"></i>Milestone</span></div>
+      </div>
+    </div>
+    <div class="chart-card" style="margin-top:22px"><h3>Illustrative monthly subscription revenue</h3><p>USD millions · based on 80% Builder Plus and 20% Builder Pro subscribers at target pricing.</p>
+      <div class="chart-wrap"><svg viewBox="0 0 900 300" role="img" aria-label="Bar chart of monthly gross subscription revenue: 560 thousand dollars in month one, 2.8 million in month two, and 5.6 million in each month from month three to month six.">
+        <g stroke="#24392c"><path d="M50 35H870M50 95H870M50 155H870M50 215H870M50 255H870"/></g>
+        <g fill="#91a69a" font-size="12"><text x="7" y="39">$6M</text><text x="7" y="99">$4.5M</text><text x="7" y="159">$3M</text><text x="7" y="219">$1.5M</text><text x="25" y="259">$0</text></g>
+        <g fill="#70c98e"><rect x="95" y="233" width="74" height="22" rx="8"/><rect x="225" y="143" width="74" height="112" rx="8"/><rect x="355" y="45" width="74" height="210" rx="8"/><rect x="485" y="45" width="74" height="210" rx="8"/><rect x="615" y="45" width="74" height="210" rx="8"/><rect x="745" y="45" width="74" height="210" rx="8"/></g>
+        <g fill="#e3c27d" font-size="13" font-weight="700" text-anchor="middle"><text x="132" y="220">$0.56M</text><text x="262" y="130">$2.8M</text><text x="392" y="31">$5.6M</text><text x="522" y="31">$5.6M</text><text x="652" y="31">$5.6M</text><text x="782" y="31">$5.6M</text></g>
+        <g fill="#dce9df" font-size="13" text-anchor="middle"><text x="132" y="280">Month 1</text><text x="262" y="280">Month 2</text><text x="392" y="280">Month 3</text><text x="522" y="280">Month 4</text><text x="652" y="280">Month 5</text><text x="782" y="280">Month 6</text></g>
+      </svg></div>
+    </div>
+    <div class="revenue-grid">
+      <div class="revenue-breakdown"><span>Builder Plus · 800,000 × $2/month</span><strong class="accent">$1.6M</strong><small>Monthly gross subscription revenue</small></div>
+      <div class="revenue-breakdown"><span>Builder Pro · 200,000 × $20/month</span><strong class="gold">$4.0M</strong><small>Monthly gross subscription revenue</small></div>
+      <div class="revenue-breakdown"><span>Target monthly gross revenue</span><strong>$5.6M</strong><small>At one million verified paying subscribers</small></div>
+      <div class="revenue-breakdown"><span>Six-month cumulative scenario</span><strong>$25.76M</strong><small>Assumes the subscriber ramp shown above and full-month paid subscriptions</small></div>
+    </div>
+    <p class="disclaimer">Projection assumptions: 100,000 verified subscribers in Month 1; 500,000 in Month 2; 1,000,000 in Month 3 and maintained through Month 6. Subscriber mix remains 80% Builder Plus and 20% Builder Pro. Prices are monthly. Gross billings exclude taxes, payment processing, refunds, discounts, churn, failed payments and other deductions. Registered users, active users and paid verified subscribers are different measures.</p>
+  </div>
+</section>
+<section class="section" id="pricing">
+  <div class="shell">
+    <div class="section-head"><span class="eyebrow">Simple, region-aware pricing</span><h2>One membership. Local pricing where you live.</h2><p>Builder subscriptions are billed monthly. Nigerian users see naira pricing; users outside Nigeria see the corresponding US-dollar price.</p></div>
+    <div class="pricing-grid">
+      <article class="price-card"><span class="eyebrow">For committed builders</span><h3>Builder Plus</h3><p>Expanded access for people actively building and connecting.</p><div class="price-values"><div class="price-value"><small>Nigeria · monthly</small><strong>₦3,000</strong></div><div class="price-value"><small>International · monthly</small><strong>$2</strong></div></div><div class="price-foot">Region-based price equivalent. Billed monthly.</div></article>
+      <article class="price-card featured"><span class="eyebrow gold">For serious execution</span><h3>Builder Pro</h3><p>Professional-tier access for builders who want to go further.</p><div class="price-values"><div class="price-value"><small>Nigeria · monthly</small><strong>₦30,000</strong></div><div class="price-value"><small>International · monthly</small><strong>$20</strong></div></div><div class="price-foot">Region-based price equivalent. Billed monthly.</div></article>
+    </div>
+  </div>
+</section>
+<section class="section" id="investment">
+  <div class="shell">
+    <div class="section-head"><span class="eyebrow">The investment opportunity</span><h2>Build the infrastructure behind Africa’s next generation of builders.</h2><p>Ping is seeking a strategic capital partner to accelerate product readiness, continental distribution, infrastructure and ecosystem execution.</p></div>
+    <div class="funding-grid">
+      <div class="ask-card"><span class="eyebrow">Capital raise</span><div class="ask-number">₦30bn</div><h3>$20 million for 10% equity</h3><p>Illustrative implied valuation: $200m post-money and $180m pre-money, using the stated $20m investment for 10% post-money ownership.</p><p class="disclaimer">Naira equivalent assumes ₦1,500 per US dollar. Final transaction terms and valuation are subject to diligence and negotiation.</p></div>
+      <div class="chart-card"><h3>How the capital is allocated</h3><p>Proposed allocation of the ₦30 billion raise.</p>
+        <div class="allocation">
+          <div class="allocation-row"><span>Core infrastructure</span><div class="allocation-track"><div class="allocation-fill" style="width:100%"></div></div><b>₦10bn</b></div>
+          <div class="allocation-row"><span>Build Africa Challenge</span><div class="allocation-track"><div class="allocation-fill" style="width:100%"></div></div><b>₦10bn</b></div>
+          <div class="allocation-row"><span>12-month operations</span><div class="allocation-track"><div class="allocation-fill" style="width:50%"></div></div><b>₦5bn</b></div>
+          <div class="allocation-row"><span>R&amp;D &amp; strategic</span><div class="allocation-track"><div class="allocation-fill" style="width:50%"></div></div><b>₦5bn</b></div>
+        </div>
+        <p class="disclaimer">Infrastructure includes data centre, storage and energy. Programme allocation includes continental activation, hubs and partnerships. Operations include team expansion, marketing, security and customer support. R&amp;D allocation includes research, registrations, licensing and strategic transactions.</p>
+      </div>
+    </div>
+    <div class="challenge-band" style="margin-top:24px"><div><span class="eyebrow gold">Potential strategic partnership</span><h3>Help create a platform for African builders to build at scale.</h3><p>We see an opportunity for a strategic partner such as Genesis Group to help shape a lasting institution for entrepreneurship, innovation and African development. This is an invitation to explore a partnership, not an announcement of an existing agreement.</p></div><a class="btn btn-primary" href="mailto:support@pingbydot.com?subject=Ping%20Strategic%20Partnership">Start a conversation ↗</a></div>
+  </div>
+</section>
+<section class="section" id="about">
+  <div class="shell">
+    <div class="section-head"><span class="eyebrow">The founder’s story</span><h2>Built from conviction. Designed for a much bigger mission.</h2><p>Ping began with a belief that African builders should not have to build alone.</p></div>
+    <div class="founder-card">
+      <div class="founder-portrait"><div class="founder-monogram">DV</div><h3>Dum Victor</h3><p>Founder, Ping · Founder, Avantage Group</p></div>
+      <div class="founder-copy"><span class="eyebrow">Founder &amp; builder</span><h2>From building communities to building the network.</h2><p>Dum Victor is an entrepreneur and venture builder focused on creating systems that help people turn ideas into real-world progress. For approximately four years, he has been building Avantage Group around the conviction that talent grows faster when people have access to the right networks, knowledge and execution infrastructure.</p><p>Ping was built from that conviction. Developed largely hands-on as a solo-founder effort, it is now moving from beta toward a wider public launch and a broader team across product, engineering, security, infrastructure, growth and community operations.</p><p>His experience spans student representation, community leadership and entrepreneurship. He has served as a Student Representative at Wigwe University and as a regional lead within the Redeemed Christian Church of God, alongside leadership and management roles in other communities.</p><p>He has also been nominated by the ISMEA Council for a doctorate degree in Entrepreneurship and Venture Creation at the University of Thames, Paris, France. This is a nomination, not a claim that the degree has been awarded.</p>
+        <div class="cred-list"><div class="cred"><b>VENTURE BUILDING</b>Founder of Avantage Group · approximately four years</div><div class="cred"><b>UNIVERSITY LEADERSHIP</b>Former Student Representative · Wigwe University</div><div class="cred"><b>COMMUNITY LEADERSHIP</b>Regional Lead · Redeemed Christian Church of God</div><div class="cred"><b>RECOGNITION</b>Doctorate nomination · ISMEA Council, Entrepreneurship &amp; Venture Creation</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="section" id="challenge">
+  <div class="shell"><div class="challenge-band"><div><span class="eyebrow gold">Build Africa Challenge</span><h3>Turn the network into a launchpad for builders.</h3><p>Our programme ambition is to give one million builders access to structured learning through DOT, then work with 10,000 founders to develop tangible technology-enabled solutions using GRIOT AI. The long-term ambition is to help create 1,000 billion-dollar companies by 2030. These are programme ambitions, not guaranteed outcomes.</p></div><a class="btn btn-primary" href="https://justping.lovable.app/">Join Ping ↗</a></div></div>
+</section>
+<section class="section" id="download">
+  <div class="shell two-col">
+    <div><span class="eyebrow">Get started</span><h2 style="font:800 clamp(2.2rem,4vw,3.7rem)/1.06 Manrope;letter-spacing:-.055em;margin:16px 0">Your people are building. <span class="accent">Find them on Ping.</span></h2><p class="lead">Open the official Ping Download Centre to install the available web app on your phone or computer. Native Android and iOS distribution channels are being prepared; we will publish those installers only when signed and approved builds are ready.</p><a class="btn btn-primary" href="https://justping.lovable.app/download?ref=corporate-site&site=godson-create.github.io/pingbydot&utm_source=corporate-site&utm_medium=website&utm_campaign=public-launch">Open official Download Centre ↗</a></div>
+    <div class="story-panel"><h3>Install Ping in moments</h3><p><b class="accent">Android:</b> Open the Download Centre in Chrome, then choose Install app or Add to Home screen when offered.</p><p style="margin-top:14px"><b class="accent">iPhone / iPad:</b> Open the Download Centre in Safari, tap Share, then choose Add to Home Screen.</p><p style="margin-top:14px"><b class="accent">Desktop:</b> Open the Download Centre in Chrome or Edge and use the install icon in the address bar when available.</p></div>
+  </div>
+</section>
+</main>
+<footer class="footer">
+  <div class="shell">
+    <div class="footer-top"><div><a class="brand" href="#top"><span class="brand-mark">p.</span>ping</a><p>The social network for builders. Connect people, ideas and opportunities so more useful things get built.</p></div><div class="footer-links"><a href="#why-ping">Why Ping</a><a href="#ecosystem">Ecosystem</a><a href="#growth">Growth</a><a href="#investment">Investors</a><a href="#about">Founder</a><a href="https://justping.lovable.app/download">Download</a><a href="mailto:support@pingbydot.com">Contact</a></div></div>
+    <div class="footer-bottom"><span>© <span id="current-year">2026</span> Ping by DOT. All rights reserved.</span><span>Built for people who build.</span></div>
+  </div>
+</footer>
+<script src="./corporate.js" defer></script>
 </body>
 </html>
